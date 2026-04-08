@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-export default function ForgotPassword() {
+export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Left Panel - Matches Login exactly */}
