@@ -8,24 +8,11 @@ export default function ForgotPasswordPage() {
         className="flex-1 flex items-center justify-center min-h-[40vh] md:min-h-screen"
         style={{ backgroundColor: "#D1C4E9" }}
       >
-        <h1
-          className="text-center px-8 select-none"
-          style={{
-            fontFamily: "'Space Grotesk', sans-serif",
-            fontWeight: 700,
-            fontSize: "clamp(2.5rem, 6vw, 4.5rem)",
-            lineHeight: "120%",
-            letterSpacing: "-0.03em",
-            color: "#E0E0E0",
-            textShadow: "0 4px 4px rgba(0, 0, 0, 0.25)",
-            WebkitTextStrokeWidth: "3px",
-            WebkitTextStrokeColor: "#000",
-            filter: "blur(0.8px)",
-            maxWidth: "600px",
-          }}
-        >
-          RESET PASSWORD
-        </h1>
+      <img
+      src="/conven.jpg"
+       alt="One Stop Convenience Store"
+       className="w-[500px] max-w-full object-contain"
+        />
       </div>
 
       {/* Right Panel - Form Area */}
