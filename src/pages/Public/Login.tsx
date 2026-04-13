@@ -2,14 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Store, ShoppingCart, Package, BarChart3 } from "lucide-react";
 
-type Role = "owner" | "manager" | "staff";
-
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>("owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [staffId, setStaffId] = useState("");
-  const [pin, setPin] = useState(["", "", "", ""]);
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -20,12 +15,8 @@ export default function LoginPage() {
     setLoading(true);
     setErrorMsg("");
 
-    if (role === "owner" && email === "admin@gmail.com" && password === "admin123") {
+    if (email === "admin@gmail.com" && password === "admin123") {
       navigate("/admin/dashboard");
-    } else if (role === "manager" && email === "manager@gmail.com" && password === "manager123") {
-      navigate("/manager/dashboard");
-    } else if (role === "staff" && staffId === "staff1" && pin.join("") === "1234") {
-      navigate("/staff/dashboard");
     } else {
       setErrorMsg("Invalid credentials.");
     }
@@ -33,18 +24,6 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const handlePinChange = (index: number, value: string) => {
-    if (!/^\d?$/.test(value)) return;
-
-    const newPin = [...pin];
-    newPin[index] = value;
-    setPin(newPin);
-
-    if (value && index < 3) {
-      document.getElementById(`pin-${index + 1}`)?.focus();
-    }
-  };
-    {/* BACKGROUND OF LOGIN */}
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
 
@@ -52,7 +31,7 @@ export default function LoginPage() {
       <div className="hidden md:flex flex-1 relative overflow-hidden">
 
         <img
-          src="/conven.jpg"
+          src="/store.jpg"
           className="absolute inset-0 w-full h-full object-cover"
         />
 
@@ -121,73 +100,25 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* ROLE */}
-            <div className="grid grid-cols-3 gap-3">
-              {["owner", "manager", "staff"].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setRole(r as Role)}
-                  className={`py-2 rounded-lg border transition ${
-                    role === r
-                      ? "bg-blue-600 text-white border-blue-500 shadow-lg"
-                      : "bg-white/10 text-gray-300 border-white/20 hover:bg-white/20"
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+            {/* EMAIL */}
+            <input
+              type="email"
+              placeholder="Email"
+              className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-            {/* OWNER / MANAGER */}
-            {(role === "owner" || role === "manager") && (
-              <>
-                <input
-                  type="email"
-                  placeholder="Email"
-                  className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-
-                <input
-                  type="password"
-                  placeholder="Password"
-                  className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </>
-            )}
-
-            {/* STAFF */}
-            {role === "staff" && (
-              <>
-                <input
-                  type="text"
-                  placeholder="Staff ID"
-                  className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={staffId}
-                  onChange={(e) => setStaffId(e.target.value)}
-                  required
-                />
-
-                <div className="flex gap-3 justify-center">
-                  {pin.map((digit, i) => (
-                    <input
-                      key={i}
-                      id={`pin-${i}`}
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handlePinChange(i, e.target.value)}
-                      className="w-12 h-12 text-center rounded-lg bg-white/10 text-white border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xl"
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+            {/* PASSWORD */}
+            <input
+              type="password"
+              placeholder="Password"
+              className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
 
             {/* BUTTON */}
             <button
@@ -195,7 +126,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-lg shadow-blue-500/30"
             >
-              {loading ? "Checking..." : `Sign in as ${role}`}
+              {loading ? "Checking..." : "Sign In"}
             </button>
 
             {/* LINKS */}
