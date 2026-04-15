@@ -10,19 +10,27 @@ export default function LoginPage() {
 
   const navigate = useNavigate();
 
-  const handleSignIn = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setErrorMsg("");
+  const handleSignIn = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setErrorMsg("");
 
-    if (email === "admin@gmail.com" && password === "admin123") {
+    if (role === "owner" && email === "admin@gmail.com" && password === "admin123") {
       navigate("/admin/dashboard");
     } else {
-      setErrorMsg("Invalid credentials.");
+      setErrorMsg(data.message || "Invalid email or password");
     }
 
-    setLoading(false);
-  };
+  } catch (error) {
+    setErrorMsg(
+      error instanceof Error
+        ? error.message
+        : "Server error. Make sure PHP server is running."
+    );
+  }
+
+  setLoading(false);
+};
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
