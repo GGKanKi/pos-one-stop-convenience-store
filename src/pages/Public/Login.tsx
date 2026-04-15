@@ -15,29 +15,7 @@ export default function LoginPage() {
   setLoading(true);
   setErrorMsg("");
 
-  try {
-    const response = await fetch("http://localhost/POS/backend/api/login.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Server responded ${response.status}: ${text}`);
-    }
-
-    const data = await response.json();
-
-    if (data.success) {
-      // optional: store user info
-      localStorage.setItem("user", JSON.stringify(data.user));
-
+    if (role === "owner" && email === "admin@gmail.com" && password === "admin123") {
       navigate("/admin/dashboard");
     } else {
       setErrorMsg(data.message || "Invalid email or password");

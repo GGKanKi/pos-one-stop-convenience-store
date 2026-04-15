@@ -68,82 +68,86 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSignup} className="flex flex-col gap-4">
-
-          {errorMsg && (
-            <div className="bg-red-500/20 border border-red-400 text-red-200 px-4 py-2 rounded-lg text-sm">
-              {errorMsg}
+            <div className="flex flex-col gap-2">
+              <label htmlFor="firstName" className="text-[#1E1E1E] text-base font-normal leading-[140%]" style={{ fontFamily: "Inter, sans-serif" }}>
+                First Name
+              </label>
+              <input
+                id="firstName"
+                type="text"
+                placeholder="Value"
+                className="w-full px-4 py-3 rounded-lg border border-[#D9D9D9] bg-white text-base text-[#B3B3B3] placeholder:text-[#B3B3B3] outline-none focus:border-[#2C2C2C] transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              />
             </div>
-          )}
 
-          {/* First Name */}
-          <input
-            type="text"
-            placeholder="First Name"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+            <div className="flex flex-col gap-2">
+              <label htmlFor="lastName" className="text-[#1E1E1E] text-base font-normal leading-[140%]" style={{ fontFamily: "Inter, sans-serif" }}>
+                Last Name
+              </label>
+              <input
+                id="lastName"
+                type="text"
+                placeholder="Value"
+                className="w-full px-4 py-3 rounded-lg border border-[#D9D9D9] bg-white text-base text-[#B3B3B3] placeholder:text-[#B3B3B3] outline-none focus:border-[#2C2C2C] transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              />
+            </div>
 
-          {/* Last Name */}
-          <input
-            type="text"
-            placeholder="Last Name"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+            <div className="flex flex-col gap-2">
+              <label htmlFor="email" className="text-[#1E1E1E] text-base font-normal leading-[140%]" style={{ fontFamily: "Inter, sans-serif" }}>
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder="Value"
+                className="w-full px-4 py-3 rounded-lg border border-[#D9D9D9] bg-white text-base text-[#B3B3B3] placeholder:text-[#B3B3B3] outline-none focus:border-[#2C2C2C] transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              />
+            </div>
 
-          {/* Email */}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+            <div className="flex flex-col gap-2 relative">
+              <label htmlFor="password" className="text-[#1E1E1E] text-base font-normal leading-[140%]" style={{ fontFamily: "Inter, sans-serif" }}>
+                Password
+              </label>
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Value"
+                className="w-full px-4 py-3 rounded-lg border border-[#D9D9D9] bg-white text-base text-[#B3B3B3] placeholder:text-[#B3B3B3] outline-none focus:border-[#2C2C2C] transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-11 text-[#6B7280]"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
 
-          {/* Password */}
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
+            <div className="flex flex-col gap-2">
+              <label htmlFor="confirmPassword" className="text-[#1E1E1E] text-base font-normal leading-[140%]" style={{ fontFamily: "Inter, sans-serif" }}>
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                placeholder="Value"
+                className="w-full px-4 py-3 rounded-lg border border-[#D9D9D9] bg-white text-base text-[#B3B3B3] placeholder:text-[#B3B3B3] outline-none focus:border-[#2C2C2C] transition-colors"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              />
+            </div>
+
             <button
               type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-3 text-gray-300 text-sm"
+              className="w-full py-3 rounded-lg border border-[#2C2C2C] bg-[#2C2C2C] text-[#F5F5F5] transition-colors hover:bg-[#1f1f1f]"
+              style={{ fontFamily: "Inter, sans-serif" }}
             >
-              {showPassword ? "Hide" : "Show"}
+              Create account
             </button>
-          </div>
-
-          {/* Confirm pass */}
-          <input
-            type="password"
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-
-          {/* Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-lg shadow-blue-500/30 disabled:opacity-50"
-          >
-            {loading ? "Creating..." : "Create Account"}
-          </button>
 
           {/* Login Link */}
           <p className="text-center text-sm text-gray-300 mt-2">
