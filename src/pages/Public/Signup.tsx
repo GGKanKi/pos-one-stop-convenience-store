@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function SignupPage() {
@@ -157,8 +157,7 @@ export default function SignupPage() {
             </Link>
           </p>
 
-        </form>
+        </div> {/**DAPAT DIV HAHAHAHA */}
       </div>
-    </div>
   );
 }
