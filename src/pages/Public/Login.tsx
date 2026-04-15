@@ -11,26 +11,31 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   const handleSignIn = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  setErrorMsg("");
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
 
-    if (role === "owner" && email === "admin@gmail.com" && password === "admin123") {
-      navigate("/admin/dashboard");
-    } else {
-      setErrorMsg(data.message || "Invalid email or password");
+    try {
+      const res = await fetch("http://localhost/POS/backend/api/login.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        navigate("/admin/dashboard");
+      } else {
+        setErrorMsg(data.message || "Invalid email or password");
+      }
+    } catch (error) {
+      setErrorMsg("Server error. Make sure your Laragon/Apache is running.");
     }
-
-  } catch (error) {
-    setErrorMsg(
-      error instanceof Error
-        ? error.message
-        : "Server error. Make sure PHP server is running."
-    );
-  }
-
-  setLoading(false);
-};
+  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
