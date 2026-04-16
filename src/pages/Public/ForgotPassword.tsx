@@ -6,7 +6,7 @@ export default function ForgotPasswordPage() {
 
       {/* Background image */}
       <img
-        src="/store.jpg" // 
+        src="/pictures/store.jpg" // 
         className="absolute inset-0 w-full h-full object-cover"
       />
 
