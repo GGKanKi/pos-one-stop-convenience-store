@@ -17,8 +17,7 @@ $rawInput = file_get_contents("php://input");
 $data = json_decode($rawInput);
 
 //validate the input data and check if email and password are provided
-if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->email, $data->password)) {
-    http_response_code(400);
+if (!$data || !isset($data->email, $data->password)) {
     echo json_encode([
         "success" => false,
         "message" => "Invalid request. Email and password are required."
@@ -28,19 +27,30 @@ if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->email, $dat
 
 $email = trim($data->email);
 $password = $data->password;
+
+// USER FETCH
 $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
 $stmt->execute([$email]);
-
 $user = $stmt->fetch();
 
-if ($user && password_verify($password, $user['password'])) {
-    echo json_encode([
-        "success" => true,
-        "user" => [
-            "id" => $user['id'],
-            "first_name" => $user['first_name']
-        ]
-    ]);
+if ($user) {
+
+    // updated: password verification for hashed passwords
+    if (password_verify($password, $user['password_hash'])) {
+        echo json_encode([
+            "success" => true,
+            "user" => [
+                "id" => $user['id'],
+                "first_name" => $user['first_name']
+            ]
+        ]);
+    } else {
+        echo json_encode([
+            "success" => false,
+            "message" => "Invalid email or password"
+        ]);
+    }
+
 } else {
     echo json_encode([
         "success" => false,
