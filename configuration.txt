@@ -1,0 +1,34 @@
+📂 PROJECT STRUCTURE & NAMING CONVENTION
+To keep the project running without using .env files, everyone must use identical folder names and paths.
+
+1. Root Folder Name
+Your local folder in laragon/www/ must be named exactly:
+
+One-Convenience
+
+2. Absolute Pathing
+All backend calls in the React frontend are hardcoded to:
+http://localhost/One-Convenience/backend/api/
+
+3. Internal Folder Structure
+Do not move or rename these subfolders:
+
+One-Convenience/frontend/ — (React source code)
+
+One-Convenience/backend/api/ — (All .php files)
+
+One-Convenience/backend/config/ — (Database connection)
+
+Additionally, when running the QUERY, run the seeder files next in your terminal - php backend/config/seeder.php
+
+4. Why this matters
+Since we aren't using environment variables, the frontend looks for a specific URL. If your folder is named one-convenience (lowercase) or ConvenienceStore, your login will return a 404 Not Found error.
+
+⚠️ IMPORTANT: Database Sync
+Since the code relies on specific column names, ensure your users table matches this exactly:
+
+Table: users
+
+Password Column: password_hash
+
+Primary Key: id (Auto-increment)

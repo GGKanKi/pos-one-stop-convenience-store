@@ -16,7 +16,7 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      const res = await fetch("http://localhost/POS/backend/api/login.php", {
+      const res = await fetch("http://localhost/One-Convenience/backend/api/login.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -32,8 +32,11 @@ export default function LoginPage() {
       } else {
         setErrorMsg(data.message || "Invalid email or password");
       }
-    } catch (error) {
+    } catch (error: any) {
       setErrorMsg("Server error. Make sure your Laragon/Apache is running.");
+      console.log("Login Error: ", error);
+    } finally {
+      setLoading(false);
     }
   };
 
