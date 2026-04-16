@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -6,5 +6,5 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL
 );
 
-INSERT INTO users (first_name, last_name, email, password_hash)
-VALUES ('test', 'test', 'test@gmail.com', 'test123');
+-- RUN SEEDER FILES BY USING THIS IN THE TERMINAL
+-- php backend/config/seeder.php
