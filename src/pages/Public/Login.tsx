@@ -44,7 +44,7 @@ export default function LoginPage() {
       <div className="hidden md:flex flex-1 relative overflow-hidden">
 
         <img
-          src="/store.jpg"
+          src="/pictures/store.jpg"
           className="absolute inset-0 w-full h-full object-cover"
         />
 
