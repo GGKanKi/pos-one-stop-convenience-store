@@ -41,7 +41,7 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (data.success) {
-        navigate("/login");
+        navigate("/setstaffid");     {/* to go to setstaffid */}
       } else {
         setErrorMsg("Registration failed");
       }
@@ -159,9 +159,10 @@ export default function SignupPage() {
           </Link>
         </p>
 
-      </div> {/**DAPAT DIV HAHAHAHA */}
+      </div>
     </div>
   );
 }
+
 
 
