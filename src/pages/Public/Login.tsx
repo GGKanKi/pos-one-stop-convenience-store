@@ -41,8 +41,11 @@ export default function LoginPage() {
         }
 
         // If Else Statement Here if (user.role === "admin")
-
-        navigate("/admin/dashboard");
+        if (data.user.role === 'admin') {
+          navigate("/admin/dashboard");
+        } else if (data.user.role === 'staff') {
+          setErrorMsg("Unauthorized: You do not have access to this page.");
+        }
       } else {
         setErrorMsg(data.message || "Invalid email or password");
       }
