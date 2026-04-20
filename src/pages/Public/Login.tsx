@@ -26,8 +26,22 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      if (data.success) {
+      if (data.success) { // Add another parameter for checking what type of user role is logging in
         localStorage.setItem("user", JSON.stringify(data.user));
+
+
+        if (data.user && data.user.id) { // If validation Works
+          localStorage.setItem("userId", data.user.id);
+        }
+
+        if (data.token) {
+          localStorage.setItem("authToken", data.token);
+        } else if (data.authToken) {
+          localStorage.setItem("authToken", data.authToken);
+        }
+
+        // If Else Statement Here if (user.role === "admin")
+
         navigate("/admin/dashboard");
       } else {
         setErrorMsg(data.message || "Invalid email or password");

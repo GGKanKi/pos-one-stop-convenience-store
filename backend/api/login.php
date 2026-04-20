@@ -33,28 +33,28 @@ $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
 $stmt->execute([$email]);
 $user = $stmt->fetch();
 
-if ($user) {
 
-    // updated: password verification for hashed passwords
-    if (password_verify($password, $user['password_hash'])) {
-        echo json_encode([
-            "success" => true,
-            "user" => [
-                "id" => $user['id'],
-                "first_name" => $user['first_name']
-            ]
-        ]);
-    } else {
-        echo json_encode([
-            "success" => false,
-            "message" => "Invalid email or password"
-        ]);
-    }
 
+if ($user && password_verify($password, $user['password_hash'])){
+
+    // Token Generation For User Session
+    $tokenData = $user['id'] . ':'  .time();
+    $token = base64_encode($tokenData); // User Data Encryption
+
+    echo json_encode([
+        "success" => true,
+        "token" => $token, // Token Response to Frontend
+        "user" => [
+            'id' => $user['id'],
+            'first_name' => $user['first_name'],
+            'last_name' => $user['last_name']
+        ]
+    ]);
 } else {
     echo json_encode([
         "success" => false,
-        "message" => "Invalid email or password"
+        "message" => "Invalid email or password."
     ]);
 }
+
 ?>
