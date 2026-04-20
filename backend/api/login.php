@@ -47,7 +47,8 @@ if ($user && password_verify($password, $user['password_hash'])){
         "user" => [
             'id' => $user['id'],
             'first_name' => $user['first_name'],
-            'last_name' => $user['last_name']
+            'last_name' => $user['last_name'],
+            'role' => $user['role']
         ]
     ]);
 } else {
