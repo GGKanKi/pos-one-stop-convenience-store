@@ -1,6 +1,4 @@
 <?php
-require __DIR__ . '/../config/db.php'; //database connection (pdo)
-
 //response type json  and allow cross-origin requests from any domain
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
@@ -13,11 +11,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+
+require __DIR__ . '/../config/db.php'; //database connection (pdo)
+
+
 //get the raw input and decode the json data
 $rawInput = file_get_contents("php://input");
 $data = json_decode($rawInput);
 
-if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->first_name, $data->last_name, $data->email, $data->password)) {
+if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->first_name, $data->last_name, $data->email, $data->password_hash)) {
     http_response_code(400);
     echo json_encode([
         "success" => false,
@@ -29,11 +31,11 @@ if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->first_name,
 $first_name = trim($data->first_name);
 $last_name = trim($data->last_name);
 $email = trim($data->email);
-$password = password_hash($data->password, PASSWORD_DEFAULT);
+$password_hash = trim($data->password_hash, PASSWORD_DEFAULT);
 
-$stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)");
+$stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES (?, ?, ?, ?)");
 
-if ($stmt->execute([$first_name, $last_name, $email, $password])) {
+if ($stmt->execute([$first_name, $last_name, $email, $password_hash])) {
     echo json_encode(["success" => true]);
 } else {
     echo json_encode(["success" => false]);
