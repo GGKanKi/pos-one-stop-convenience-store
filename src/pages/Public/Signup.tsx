@@ -1,5 +1,6 @@
 ﻿import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { SignupSchema } from "../../services/ValidationServices";
 
 export default function SignupPage() {
   const [firstName, setFirstName] = useState("");
@@ -11,11 +12,19 @@ export default function SignupPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const navigate = useNavigate();
 
   const handleSignup = async (e: FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+
+    const result = SignupSchema.safeParse({ firstName, lastName, email, password });
+    
+    if (!result.success) {
+      setErrorMsg("Invalid input data");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setErrorMsg("Passwords do not match");
@@ -25,7 +34,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost/POS/backend/api/register.php", {
+      const res = await fetch("http://localhost/ONE-CONVENIENCE/backend/api/register.php", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -33,22 +42,21 @@ export default function SignupPage() {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          email,
-          password,
+          email: email,
+          password_hash: password,
         }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        navigate("/setstaffid");     {/* to go to setstaffid */}
+        navigate("/login");     {/* to go to login page */}
       } else {
         setErrorMsg("Registration failed");
       }
     } catch (error) {
       setErrorMsg("Server error. Please try again.");
     }
-
     setLoading(false);
   };
 
