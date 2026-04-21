@@ -28,12 +28,15 @@ if (!$data || !isset($data->email, $data->password)) {
 $email = trim($data->email);
 $password = $data->password;
 
-// USER FETCH
-$stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
+// USER FETCH with staff_id check (LEFT JOIN for SetStaffId flow - BLACKBOXAI)
+$stmt = $pdo->prepare("
+    SELECT u.*, s.staff_id, s.avatar as staff_avatar 
+    FROM users u 
+    LEFT JOIN staff_ids s ON u.id = s.user_id 
+    WHERE u.email = ?
+");
 $stmt->execute([$email]);
 $user = $stmt->fetch();
-
-
 
 if ($user && password_verify($password, $user['password_hash'])){
 
@@ -48,7 +51,10 @@ if ($user && password_verify($password, $user['password_hash'])){
             'id' => $user['id'],
             'first_name' => $user['first_name'],
             'last_name' => $user['last_name'],
-            'role' => $user['role']
+            'role' => $user['role'],
+            'hasStaffId' => !empty($user['staff_id']), // New: true if staff_id set
+            'staff_id' => $user['staff_id'] ?? null,
+            'staff_avatar' => $user['staff_avatar'] ?? null
         ]
     ]);
 } else {

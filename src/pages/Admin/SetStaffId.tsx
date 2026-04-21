@@ -32,14 +32,25 @@ export default function SetStaffId() {
     }
   };
 
-  // SAVE (READY ONLY) (RHUZ PART)
-  const handleSave = () => {
+  // SAVE: POST to /api/setstaffid.php
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async () => {
     const finalId = staffId.join("");
 
     if (finalId.length !== 6) {
-      alert("Please complete 6-digit Staff ID");
+      alert("Please complete 6-character Staff ID");
       return;
     }
+
+    if (!email) {
+      alert("Email not found. Please login again.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
 
     const payload = {
       email,
@@ -47,11 +58,26 @@ export default function SetStaffId() {
       avatar: selectedAvatar,
     };
 
-    // (GAMITIN NI RHUZ?)
-    console.log("READY DATA:", payload);
+    try {
+      const response = await fetch("http://localhost/One-Convenience/backend/api/setstaffid.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    // TEMP ONLY (can remove later)
-    navigate("/POS"); // TO DO BY BERN PA YUNG POS
+      const result = await response.json();
+
+      if (result.success) {
+        alert("Staff ID set successfully!");
+        navigate("/POS");
+      } else {
+        setError(result.message || "Failed to save Staff ID.");
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const avatars = [
@@ -141,12 +167,18 @@ export default function SetStaffId() {
 
           <button
             onClick={handleSave}
-            className="w-full py-3 rounded-xl font-semibold
+            disabled={loading}
+            className={`w-full py-3 rounded-xl font-semibold transition-all
             bg-gradient-to-r from-blue-500 to-indigo-500
-            shadow-lg shadow-blue-500/30 hover:opacity-90 transition"
+            shadow-lg shadow-blue-500/30 hover:opacity-90 ${
+              loading ? "opacity-70 cursor-not-allowed" : ""
+            }`}
           >
-            Save Profile 
+            {loading ? "Saving..." : "Save Profile"}
           </button>
+          {error && (
+            <p className="text-red-400 text-sm mt-3 text-center">{error}</p>
+          )}
         </div>
       </div>
     </div>
