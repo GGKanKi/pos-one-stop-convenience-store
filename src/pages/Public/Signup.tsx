@@ -54,7 +54,7 @@ export default function SignupPage() {
       } else {
         setErrorMsg("Registration failed");
       }
-    } catch (error) {
+    } catch {
       setErrorMsg("Server error. Please try again.");
     }
     setLoading(false);
