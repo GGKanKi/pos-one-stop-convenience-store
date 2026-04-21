@@ -49,7 +49,7 @@ export default function LoginPage() {
       } else {
         setErrorMsg(data.message || "Invalid email or password");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setErrorMsg("Server error. Make sure your Laragon/Apache is running.");
       console.log("Login Error: ", error);
     } finally {
