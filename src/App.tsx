@@ -3,8 +3,8 @@ import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
-import SetStaffId from './pages/Public/SetStaffId'; // ADDED BY BERN
-import AdminDashboard from './pages/Admin/Dashboard';
+import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId';)
+import AdminDashboard from './pages/Admin/Dashboard'; // new
 
 function App() {
   return (
@@ -20,7 +20,6 @@ function App() {
 
         {/** ADMIN PAGES */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-
 
         {/* DEFAULT */}
         <Route path="/" element={<LoginPage />} />
