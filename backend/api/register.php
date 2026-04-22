@@ -31,9 +31,9 @@ if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->first_name,
 $first_name = trim($data->first_name);
 $last_name = trim($data->last_name);
 $email = trim($data->email);
-$password_hash = trim($data->password_hash, PASSWORD_DEFAULT);
+$password_hash = password_hash($data->password_hash, PASSWORD_DEFAULT);
 
-$stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES (?, ?, ?, ?)");
+$stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?, ?, ?, ?, 'staff')");
 
 if ($stmt->execute([$first_name, $last_name, $email, $password_hash])) {
     echo json_encode(["success" => true]);
@@ -41,3 +41,4 @@ if ($stmt->execute([$first_name, $last_name, $email, $password_hash])) {
     echo json_encode(["success" => false]);
 }
 ?>
+

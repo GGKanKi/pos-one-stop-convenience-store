@@ -26,27 +26,30 @@ export default function LoginPage() {
 
       const data = await res.json();
 
-      if (data.success) { // Add another parameter for checking what type of user role is logging in
-        localStorage.setItem("user", JSON.stringify(data.user));
+        if (data.success) {
+          localStorage.setItem("user", JSON.stringify(data.user));
 
+          if (data.user && data.user.id) {
+            localStorage.setItem("userId", data.user.id);
+          }
 
-        if (data.user && data.user.id) { // If validation Works
-          localStorage.setItem("userId", data.user.id);
-        }
+          if (data.token) {
+            localStorage.setItem("authToken", data.token);
+          } else if (data.authToken) {
+            localStorage.setItem("authToken", data.authToken);
+          }
 
-        if (data.token) {
-          localStorage.setItem("authToken", data.token);
-        } else if (data.authToken) {
-          localStorage.setItem("authToken", data.authToken);
-        }
-
-        // If Else Statement Here if (user.role === "admin")
-        if (data.user.role === 'admin') {
-          navigate("/admin/dashboard");
-        } else if (data.user.role === 'staff') {
-          setErrorMsg("Unauthorized: You do not have access to this page.");
-        }
-      } else {
+          // SetStaffId flow integration 
+          if (data.user.role === 'admin') {
+            navigate("/admin/dashboard");
+          } else if (data.user.role === 'staff') {
+            if (data.user.hasStaffId) {
+              navigate("/POS");
+            } else {
+              navigate("/setstaffid", { state: { email: email } });
+            }
+          }
+        } else {
         setErrorMsg(data.message || "Invalid email or password");
       }
     } catch (error: unknown) {
