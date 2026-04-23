@@ -3,8 +3,10 @@ import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
-import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId';)
-import AdminDashboard from './pages/Admin/Dashboard'; // new
+import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
+import AdminDashboard from './pages/Admin/Dashboard'; 
+
+import StaffPage from './pages/Admin/Staff'; 
 
 function App() {
   return (
@@ -20,8 +22,11 @@ function App() {
 
         {/** ADMIN PAGES */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        
+        {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
+        <Route path="/admin/staff" element={<StaffPage />} /> 
 
-        {/* DEFAULT */}
+        {/** DEFAULT */}
         <Route path="/" element={<LoginPage />} />
       </Routes>
     </Router>
