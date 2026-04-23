@@ -28,17 +28,32 @@ if (!$data || json_last_error() !== JSON_ERROR_NONE || !isset($data->first_name,
     exit;
 }
 
-$first_name = trim($data->first_name);
-$last_name = trim($data->last_name);
-$email = trim($data->email);
-$password_hash = password_hash($data->password_hash, PASSWORD_DEFAULT);
+try {
+    $first_name = trim($data->first_name);
+    $last_name = trim($data->last_name);
+    $email = trim($data->email);
+    $password_hash = password_hash($data->password_hash, PASSWORD_DEFAULT);
 
-$stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?, ?, ?, ?, 'staff')");
+    $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash, role) VALUES (?, ?, ?, ?, 'staff')");
 
-if ($stmt->execute([$first_name, $last_name, $email, $password_hash])) {
-    echo json_encode(["success" => true]);
-} else {
-    echo json_encode(["success" => false]);
+    if ($stmt->execute([$first_name, $last_name, $email, $password_hash])) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false]);
+    }
+
+} catch (PDOException $e) {
+    if ($e->getCode() == 23000) {
+            echo json_encode(["success" => false, "message" => "Email already registered!"]);
+        } else {
+            echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
+        }
+    exit;
+} catch (Exception $e) {
+    echo json_encode(["success" => false, "message" => "An unexpected error occurred."]);
+    exit;
 }
+
+
 ?>
 
