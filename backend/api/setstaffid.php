@@ -47,8 +47,14 @@ if (strlen($staffId) !== 6 || !preg_match('/^[A-Z0-9]{6}$/', $staffId)) {
 }
 
 // Allowed avatars (from frontend)
+$avatar = trim($data['avatar']);
 $allowedAvatars = ['/pictures/avatar1.jpg', '/pictures/avatar2.jpg', '/pictures/avatar3.jpg', '/pictures/avatar4.jpg'];
-if (!in_array($avatar, $allowedAvatars)) {
+
+// Validate URL Path For Avatar and Set Custom Array
+$isvalidAvatr = filter_var($avatar, FILTER_VALIDATE_URL);
+$avatarArray = in_array($avatar, $allowedAvatars) || $isvalidAvatr ? $avatar : null;
+
+if (!$isValidUrl && !$isAllowedAvatar) {
     http_response_code(400);
     echo json_encode([
         "success" => false,

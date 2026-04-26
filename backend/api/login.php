@@ -4,7 +4,7 @@ require __DIR__ . '/../config/db.php'; //database connection (pdo)
 //response type json  and allow cross-origin requests from any domain
 header("Content-Type: application/json"); 
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 
 //handle preflight OPTIONS request for CORS
@@ -73,7 +73,7 @@ try {
             "message" => "Invalid email or password."
         ]);
     }
-
+// Catch Database Error for Specific Debugging problems - always use this!
 } catch (PDOException $e) {
     echo json_encode([
         "success" => false,
