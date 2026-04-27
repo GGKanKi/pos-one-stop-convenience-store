@@ -3,7 +3,7 @@ import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
-import LoginId from './pages/Public/LoginId'; // NEW: Added by bern for 6-digit PIN clock-in
+import LoginId from './pages/Staff/LoginId'; // NEW: Added by bern for 6-digit PIN clock-in
 import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
 import AdminDashboard from './pages/Admin/Dashboard'; 
 import StaffPage from './pages/Admin/Staff'; 

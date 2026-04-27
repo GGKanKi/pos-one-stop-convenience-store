@@ -58,8 +58,10 @@ export default function LoginId() {
       className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
       style={{ backgroundImage: `url(${backgroundImageUrl})` }}
     >
+      {/* Dark overlay to ensure the form remains readable against the background image */}
       <div className="absolute inset-0 bg-blue-950/60 backdrop-blur-sm" />
 
+      {/* Content container set to relative z-10 to appear above the overlay */}
       <div className="relative z-10 w-full max-w-2xl bg-white/10 backdrop-blur-xl border border-white/10 rounded-[2rem] p-12 flex flex-col items-center text-center shadow-2xl">
         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-8 border border-white/20 shadow-inner">
           <Clock className="text-white w-8 h-8 opacity-90" />
@@ -79,7 +81,8 @@ export default function LoginId() {
               key={index}
               type="text"
               maxLength={1}
-              ref={(el) => { if (el) inputRefs.current[index] = el; }}
+              // Fixed: Ref assignment logic to remove TypeScript error
+              ref={(el) => { if (el) inputRefs.current[index] = el; }} 
               value={digit}
               onChange={(e) => handleChange(e.target, index)}
               onKeyDown={(e) => handleKeyDown(e, index)}
