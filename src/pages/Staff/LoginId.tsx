@@ -47,7 +47,7 @@ export default function LoginId() {
     // For now, it will navigate directly to the POS screen.
     setTimeout(() => {
       setLoading(false);
-      navigate("/pos"); 
+      navigate("/POS"); 
     }, 1000);
   };
 
@@ -81,7 +81,6 @@ export default function LoginId() {
               key={index}
               type="text"
               maxLength={1}
-              // Fixed: Ref assignment logic to remove TypeScript error
               ref={(el) => { if (el) inputRefs.current[index] = el; }} 
               value={digit}
               onChange={(e) => handleChange(e.target, index)}
