@@ -76,16 +76,25 @@ export default function POS() {
         <div className="flex-[2] bg-white rounded-[30px] overflow-hidden shadow-xl flex flex-col">
 
           {/* HEADER */}
-          <div className="bg-[#0f172a] text-white flex justify-between items-center px-6 py-4">
+          <div className="bg-[#0056b3] text-white flex justify-between items-center px-6 py-4 rounded-xl shadow-md border-b-4 border-blue-900">
+
+            {/* LEFT SIDE */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white">
                 <img src="/pictures/avatar.jpg" className="w-full h-full object-cover" />
               </div>
-              <span className="text-sm font-bold">
-                202603 - Bernice Partisala
-              </span>
+
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-bold uppercase tracking-wide">
+                  Dashboard
+                </span>
+                <span className="text-xs opacity-90">
+                  202603 - Bernice Partisala
+                </span>
+              </div>
             </div>
 
+            {/* RIGHT SIDE */}
             <div className="flex gap-2">
               <button className="bg-white text-black px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-200">
                 Settings
@@ -94,6 +103,7 @@ export default function POS() {
                 Log out
               </button>
             </div>
+
           </div>
 
           <div className="p-5 flex flex-col gap-5 flex-1">
@@ -138,16 +148,16 @@ export default function POS() {
             </div>
 
             {/* TABLE */}
-            <div className="border rounded-xl flex-1 overflow-hidden">
+            <div className="border rounded-xl flex-1 overflow-hidden shadow-md">
               <div className="h-full overflow-y-auto">
                 <table className="w-full table-fixed text-sm">
 
-                  <thead className="bg-[#1f3b6d] text-white">
-                    <tr>
-                      <th className="p-3 w-[6%]">NO.</th>
-                      <th className="p-3 w-[20%]">Code</th>
-                      <th className="p-3 w-[24%]">Name</th>
-                      <th className="p-3 w-[20%]">Desc</th>
+                  <thead className="bg-[#0056b3] text-white border-b-4 border-blue-900 sticky top-0 z-10">
+                    <tr className="uppercase tracking-wide text-xs">
+                      <th className="p-3 w-[6%] text-left">No.</th>
+                      <th className="p-3 w-[20%] text-left">Code</th>
+                      <th className="p-3 w-[24%] text-left">Name</th>
+                      <th className="p-3 w-[20%] text-left">Desc</th>
                       <th className="p-3 w-[15%] text-center">Qty</th>
                       <th className="p-3 w-[15%] text-center">Price</th>
                     </tr>
@@ -210,17 +220,28 @@ export default function POS() {
 
             <div>
               <p className="text-xs font-bold">Payment Method</p>
+
+              {/* ✅ UPDATED BUTTON STYLE */}
               <div className="flex gap-2 mt-2">
-                <button onClick={() => setPaymentMethod("Cash")}
-                  className={`flex-1 py-2 rounded font-bold ${
-                    paymentMethod === "Cash" ? "bg-[#1f4e8c] text-white" : "bg-gray-300"
-                  }`}>
+                <button
+                  onClick={() => setPaymentMethod("Cash")}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                    paymentMethod === "Cash"
+                      ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                >
                   Cash
                 </button>
-                <button onClick={() => setPaymentMethod("GCash")}
-                  className={`flex-1 py-2 rounded font-bold ${
-                    paymentMethod === "GCash" ? "bg-[#1f4e8c] text-white" : "bg-gray-300"
-                  }`}>
+
+                <button
+                  onClick={() => setPaymentMethod("GCash")}
+                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                    paymentMethod === "GCash"
+                      ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                >
                   GCash
                 </button>
               </div>
@@ -246,7 +267,7 @@ export default function POS() {
                     active:bg-[#2f5bd3] active:text-white active:border-[#2f5bd3]
                     active:shadow-[0_0_10px_rgba(47,91,211,0.6)]"
                   >
-                    F{i + 1} ₱{v}
+                    [F{i + 1}] ₱{v}
                   </button>
                 ))}
               </div>
@@ -258,19 +279,24 @@ export default function POS() {
                 active:bg-[#2f5bd3] active:text-white active:border-[#2f5bd3]
                 active:shadow-[0_0_10px_rgba(47,91,211,0.6)]"
               >
-                F4 EXACT
+                [F4] EXACT
               </button>
             </div>
 
-            <div>
-              <p className="text-xs font-bold mb-1">Change Due</p>
+            <div className="mt-2">
+              <p className="text-xs font-bold mb-1 uppercase tracking-wide">
+                Change Due
+              </p>
 
-              <div className="bg-[#102c44] text-white text-center py-4 rounded-xl font-bold text-lg border-4 border-black shadow-inner">
-                ₱ {changeDue.toFixed(2)}
+              <div className="bg-[#0056b3] text-white p-4 rounded-xl shadow-md border-b-4 border-blue-900 text-center">
+                <span className="text-xl font-extrabold tracking-wide">
+                  ₱ {changeDue.toFixed(2)}
+                </span>
               </div>
             </div>
 
           </div>
+
           {/* BUTTONS */}
           <div className="flex gap-2 mt-auto">
             <button onClick={handleConfirm}
