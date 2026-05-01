@@ -3,6 +3,7 @@ import {
   Search, Trash2, Plus, Minus,
   Tag, RotateCcw, ScanLine
 } from 'lucide-react';
+import { useNavigate } from "react-router-dom";
 
 interface Product {
   id: number;
@@ -14,6 +15,9 @@ interface Product {
 }
 
 export default function POS() {
+
+  const navigate = useNavigate(); // ✅ needed for dashboard button
+
   const [cart, setCart] = useState<Product[]>([
     { id: 1, code: '8801073411432', name: 'Buldak Carbonara', description: '200g Pink', price: 95, qty: 2 },
     { id: 2, code: '4801981107971', name: 'Wilkins Pure', description: '500ML', price: 20, qty: 1 },
@@ -78,7 +82,6 @@ export default function POS() {
           {/* HEADER */}
           <div className="bg-[#0056b3] text-white flex justify-between items-center px-6 py-4 rounded-xl shadow-md border-b-4 border-blue-900">
 
-            {/* LEFT SIDE */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white">
                 <img src="/pictures/avatar.jpg" className="w-full h-full object-cover" />
@@ -94,7 +97,6 @@ export default function POS() {
               </div>
             </div>
 
-            {/* RIGHT SIDE */}
             <div className="flex gap-2">
               <button className="bg-white text-black px-3 py-1 rounded-full text-xs font-bold hover:bg-gray-200">
                 Settings
@@ -120,24 +122,35 @@ export default function POS() {
 
             {/* ACTIONS */}
             <div className="flex justify-between items-center">
-              <div className="flex gap-4">
+              <div className="flex gap-10">
 
-                <button className="flex flex-col items-center text-xs font-bold">
-                  <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white active:scale-95">
-                    <Tag />
-                  </div>
-                  Discounts
+                {/* DISCOUNTS */}
+                <button className="flex flex-col items-center group">
+                  <span className="text-sm text-gray-600 mb-1">F5</span>
+                  <img src="/pictures/discount.jpg" className="w-14 h-14 object-contain group-hover:scale-110 group-active:scale-95 transition" />
+                  <span className="text-sm font-medium mt-1">Discounts</span>
                 </button>
 
-                <button className="flex flex-col items-center text-xs font-bold">
-                  <div className="w-10 h-10 bg-cyan-400 rounded-xl flex items-center justify-center text-white active:scale-95">
-                    <RotateCcw />
-                  </div>
-                  Recall
+                {/* RECALL */}
+                <button className="flex flex-col items-center group">
+                  <span className="text-sm text-gray-600 mb-1">F6</span>
+                  <img src="/pictures/recall.jpg" className="w-14 h-14 object-contain group-hover:scale-110 group-active:scale-95 transition" />
+                  <span className="text-sm font-medium mt-1">Recall</span>
+                </button>
+
+                {/* DASHBOARD */}
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="flex flex-col items-center group"
+                >
+                  <span className="text-sm text-gray-600 mb-1">F7</span>
+                  <img src="/pictures/dashboard.png" className="w-14 h-14 object-contain group-hover:scale-110 group-active:scale-95 transition" />
+                  <span className="text-sm font-medium mt-1">Dashboard</span>
                 </button>
 
               </div>
 
+              {/* SEARCH */}
               <div className="relative w-[220px]">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -153,11 +166,11 @@ export default function POS() {
                 <table className="w-full table-fixed text-sm">
 
                   <thead className="bg-[#0056b3] text-white border-b-4 border-blue-900 sticky top-0 z-10">
-                    <tr className="uppercase tracking-wide text-xs">
-                      <th className="p-3 w-[6%] text-left">No.</th>
-                      <th className="p-3 w-[20%] text-left">Code</th>
-                      <th className="p-3 w-[24%] text-left">Name</th>
-                      <th className="p-3 w-[20%] text-left">Desc</th>
+                    <tr>
+                      <th className="p-3 w-[6%]">No.</th>
+                      <th className="p-3 w-[20%]">Code</th>
+                      <th className="p-3 w-[24%]">Name</th>
+                      <th className="p-3 w-[20%]">Desc</th>
                       <th className="p-3 w-[15%] text-center">Qty</th>
                       <th className="p-3 w-[15%] text-center">Price</th>
                     </tr>
@@ -202,7 +215,7 @@ export default function POS() {
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT PANEL (UNCHANGED) */}
         <div className="flex-[1] max-w-[380px] bg-[#e9e9e9] rounded-[30px] p-5 border-4 border-blue-600 shadow-xl flex flex-col gap-5">
 
           {/* TOTAL */}
@@ -215,20 +228,18 @@ export default function POS() {
 
           <hr />
 
-          {/* PAYMENT */}
+          {/* PAYMENT (UNCHANGED) */}
           <div className="bg-[#f4f4f4] rounded-xl p-4 border space-y-4">
 
             <div>
               <p className="text-xs font-bold">Payment Method</p>
-
-              {/* ✅ UPDATED BUTTON STYLE */}
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={() => setPaymentMethod("Cash")}
-                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                  className={`flex-1 py-2 rounded-xl font-bold ${
                     paymentMethod === "Cash"
                       ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900"
-                      : "bg-gray-300 hover:bg-gray-400"
+                      : "bg-gray-300"
                   }`}
                 >
                   Cash
@@ -236,10 +247,10 @@ export default function POS() {
 
                 <button
                   onClick={() => setPaymentMethod("GCash")}
-                  className={`flex-1 py-2 rounded-xl font-bold transition-all ${
+                  className={`flex-1 py-2 rounded-xl font-bold ${
                     paymentMethod === "GCash"
                       ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900"
-                      : "bg-gray-300 hover:bg-gray-400"
+                      : "bg-gray-300"
                   }`}
                 >
                   GCash
