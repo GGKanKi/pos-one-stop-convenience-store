@@ -3,7 +3,7 @@ import Sidebar from '../../components/Sidebar';
 
 export default function AdminDashboard() {
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans text-gray-800">
+    <div className="flex min-h-screen bg-[#EAE7DC] font-sans text-gray-800" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
       <Sidebar />
 

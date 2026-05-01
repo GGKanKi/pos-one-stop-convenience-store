@@ -11,9 +11,8 @@ import POS from './pages/Staff/POS';
 import SetStaffId from "./pages/Admin/SetStaffId";
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
-
-// new
 import Inventory from './pages/Admin/Inventory';
+import Transactions from './pages/Admin/Transaction'; // New Import
 
 function App() {
   return (
@@ -34,9 +33,8 @@ function App() {
         {/** ADMIN */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/staff" element={<StaffPage />} />
-
-        {/* new */}
         <Route path="/admin/inventory" element={<Inventory />} />
+        <Route path="/admin/transactions" element={<Transactions />} />
 
         {/** DEFAULT */}
         <Route path="/" element={<LoginPage />} />
