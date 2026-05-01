@@ -6,7 +6,7 @@ const STAFF_DATA = [
   { id: "202601", name: "Diane Annonuevo", timeIn: "06:03 AM", timeOut: "2:05 PM", duration: "8.03 hours", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Diane" },
   { id: "202602", name: "Rhuztin Protomartir", timeIn: "2:06 PM", timeOut: "11:00 PM", duration: "8.9 hours", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rhuztin" },
   { id: "202603", name: "Bernice Partisala", timeIn: "--:--", timeOut: "--:--", duration: "--", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bernice" }
-];
+]; // avatars are not permanent, just for demo purposes. they will be generated based on the staff's name when they set their staff ID for the first time.
 
 export default function StaffPage() {
   const [view, setView] = useState<'daily' | 'monthly'>('daily');
@@ -32,7 +32,7 @@ export default function StaffPage() {
             <button 
               onClick={() => setView('daily')}
               className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'daily' ? "bg-[#1A3E7A] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+                view === 'daily' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
               }`}
             >
               Daily View
@@ -40,7 +40,7 @@ export default function StaffPage() {
             <button 
               onClick={() => setView('monthly')}
               className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'monthly' ? "bg-[#1A3E7A] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+                view === 'monthly' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
               }`}
             >
               Monthly View
@@ -102,10 +102,10 @@ export default function StaffPage() {
               
               <div className="relative p-6 flex items-center gap-5">
                 
-                {/* BLUE BAND - Height set to h-10 */}
+                {/* BLUE BAND and Height set to h-10 */}
                 <div className="absolute bottom-6 left-0 w-full h-10 bg-[#1A3E7A]" />
 
-                {/* Avatar floating over band */}
+                {/* Avatar floating */}
                 <div className="relative z-10 w-24 h-24 rounded-full border-[8px] border-[#FDB813] overflow-hidden bg-white shadow-xl shrink-0">
                   <img src={staff.avatar} className="w-full h-full object-cover" alt={staff.name} />
                 </div>
@@ -117,7 +117,7 @@ export default function StaffPage() {
                     {staff.name}
                   </h3>
                   
-                  {/* ID NUMBER - Flex items-center + h-10 makes it PERFECTLY centered in the blue stripe */}
+                  {/* ID NUMBER - Flex items-center + h-10 makes it centered in the blue box */}
                   <div className="h-10 flex items-center">
                     <p className="text-white font-bold text-sm tracking-widest pl-1 leading-none">
                       {staff.id}
