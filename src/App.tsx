@@ -16,7 +16,6 @@ function App() {
   return (
     <Router>
       <Routes>
-
         {/** PUBLIC ROUTES */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
@@ -24,13 +23,13 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF ROUTES */}
+        {/** STAFF ROUTES - Matches the POS navigation */}
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/loginid" element={<LoginId />} />
+        <Route path="/logoutid" element={<LogoutId />} />
         <Route path="/pos" element={<POS />} />
 
         {/** ADMIN ROUTES */}
-        {/* These routes will render the Sidebar normally, unless accessed via the POS dashboard button */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         
         {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
@@ -39,7 +38,6 @@ function App() {
 
         {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
-
       </Routes>
     </Router>
   );

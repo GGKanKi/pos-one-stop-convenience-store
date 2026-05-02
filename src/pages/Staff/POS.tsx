@@ -87,9 +87,27 @@ export default function POS() {
               </div>
             </div>
             <div className="flex gap-2">
-               <button className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200">Cashier Out</button>
-              <button className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200">Settings</button>
-              <button className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200">Log out</button>
+              {/* UPDATED: Path matches App.tsx */}
+              <button 
+                onClick={() => navigate("/cashregister")} 
+                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
+              >
+                Cashier Out
+              </button>
+              
+              <button 
+                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
+              >
+                Settings
+              </button>
+
+              {/* UPDATED: Navigates to Logout PIN screen */}
+              <button 
+                onClick={() => navigate("/logoutid")}
+                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
+              >
+                Log out
+              </button>
             </div>
           </div>
 
@@ -100,7 +118,7 @@ export default function POS() {
               <input
                 ref={scanInputRef}
                 placeholder="Scan Product Code"
-                className="w-full pl-12 pr-4 py-3 border-2 border-blue-400 rounded-full outline-none"
+                className="w-full pl-12 pr-4 py-3 border-2 border-blue-400 rounded-full outline-none focus:ring-2 focus:ring-blue-600 transition-all"
               />
             </div>
 
@@ -118,7 +136,6 @@ export default function POS() {
                   <span className="text-sm font-medium mt-1">Recall</span>
                 </button>
 
-                {/* DASHBOARD BUTTON - UPDATED NAVIGATION */}
                 <button
                   onClick={() => navigate("/admin/dashboard", { state: { fullScreen: true } })}
                   className="flex flex-col items-center group"
@@ -134,16 +151,19 @@ export default function POS() {
                   <span className="text-sm font-medium mt-1">Void</span>
                 </button>
 
-                <button className="flex flex-col items-center group">
+                <button 
+                   onClick={() => navigate("/admin/inventory")}
+                   className="flex flex-col items-center group"
+                >
                   <span className="text-sm text-gray-600 mb-1">F9</span>
-                  <img src="/pictures/inventory.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Void" />
+                  <img src="/pictures/inventory.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Inventory" />
                   <span className="text-sm font-medium mt-1">Inventory</span>
                 </button>
               </div>
 
               <div className="relative w-[220px]">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input placeholder="Search Product Name" className="w-full px-3 py-2 border rounded-full text-sm" />
+                <input placeholder="Search Product Name" className="w-full px-3 py-2 border rounded-full text-sm outline-none focus:border-blue-500" />
               </div>
             </div>
 
@@ -153,31 +173,31 @@ export default function POS() {
                 <table className="w-full table-fixed text-sm">
                   <thead className="bg-[#0056b3] text-white border-b-4 border-blue-900 sticky top-0 z-10">
                     <tr>
-                      <th className="p-3 w-[6%]">No.</th>
-                      <th className="p-3 w-[20%]">Code</th>
-                      <th className="p-3 w-[24%]">Name</th>
-                      <th className="p-3 w-[20%]">Desc</th>
+                      <th className="p-3 w-[6%] text-center">No.</th>
+                      <th className="p-3 w-[20%] text-left">Code</th>
+                      <th className="p-3 w-[24%] text-left">Name</th>
+                      <th className="p-3 w-[20%] text-left">Desc</th>
                       <th className="p-3 w-[15%] text-center">Qty</th>
                       <th className="p-3 w-[15%] text-center">Price</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cart.map((item, i) => (
-                      <tr key={item.id} className="border-b">
+                      <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
                         <td className="p-3 text-center">{i + 1}</td>
                         <td className="p-3 truncate">{item.code}</td>
                         <td className="p-3 truncate font-bold">{item.name}</td>
                         <td className="p-3 truncate text-gray-500">{item.description}</td>
                         <td className="p-3">
                           <div className="flex justify-center items-center gap-2">
-                            <button onClick={() => updateQty(item.id, -1)} className="border w-7 h-7 rounded-full flex items-center justify-center active:scale-95"><Minus size={12} /></button>
-                            <span className="font-bold">{item.qty}</span>
-                            <button onClick={() => updateQty(item.id, 1)} className="border w-7 h-7 rounded-full flex items-center justify-center active:scale-95"><Plus size={12} /></button>
+                            <button onClick={() => updateQty(item.id, -1)} className="border w-7 h-7 rounded-full flex items-center justify-center bg-white hover:bg-gray-100 active:scale-90"><Minus size={12} /></button>
+                            <span className="font-bold w-4 text-center">{item.qty}</span>
+                            <button onClick={() => updateQty(item.id, 1)} className="border w-7 h-7 rounded-full flex items-center justify-center bg-white hover:bg-gray-100 active:scale-90"><Plus size={12} /></button>
                           </div>
                         </td>
                         <td className="p-3 text-center font-bold relative">
-                          ₱ {item.price}
-                          <button onClick={() => removeItem(item.id)} className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500"><Trash2 size={14} /></button>
+                          ₱ {item.price.toFixed(2)}
+                          <button onClick={() => removeItem(item.id)} className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={14} /></button>
                         </td>
                       </tr>
                     ))}
@@ -194,24 +214,29 @@ export default function POS() {
             <p className="text-xs text-gray-300 font-bold">TOTAL</p>
             <div className="text-right text-3xl text-gray-300 font-extrabold">₱ {total.toFixed(2)}</div>
           </div>
-          <hr />
+          <hr className="border-gray-400" />
           <div className="bg-[#f4f4f4] rounded-xl p-4 border space-y-4">
             <div>
               <p className="text-xs font-bold">Payment Method</p>
               <div className="flex gap-2 mt-2">
-                <button onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2 rounded-xl font-bold ${paymentMethod === "Cash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300"}`}>Cash</button>
-                <button onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2 rounded-xl font-bold ${paymentMethod === "GCash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300"}`}>GCash</button>
+                <button onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2 rounded-xl font-bold transition ${paymentMethod === "Cash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300 text-gray-600"}`}>Cash</button>
+                <button onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2 rounded-xl font-bold transition ${paymentMethod === "GCash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300 text-gray-600"}`}>GCash</button>
               </div>
             </div>
             <div>
               <p className="text-xs font-bold">Cash Tendered</p>
-              <input value={cashTendered} onClick={() => setCashTendered("")} onChange={(e) => setCashTendered(e.target.value)} className="w-full bg-[#ddd] rounded p-2 text-center font-bold outline-none" />
+              <input 
+                value={cashTendered} 
+                onClick={() => setCashTendered("")} 
+                onChange={(e) => setCashTendered(e.target.value)} 
+                className="w-full bg-[#ddd] rounded p-2 text-center font-bold outline-none border-2 border-transparent focus:border-blue-400" 
+              />
               <div className="flex gap-2 mt-2 text-sm">
-                {[100, 500, 1000].map((v, i) => (
-                  <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white">₱{v}</button>
+                {[100, 500, 1000].map((v) => (
+                  <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white transition">₱{v}</button>
                 ))}
               </div>
-              <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white">EXACT</button>
+              <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white transition">EXACT</button>
             </div>
             <div className="mt-2">
               <p className="text-xs font-bold mb-1 uppercase tracking-wide">Change Due</p>
@@ -221,8 +246,8 @@ export default function POS() {
             </div>
           </div>
           <div className="flex gap-2 mt-auto">
-            <button onClick={handleConfirm} className="flex-1 bg-[#102c44] text-white py-2 rounded font-bold active:scale-95">Confirm</button>
-            <button onClick={handleCancel} className="flex-1 bg-gray-300 py-2 rounded font-bold active:scale-95">Cancel</button>
+            <button onClick={handleConfirm} className="flex-1 bg-[#102c44] text-white py-3 rounded-xl font-bold active:scale-95 hover:bg-slate-800 transition">Confirm</button>
+            <button onClick={handleCancel} className="flex-1 bg-gray-300 py-3 rounded-xl font-bold active:scale-95 hover:bg-gray-400 transition text-gray-700">Cancel</button>
           </div>
         </div>
       </div>
