@@ -23,9 +23,14 @@ export default function Transactions() {
         <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-gray-700">Filters</h2>
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors border border-gray-300">
-              <RotateCcw size={14} /> Reset Filters
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="flex items-center gap-2 px-4 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors border border-gray-300">
+                <RotateCcw size={14} /> Reset Filters
+              </button>
+              <button className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors border border-blue-600">
+                <RotateCcw size={14} /> Load Filters
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
