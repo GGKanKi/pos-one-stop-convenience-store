@@ -4,11 +4,12 @@ import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
 import LoginId from './pages/Staff/LoginId'; // NEW: Added by bern for 6-digit PIN clock-in
-import POS from './pages/Staff/POS'; // NEW: Added for the Point of Sale system
+import POS from './pages/Staff/POS'; // NEW: Added by rhuz for the POS page
 import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
 import AdminDashboard from './pages/Admin/Dashboard'; 
 
 import StaffPage from './pages/Admin/Staff'; 
+import StaffDashboard from './pages/Staff/Dashboard'; // NEW: Dynamic staff dashboard - BLACKBOXAI
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
         
         {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
         <Route path="/admin/staff" element={<StaffPage />} /> 
+        <Route path="/staff/dashboard" element={<StaffDashboard />} /> {/* NEW: Staff Dashboard route - BLACKBOXAI */}
 
         {/** DEFAULT */}
         <Route path="/" element={<LoginPage />} />
