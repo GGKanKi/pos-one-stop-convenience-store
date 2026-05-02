@@ -50,7 +50,6 @@ foreach ($files as $file) {
     $conn->exec(sql);
 
 
-
     // Record the Files By Inserting File Data into MIGRATIONS table
     $stmt = $conn->prepare("INSERT IGNORE INTO migrations (filename) VALUES (?)");
     $stmt->execute([$filename]);

@@ -30,6 +30,7 @@ function App() {
         
         {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
         <Route path="/admin/staff" element={<StaffPage />} /> 
+        <Route path="/staff/pos" element={<POS />} /> 
 
         {/** DEFAULT */}
         <Route path="/" element={<LoginPage />} />
