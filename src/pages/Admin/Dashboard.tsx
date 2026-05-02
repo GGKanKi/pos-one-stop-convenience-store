@@ -1,17 +1,37 @@
-import { type LucideIcon, AlertCircle, TrendingUp, DollarSign, Award } from 'lucide-react';
+import { type LucideIcon, AlertCircle, TrendingUp, DollarSign, Award, ArrowLeft } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
 
 export default function AdminDashboard() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Check if we came from POS with the fullScreen flag
+  const isFullScreen = location.state?.fullScreen;
+
   return (
     <div className="flex min-h-screen bg-[#EAE7DC] font-sans text-gray-800" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
-      <Sidebar />
+      {/* 1. SIDEBAR: Only show if NOT in full screen mode */}
+      {!isFullScreen && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-6">
         
-        {/* Dashboard Header Bar */}
-         <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
-          <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Dashboard</h1>
+        {/* 2. HEADER: Modified to show Back Button if Full Screen */}
+        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+          <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">
+            {isFullScreen ? "Store Analytics" : "Dashboard"}
+          </h1>
+
+          {isFullScreen && (
+            <button 
+              onClick={() => navigate(-1)} 
+              className="mr-2 flex items-center gap-2 bg-white text-[#0056b3] px-4 py-1.5 rounded-full text-xs font-bold hover:bg-gray-200 transition shadow-sm active:scale-95"
+            >
+              <ArrowLeft size={14} />
+              BACK TO POS
+            </button>
+          )}
         </header>
 
         {/* Low Stock Alert Section */}

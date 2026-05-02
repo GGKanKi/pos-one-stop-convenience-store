@@ -33,7 +33,7 @@ export default function LoginId() {
     }
   };
 
-  // Logic to handle navigation to POS
+  // Logic to handle navigation to Cash Register breakdown
   const handleClockIn = () => {
     const fullPin = pin.join("");
     
@@ -43,25 +43,19 @@ export default function LoginId() {
     }
 
     setLoading(true);
-    // will be verify the PIN with backend here.
-    // For now, it will navigate directly to the POS screen.
+    // PIN verification with backend would happen here.
+    
     setTimeout(() => {
       setLoading(false);
-      navigate("/POS"); 
+      // Redirecting to cash-register 
+      navigate("/cash-register"); 
     }, 1000);
   };
 
-  const backgroundImageUrl = "/pictures/bg.jpg";
-
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
-      style={{ backgroundImage: `url(${backgroundImageUrl})` }}
-    >
-      {/* Dark overlay to ensure the form remains readable against the background image */}
+    <div className="min-h-screen flex items-center justify-center px-6 py-10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
       <div className="absolute inset-0 bg-blue-950/60 backdrop-blur-sm" />
 
-      {/* Content container set to relative z-10 to appear above the overlay */}
       <div className="relative z-10 w-full max-w-2xl bg-white/10 backdrop-blur-xl border border-white/10 rounded-[2rem] p-12 flex flex-col items-center text-center shadow-2xl">
         <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-8 border border-white/20 shadow-inner">
           <Clock className="text-white w-8 h-8 opacity-90" />
