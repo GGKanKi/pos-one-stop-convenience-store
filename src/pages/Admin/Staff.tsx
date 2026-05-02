@@ -85,7 +85,7 @@ export default function StaffPage() {
             <button 
               onClick={() => setView('daily')}
               className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'daily' ? "bg-[#1A3E7A] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+                view === 'daily' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
               }`}
             >
               Daily View
@@ -93,7 +93,7 @@ export default function StaffPage() {
             <button 
               onClick={() => setView('monthly')}
               className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'monthly' ? "bg-[#1A3E7A] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+                view === 'monthly' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
               }`}
             >
               Monthly View

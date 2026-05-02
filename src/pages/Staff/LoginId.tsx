@@ -83,8 +83,6 @@ export default function LoginId() {
     }
   };
 
-  const backgroundImageUrl = "/pictures/bg.jpg";
-
   return (
     <div
       className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"

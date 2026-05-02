@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
 import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
@@ -15,26 +16,30 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/** PUBLIC PAGES */}
+
+        {/** PUBLIC ROUTES */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/setstaffid" element={<SetStaffId />} /> {/* ADDED BY BERN */}
+        <Route path="/setstaffid" element={<SetStaffId />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF PAGES */}
-        <Route path="/loginid" element={<LoginId />} /> 
-        <Route path="/pos" element={<POS />} /> 
+        {/** STAFF ROUTES */}
+        <Route path="/cashregister" element={<CashRegister />} />
+        <Route path="/loginid" element={<LoginId />} />
+        <Route path="/pos" element={<POS />} />
 
-        {/** ADMIN PAGES */}
+        {/** ADMIN ROUTES */}
+        {/* These routes will render the Sidebar normally, unless accessed via the POS dashboard button */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         
         {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
         <Route path="/admin/staff" element={<StaffPage />} /> 
         <Route path="/staff/dashboard" element={<StaffDashboard />} /> {/* NEW: Staff Dashboard route - BLACKBOXAI */}
 
-        {/** DEFAULT */}
+        {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
+
       </Routes>
     </Router>
   );

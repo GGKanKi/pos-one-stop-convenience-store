@@ -47,9 +47,7 @@ foreach ($files as $file) {
     $sql = file_get_contents($file);
 
     // Run through each file INDIVIDUALLY (Checker)
-    $conn->exec(sql);
-
-
+    $conn->exec($sql);
 
     // Record the Files By Inserting File Data into MIGRATIONS table
     $stmt = $conn->prepare("INSERT IGNORE INTO migrations (filename) VALUES (?)");
