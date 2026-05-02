@@ -2,12 +2,20 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
 
+// ============================================
+// MODIFIED: Replaced stub clock-in with real API calls.
+// Now verifies staff_id and records attendance via backend.
+// ============================================
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost/One-Convenience/backend/api";
+
 export default function LoginId() {
   const [pin, setPin] = useState<string[]>(new Array(6).fill(""));
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  
+
   const location = useLocation();
   const navigate = useNavigate();
   const email = location.state?.email;
@@ -33,27 +41,54 @@ export default function LoginId() {
     }
   };
 
-  // Logic to handle navigation to Cash Register breakdown
-  const handleClockIn = () => {
+  // NEW: Real clock-in logic using backend API
+  const handleClockIn = async () => {
     const fullPin = pin.join("");
-    
+
     if (fullPin.length < 6) {
       setErrorMsg("Please enter your full 6-digit ID.");
       return;
     }
 
     setLoading(true);
-    // PIN verification with backend would happen here.
-    
-    setTimeout(() => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${API_BASE}/clockin.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staff_id: fullPin }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccessMsg(`Clocked in at ${data.time_in}`);
+        // Store staff_id in localStorage for dashboard clock-out
+        localStorage.setItem("staff_id", fullPin);
+        // Set pending clock-in flag for Dashboard to refresh
+        localStorage.setItem("pending_clock_in", "true");
+        // Navigate to staff dashboard after a short delay
+        setTimeout(() => {
+          navigate("/staff/dashboard");
+        }, 1500);
+      } else {
+        setErrorMsg(data.message || "Clock-in failed.");
+      }
+    } catch (err) {
+      setErrorMsg("Network error. Please try again.");
+    } finally {
       setLoading(false);
-      // Redirecting to cash-register 
-      navigate("/cash-register"); 
-    }, 1000);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900">
+    <div
+      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
+      style={{ backgroundImage: `url(${backgroundImageUrl})` }}
+    >
+      {/* Dark overlay */}
       <div className="absolute inset-0 bg-blue-950/60 backdrop-blur-sm" />
 
       <div className="relative z-10 w-full max-w-2xl bg-white/10 backdrop-blur-xl border border-white/10 rounded-[2rem] p-12 flex flex-col items-center text-center shadow-2xl">
@@ -62,10 +97,16 @@ export default function LoginId() {
         </div>
         <h1 className="text-white text-3xl font-bold mb-2">Clock In</h1>
         <p className="text-blue-100 mb-10 opacity-80">Enter your staff ID to start your shift</p>
-        
+
         {errorMsg && (
           <div className="mb-4 text-red-400 bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/50">
             {errorMsg}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="mb-4 text-green-400 bg-green-900/20 px-4 py-2 rounded-lg border border-green-500/50">
+            {successMsg}
           </div>
         )}
 
@@ -75,17 +116,18 @@ export default function LoginId() {
               key={index}
               type="text"
               maxLength={1}
-              ref={(el) => { if (el) inputRefs.current[index] = el; }} 
+              ref={(el) => { if (el) inputRefs.current[index] = el; }}
               value={digit}
               onChange={(e) => handleChange(e.target, index)}
               onKeyDown={(e) => handleKeyDown(e, index)}
-              className="w-16 h-20 bg-white/5 border-2 border-white/20 rounded-2xl text-white text-3xl font-bold text-center focus:border-blue-400 focus:outline-none transition-all shadow-inner"
+              disabled={loading}
+              className="w-16 h-20 bg-white/5 border-2 border-white/20 rounded-2xl text-white text-3xl font-bold text-center focus:border-blue-400 focus:outline-none transition-all shadow-inner disabled:opacity-50"
             />
           ))}
         </div>
         <p className="text-blue-100/40 text-sm mb-10 tracking-widest uppercase">6-digit unique identifier</p>
-        
-        <button 
+
+        <button
           onClick={handleClockIn}
           disabled={loading}
           className="w-full max-w-md py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 disabled:opacity-50"
