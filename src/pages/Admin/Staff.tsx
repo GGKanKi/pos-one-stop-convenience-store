@@ -12,7 +12,7 @@ export default function StaffPage() {
   const [view, setView] = useState<'daily' | 'monthly'>('daily');
 
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans">
+    <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       <Sidebar />
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         

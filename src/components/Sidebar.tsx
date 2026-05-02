@@ -14,7 +14,7 @@ export default function Sidebar() {
     { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Staff', path: '/admin/staff', icon: Users },
     { name: 'Inventory', path: '/admin/inventory', icon: Package },
-    { name: 'History Transactions', path: '/admin/transactions', icon: History },
+    { name: 'Transaction History', path: '/admin/transactions', icon: History },
     { name: 'Product Status', path: '/admin/product-status', icon: BarChart3 },
   ];
 
