@@ -49,7 +49,6 @@ export default function CashRegister() {
           </p>
         </div>
 
-        {/* Tighter spacing in the grid and smaller py (padding-vertical) */}
         <div className="space-y-1 mb-6 px-2">
           {DENOMINATIONS.map((d) => {
             const subtotal = parseInt(counts[d.value] || "0") * d.value;
@@ -83,11 +82,21 @@ export default function CashRegister() {
         </div>
 
         <button 
-          onClick={() => navigate("/pos")}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 active:scale-[0.98]"
+          onClick={() => navigate("/logoutid")}
+          className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 active:scale-[0.98]"
         >
           Confirm
         </button>
+
+        {/* Back to POS Button - Positioned to prevent layout jumping */}
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={() => navigate("/pos")}
+            className="text-[11px] text-blue-100/40 hover:text-white transition-colors uppercase tracking-widest font-medium py-1"
+          >
+            Back to POS
+          </button>
+        </div>
       </div>
     </div>
   );
