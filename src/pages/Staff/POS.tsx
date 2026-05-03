@@ -108,6 +108,7 @@ export default function POS() {
               >
                 Log out
               </button> */}
+
             </div> 
           </div> 
 
@@ -152,7 +153,7 @@ export default function POS() {
                 </button>
 
                 <button 
-                   onClick={() => navigate("/admin/inventory")}
+                   onClick={() => navigate("/staff/inventorycheck")}
                    className="flex flex-col items-center group"
                 >
                   <span className="text-sm text-gray-600 mb-1">F9</span>

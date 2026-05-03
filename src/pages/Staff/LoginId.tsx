@@ -1,11 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
-
-// ============================================
-// MODIFIED: Replaced stub clock-in with real API calls.
-// Now verifies staff_id and records attendance via backend.
-// ============================================
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost/One-Convenience/backend/api";
 
@@ -18,7 +13,6 @@ export default function LoginId() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const email = location.state?.email;
 
   useEffect(() => {
     if (inputRefs.current[0]) inputRefs.current[0].focus();
@@ -41,12 +35,11 @@ export default function LoginId() {
     }
   };
 
-  // NEW: Real clock-in logic using backend API
   const handleClockIn = async () => {
     const fullPin = pin.join("");
 
     if (fullPin.length < 6) {
-      setErrorMsg("Please enter your full 6-digit ID.");
+      setErrorMsg("Please enter your 6-digit ID to confirm clock in.");
       return;
     }
 
@@ -65,13 +58,10 @@ export default function LoginId() {
 
       if (data.success) {
         setSuccessMsg(`Clocked in at ${data.time_in}`);
-        // Store staff_id in localStorage for dashboard clock-out
         localStorage.setItem("staff_id", fullPin);
-        // Set pending clock-in flag for Dashboard to refresh
         localStorage.setItem("pending_clock_in", "true");
-        // Navigate to staff dashboard after a short delay
         setTimeout(() => {
-          navigate("/staff/dashboard");
+          navigate("/POS");
         }, 1500);
       } else {
         setErrorMsg(data.message || "Clock-in failed.");
@@ -84,33 +74,36 @@ export default function LoginId() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat relative"
-      style={{ backgroundImage: `url(${backgroundImageUrl})` }}
-    >
-      {/* Dark overlay */}
+    <div className="min-h-screen flex items-center justify-center px-6 py-10 bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 relative overflow-hidden">
+      {/* Dark overlay with blur */}
       <div className="absolute inset-0 bg-blue-950/60 backdrop-blur-sm" />
 
+      {/* Glassmorphism Container */}
       <div className="relative z-10 w-full max-w-2xl bg-white/10 backdrop-blur-xl border border-white/10 rounded-[2rem] p-12 flex flex-col items-center text-center shadow-2xl">
-        <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-8 border border-white/20 shadow-inner">
-          <Clock className="text-white w-8 h-8 opacity-90" />
+        
+        {/* Icon Circle */}
+        <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mb-8 border border-blue-500/30 shadow-inner">
+          <Clock className="text-blue-400 w-8 h-8" />
         </div>
+
         <h1 className="text-white text-3xl font-bold mb-2">Clock In</h1>
         <p className="text-blue-100 mb-10 opacity-80">Enter your staff ID to start your shift</p>
 
+        {/* Status Messages */}
         {errorMsg && (
-          <div className="mb-4 text-red-400 bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/50">
+          <div className="mb-6 w-full max-w-md text-red-400 bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/50">
             {errorMsg}
           </div>
         )}
 
         {successMsg && (
-          <div className="mb-4 text-green-400 bg-green-900/20 px-4 py-2 rounded-lg border border-green-500/50">
+          <div className="mb-6 w-full max-w-md text-green-400 bg-green-900/20 px-4 py-2 rounded-lg border border-green-500/50">
             {successMsg}
           </div>
         )}
 
-        <div className="flex gap-4 mb-4">
+        {/* PIN Inputs */}
+        <div className="flex gap-4 mb-10">
           {pin.map((digit, index) => (
             <input
               key={index}
@@ -125,15 +118,24 @@ export default function LoginId() {
             />
           ))}
         </div>
-        <p className="text-blue-100/40 text-sm mb-10 tracking-widest uppercase">6-digit unique identifier</p>
 
-        <button
-          onClick={handleClockIn}
-          disabled={loading}
-          className="w-full max-w-md py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 disabled:opacity-50"
-        >
-          {loading ? "Checking..." : "Clock In"}
-        </button>
+        {/* Action Buttons */}
+        <div className="flex flex-col w-full max-w-md gap-3">
+          <button
+            onClick={handleClockIn}
+            disabled={loading}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 disabled:opacity-50 active:scale-95"
+          >
+            {loading ? "Verifying..." : "Confirm Clock In"}
+          </button>
+
+          <button
+            onClick={() => navigate("/login")}
+            className="w-full py-3 bg-transparent hover:bg-white/5 text-white/60 font-medium rounded-xl transition text-sm"
+          >
+            Cancel & Return to Login
+          </button>
+        </div>
       </div>
     </div>
   );

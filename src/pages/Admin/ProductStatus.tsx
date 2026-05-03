@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from '../../components/Sidebar';
 import { 
-  Search, CalendarOff, AlertCircle, PackageSearch, 
-  RotateCcw, Filter, Calendar, ChevronLeft, ChevronRight, ScanLine 
+  Search, CalendarOff, AlertCircle, PackageSearch, ScanLine 
 } from 'lucide-react';
 
 export default function ProductStatus() {
@@ -74,7 +73,7 @@ export default function ProductStatus() {
         </div>
 
         {/* Table Content Area */}
-        <section className="flex-1 bg-white rounded-[2rem] border border-gray-800 overflow-hidden flex flex-col min-h-[400px] shadow-lg">
+        <section className="flex-1 bg-white rounded-[2rem] overflow-hidden flex flex-col min-h-[400px] shadow-lg">
           {/* Vibrant Blue Header */}
           <div className="bg-[#0056b3] text-white flex items-center px-8 py-5">
             <div className="flex-1 text-sm font-bold">Product</div>

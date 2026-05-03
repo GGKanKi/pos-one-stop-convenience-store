@@ -44,7 +44,7 @@ export default function LoginPage() {
             navigate("/admin/dashboard");
           } else if (data.user.role === 'staff') {
             if (data.user.hasStaffId) {
-              navigate("/POS");
+              navigate("/LoginId");
             } else {
               navigate("/setstaffid", { state: { email: email } });
             }
