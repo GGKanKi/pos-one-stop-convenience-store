@@ -16,9 +16,8 @@ export default function Sidebar() {
     { name: 'Staff', path: '/admin/staff', icon: Users },
     { name: 'Inventory', path: '/admin/inventory', icon: Package },
     { name: 'Transaction History', path: '/admin/transactions', icon: History },
+    // Path updated to match your App.tsx route exactly
     { name: 'Product Status', path: '/admin/productstatus', icon: BarChart3 },
-    { name: 'Inventory Discrepancies', path: '/admin/Discrepancies', icon: Scale }, // to be followed
-    { name: 'Sales Reports', path: '/admin/salesreports', icon: TrendingUp }, // to be followed
   ];
 
   return (
