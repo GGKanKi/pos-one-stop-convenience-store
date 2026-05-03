@@ -9,8 +9,17 @@ import POS from './pages/Staff/POS'; // NEW: Added by rhuz for the POS page
 import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
 import AdminDashboard from './pages/Admin/Dashboard'; 
 
-import StaffPage from './pages/Admin/Staff'; 
-import StaffDashboard from './pages/Staff/Dashboard'; // NEW: Dynamic staff dashboard - BLACKBOXAI
+import CashRegister from './pages/Staff/CashRegister'; 
+import LoginId from './pages/Staff/LoginId';
+import LogoutId from './pages/Staff/LogoutId'; 
+import POS from './pages/Staff/POS';
+
+import SetStaffId from "./pages/Admin/SetStaffId";
+import AdminDashboard from './pages/Admin/Dashboard';
+import StaffPage from './pages/Admin/Staff';
+import Inventory from './pages/Admin/Inventory';
+import Transactions from './pages/Admin/Transaction'; 
+import ProductStatus from './pages/Admin/ProductStatus'; // New Import
 
 function App() {
   return (
@@ -23,7 +32,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF ROUTES - Matches the POS navigation */}
+        {/** STAFF ROUTES */}
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/loginid" element={<LoginId />} />
         <Route path="/logoutid" element={<LogoutId />} />
@@ -31,10 +40,10 @@ function App() {
 
         {/** ADMIN ROUTES */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        
-        {/* ADDED: This route allows the "Staff" button in your Sidebar to work */}
-        <Route path="/admin/staff" element={<StaffPage />} /> 
-        <Route path="/staff/dashboard" element={<StaffDashboard />} /> {/* NEW: Staff Dashboard route - BLACKBOXAI */}
+        <Route path="/admin/staff" element={<StaffPage />} />
+        <Route path="/admin/inventory" element={<Inventory />} />
+        <Route path="/admin/transactions" element={<Transactions />} />
+        <Route path="/admin/productstatus" element={<ProductStatus />} /> {/* New Route */}
 
         {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
