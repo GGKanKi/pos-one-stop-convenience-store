@@ -4,17 +4,13 @@ import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
-import LoginId from './pages/Staff/LoginId'; // NEW: Added by bern for 6-digit PIN clock-in
-import POS from './pages/Staff/POS'; // NEW: Added by rhuz for the POS page
-import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
-import AdminDashboard from './pages/Admin/Dashboard'; 
 
-import CashRegister from './pages/Staff/CashRegister'; 
+import CashRegister from './pages/Staff/CashRegister';
 import LoginId from './pages/Staff/LoginId';
 import LogoutId from './pages/Staff/LogoutId'; 
 import POS from './pages/Staff/POS';
 
-import SetStaffId from "./pages/Admin/SetStaffId";
+import SetStaffId from "./pages/Staff/SetStaffId";
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';

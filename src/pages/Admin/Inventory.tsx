@@ -145,7 +145,7 @@ export default function Inventory() {
 
               <div className="flex flex-wrap gap-6">
                 <InputField label="Expiration Date" type="date" />
-                <InputField label="Low Stock Threshold" />
+                <InputField label="Low Stock Threshold for Replenishment" />
               </div>
             </div>
 
