@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Trash2, Plus, Minus, ScanLine
+  Search, Trash2, Plus, Minus, ScanLine, Check, Printer
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 
@@ -23,6 +23,7 @@ export default function POS() {
 
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'GCash'>('Cash');
   const [cashTendered, setCashTendered] = useState("0.00");
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +57,11 @@ export default function POS() {
 
   const handleConfirm = () => {
     if (!cart.length) return alert("Cart is empty");
-    alert("Payment Confirmed");
+    setShowReceiptModal(true);
+  };
+
+  const finalizeTransaction = () => {
+    setShowReceiptModal(false);
     setCart([]);
     setCashTendered("0.00");
   };
@@ -70,12 +75,42 @@ export default function POS() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1f3b6d] flex items-center justify-center px-4 py-6" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
-      <div className="w-full max-w-[1400px] flex gap-5">
+    <div className="min-h-screen bg-[#1f3b6d] flex items-center justify-center px-4 py-6 relative" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
+      
+      {showReceiptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all">
+          <div className="bg-white w-[420px] rounded-[40px] p-10 flex flex-col items-center shadow-[0_20px_60px_rgba(0,0,0,0.3)] animate-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 bg-[#4ade80] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-100">
+              <Check size={40} className="text-white stroke-[4px]" />
+            </div>
 
-        {/* LEFT PANEL */}
+            <h2 className="text-2xl font-black text-gray-800 mb-1">Transaction Success!</h2>
+            <p className="text-gray-500 text-center mb-8 font-medium">
+              Total Amount: <span className="font-bold text-[#0056b3]">₱{total.toFixed(2)}</span>
+            </p>
+
+            <div className="w-full space-y-3">
+              <button 
+                onClick={finalizeTransaction}
+                className="w-full bg-[#0056b3] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition shadow-lg shadow-blue-100"
+              >
+                <Printer size={20} />
+                Print Receipt
+              </button>
+              
+              <button 
+                onClick={() => setShowReceiptModal(false)}
+                className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-[1400px] flex gap-5">
         <div className="flex-[2] bg-white rounded-[30px] overflow-hidden shadow-xl flex flex-col">
-          {/* HEADER */}
           <div className="bg-[#0056b3] text-white flex justify-between items-center px-6 py-4 rounded-xl shadow-md border-b-4 border-blue-900">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white">
@@ -87,33 +122,17 @@ export default function POS() {
               </div>
             </div>
             <div className="flex gap-2">
-              {/* UPDATED: Path matches App.tsx */}
               <button 
                 onClick={() => navigate("/cashregister")} 
                 className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
               >
                 Cashier Out
               </button>
-              
-              <button 
-                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
-              >
-                Settings
-              </button>
-
-            {/* 
-              <button 
-                onClick={() => navigate("/login")}
-                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
-              >
-                Log out
-              </button> */}
-
+              <button className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition">Settings</button>
             </div> 
           </div> 
 
           <div className="p-5 flex flex-col gap-5 flex-1">
-            {/* SCAN */}
             <div className="relative">
               <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -123,7 +142,6 @@ export default function POS() {
               />
             </div>
 
-            {/* ACTIONS */}
             <div className="flex justify-between items-center">
               <div className="flex gap-10">
                 <button className="flex flex-col items-center group">
@@ -136,26 +154,20 @@ export default function POS() {
                   <img src="/pictures/recall.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Recall" />
                   <span className="text-sm font-medium mt-1">Recall</span>
                 </button>
-
-                <button
-                  onClick={() => navigate("/admin/dashboard", { state: { fullScreen: true } })}
+                <button 
+                  onClick={() => navigate("/admin/dashboard", { state: { fullScreen: true } })} 
                   className="flex flex-col items-center group"
                 >
                   <span className="text-sm text-gray-600 mb-1">F7</span>
                   <img src="/pictures/dashboard.png" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Dashboard" />
                   <span className="text-sm font-medium mt-1">Dashboard</span>
                 </button>
-
                 <button className="flex flex-col items-center group">
                   <span className="text-sm text-gray-600 mb-1">F8</span>
                   <img src="/pictures/void.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Void" />
                   <span className="text-sm font-medium mt-1">Void</span>
                 </button>
-
-                <button 
-                   onClick={() => navigate("/staff/inventorycheck")}
-                   className="flex flex-col items-center group"
-                >
+                <button onClick={() => navigate("/staff/inventorycheck")} className="flex flex-col items-center group">
                   <span className="text-sm text-gray-600 mb-1">F9</span>
                   <img src="/pictures/inventory.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Inventory" />
                   <span className="text-sm font-medium mt-1">Inventory</span>
@@ -168,7 +180,6 @@ export default function POS() {
               </div>
             </div>
 
-            {/* TABLE */}
             <div className="border rounded-xl flex-1 overflow-hidden shadow-md">
               <div className="h-full overflow-y-auto">
                 <table className="w-full table-fixed text-sm">
@@ -209,7 +220,6 @@ export default function POS() {
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
         <div className="flex-[1] max-w-[380px] bg-[#e9e9e9] rounded-[30px] p-5 border-4 border-blue-600 shadow-xl flex flex-col gap-5">
           <div className="bg-black rounded-xl px-5 py-5 border-2 border-orange-500">
             <p className="text-xs text-gray-300 font-bold">TOTAL</p>
@@ -234,10 +244,10 @@ export default function POS() {
               />
               <div className="flex gap-2 mt-2 text-sm">
                 {[100, 500, 1000].map((v) => (
-                  <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white transition">₱{v}</button>
+                  <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 transition">₱{v}</button>
                 ))}
               </div>
-              <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 active:bg-[#2f5bd3] active:text-white transition">EXACT</button>
+              <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 transition">EXACT</button>
             </div>
             <div className="mt-2">
               <p className="text-xs font-bold mb-1 uppercase tracking-wide">Change Due</p>
