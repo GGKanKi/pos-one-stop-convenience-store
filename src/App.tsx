@@ -4,10 +4,6 @@ import LoginPage from './pages/Public/Login';
 import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
-import LoginId from './pages/Staff/LoginId'; // NEW: Added by bern for 6-digit PIN clock-in
-import POS from './pages/Staff/POS'; // NEW: Added by rhuz for the POS page
-import SetStaffId from "./pages/Admin/SetStaffId"; // changed by bern to admin ('./pages/Public/SetStaffId'😉
-import AdminDashboard from './pages/Admin/Dashboard'; 
 
 import CashRegister from './pages/Staff/CashRegister'; 
 import LoginId from './pages/Staff/LoginId';
@@ -19,7 +15,6 @@ import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
 import Transactions from './pages/Admin/Transaction'; 
-import ProductStatus from './pages/Admin/ProductStatus'; // New Import
 
 function App() {
   return (
@@ -32,7 +27,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF ROUTES */}
+        {/** STAFF ROUTES - Matches the POS navigation */}
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/loginid" element={<LoginId />} />
         <Route path="/logoutid" element={<LogoutId />} />
@@ -43,7 +38,6 @@ function App() {
         <Route path="/admin/staff" element={<StaffPage />} />
         <Route path="/admin/inventory" element={<Inventory />} />
         <Route path="/admin/transactions" element={<Transactions />} />
-        <Route path="/admin/productstatus" element={<ProductStatus />} /> {/* New Route */}
 
         {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
