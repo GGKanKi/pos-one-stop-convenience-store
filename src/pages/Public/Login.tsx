@@ -88,7 +88,7 @@ export default function LoginPage() {
 
             <div className="max-w-md">
               <h2 className="text-2xl md:text-4xl lg:text-5xl leading-tight mb-4 md:mb-6">
-                Modern POS & Inventory System
+                InBentalytix
               </h2>
 
               <p className="text-blue-100 text-sm md:text-base lg:text-lg opacity-90">
