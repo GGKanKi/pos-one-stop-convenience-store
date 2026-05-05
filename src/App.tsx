@@ -17,7 +17,6 @@ import Inventory from './pages/Admin/Inventory';
 import InventoryCheck from './pages/Staff/InventoryCheck';
 import Discrepancies from './pages/Admin/Discrepancies'; // Added Import
 import Transactions from './pages/Admin/Transaction'; 
-import ProductStatus from './pages/Admin/ProductStatus';
 
 function App() {
   return (
@@ -30,7 +29,7 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF ROUTES */}
+        {/** STAFF ROUTES - Matches the POS navigation */}
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/loginid" element={<LoginId />} />
         <Route path="/logoutid" element={<LogoutId />} />
@@ -43,7 +42,6 @@ function App() {
         <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
         <Route path="/admin/discrepancies" element={<Discrepancies />} /> {/* Added Route */}
         <Route path="/admin/transactions" element={<Transactions />} />
-        <Route path="/admin/productstatus" element={<ProductStatus />} />
 
         {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
