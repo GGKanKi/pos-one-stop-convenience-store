@@ -38,9 +38,8 @@ try {
     // JOIN TABLE TO GET ALL DATA
     // SELECT * AND DATA FROM STAFF_IDS TABLE WHERE THE USER ID MATCHES THE DECODED USER ID FROM LOGIN TOKEN
     $stmt = $pdo->prepare(
-        "SELECT u.*, s.avatar as staff_avatar, s.staff_id
+        "SELECT u.*
         FROM users u
-        LEFT JOIN staff_ids s ON u.id = s.user_id
         WHERE u.id = ?"
     );
     $stmt->execute([$userId]);
@@ -56,7 +55,7 @@ try {
                 "email" => $user['email'],
                 "role" => $user['role'],
                 "staff_id" => $user['staff_id'] ?? null,
-                "avatar" => $user['staff_avatar'] ?? null
+                "avatar" => $user['avatar'] ?? null
             ]
         ]);
     } else {
