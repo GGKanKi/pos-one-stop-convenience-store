@@ -46,7 +46,7 @@ export default function LogoutId() {
       setLoading(false);
       // After clocking out, typically send them back to the main Login
       alert("Shift ended successfully. Great job today!");
-      navigate("/login"); 
+      navigate("/login");  // Redirect to login page after clocking out
     }, 1500);
   };
 
@@ -92,7 +92,7 @@ export default function LogoutId() {
           </button>
           
           <button 
-            onClick={() => navigate("/pos")}
+            onClick={() => navigate("/pos")} 
             className="w-full py-3 bg-transparent hover:bg-white/5 text-white/60 font-medium rounded-xl transition text-sm"
           >
             Go Back to POS  

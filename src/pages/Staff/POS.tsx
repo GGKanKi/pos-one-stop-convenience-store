@@ -101,15 +101,16 @@ export default function POS() {
                 Settings
               </button>
 
-              {/* UPDATED: Navigates to Logout PIN screen */}
+            {/* 
               <button 
-                onClick={() => navigate("/logoutid")}
+                onClick={() => navigate("/login")}
                 className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
               >
                 Log out
-              </button>
-            </div>
-          </div>
+              </button> */}
+
+            </div> 
+          </div> 
 
           <div className="p-5 flex flex-col gap-5 flex-1">
             {/* SCAN */}
@@ -152,7 +153,7 @@ export default function POS() {
                 </button>
 
                 <button 
-                   onClick={() => navigate("/admin/inventory")}
+                   onClick={() => navigate("/staff/inventorycheck")}
                    className="flex flex-col items-center group"
                 >
                   <span className="text-sm text-gray-600 mb-1">F9</span>

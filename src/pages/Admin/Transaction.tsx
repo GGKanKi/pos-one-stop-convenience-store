@@ -1,6 +1,6 @@
 import React from 'react';
 import Sidebar from '../../components/Sidebar';
-import { RotateCcw, Search } from 'lucide-react';
+import { RotateCcw, } from 'lucide-react';
 
 const TRANSACTION_DATA = [
   { id: 1, date: "05/01/2026 10:30 AM", action: "Sale", entities: "Product", description: "Sold 2x Buldak Carbonara", user: "Diane Annonuevo" },

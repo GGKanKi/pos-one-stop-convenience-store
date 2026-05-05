@@ -5,7 +5,7 @@ import SignupPage from './pages/Public/Signup';
 import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
 
-import CashRegister from './pages/Staff/CashRegister'; 
+import CashRegister from './pages/Staff/CashRegister';
 import LoginId from './pages/Staff/LoginId';
 import LogoutId from './pages/Staff/LogoutId'; 
 import POS from './pages/Staff/POS';
@@ -14,6 +14,8 @@ import SetStaffId from "./pages/Staff/SetStaffId";
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
+import InventoryCheck from './pages/Staff/InventoryCheck';
+import Discrepancies from './pages/Admin/Discrepancies'; // Added Import
 import Transactions from './pages/Admin/Transaction'; 
 
 function App() {
@@ -37,6 +39,8 @@ function App() {
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/staff" element={<StaffPage />} />
         <Route path="/admin/inventory" element={<Inventory />} />
+        <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
+        <Route path="/admin/discrepancies" element={<Discrepancies />} /> {/* Added Route */}
         <Route path="/admin/transactions" element={<Transactions />} />
 
         {/** DEFAULT ROUTE */}
