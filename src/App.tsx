@@ -10,7 +10,7 @@ import LoginId from './pages/Staff/LoginId';
 import LogoutId from './pages/Staff/LogoutId'; 
 import POS from './pages/Staff/POS';
 
-import SetStaffId from "./pages/Admin/SetStaffId";
+import SetStaffId from "./pages/Staff/SetStaffId";
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
