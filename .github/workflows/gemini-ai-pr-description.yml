@@ -221,21 +221,3 @@ jobs:
             --body-file /tmp/pr_body.txt || true
 
           echo "✅ PR description updated"
-
-      # ── 6. Update PR body ───────────────────────────────────────────────
-      - name: Update PR with AI description
-        env:
-          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
-          DESCRIPTION: ${{ steps.gemini.outputs.description }}
-        run: |
-          if [ -z "$DESCRIPTION" ]; then
-            echo "⚠️ No description — skipping PR update"
-            exit 0
-          fi
-
-          printf '%s' "$DESCRIPTION" > /tmp/pr_body.txt
-
-          gh pr edit ${{ github.event.pull_request.number }} \
-            --body-file /tmp/pr_body.txt || true
-
-          echo "✅ PR description updated"
