@@ -1,0 +1,241 @@
+name: AI PR Description Generator
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited]
+
+jobs:
+  generate-description:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # ── 2. Get git diff ────────────────────────────────────────────────
+      - name: Get git diff
+        run: |
+          BASE="${{ github.base_ref }}"
+          HEAD_REF="${{ github.head_ref }}"
+
+          echo "🔍 Base:  $BASE"
+          echo "🔍 Head:  $HEAD_REF"
+
+          git fetch origin "$BASE"     --no-tags
+          git fetch origin "$HEAD_REF" --no-tags
+
+          BASE_SHA=$(git rev-parse "origin/$BASE")
+          HEAD_SHA=$(git rev-parse FETCH_HEAD)
+
+          echo "📌 Base SHA: $BASE_SHA"
+          echo "📌 Head SHA: $HEAD_SHA"
+
+          git diff "$BASE_SHA"..."$HEAD_SHA" --stat \
+            > /tmp/diff_stat.txt
+
+          git diff "$BASE_SHA"..."$HEAD_SHA" \
+            -- '*.ts' '*.tsx' '*.js' '*.jsx' \
+               '*.py' '*.sql' '*.css' '*.json' \
+               '*.yml' '*.yaml' '*.md' \
+            | head -n 1000 \
+            > /tmp/diff_code.txt
+
+          echo "=== FILES CHANGED ==="
+          cat /tmp/diff_stat.txt
+          echo "=== DIFF LINE COUNT ==="
+          wc -l /tmp/diff_code.txt
+
+          if [ ! -s /tmp/diff_code.txt ]; then
+            echo "⚠️ Diff is empty — check file types"
+          else
+            echo "✅ Diff captured successfully"
+          fi
+
+      # ── 3. TEMP: List available Gemini models ──────────────────────────
+      #    KEEP THIS LINE INCASE THE VERSION OF GEMINI API CHANGES AND WE NEED TO UPDATE THE MODEL NAME OR PARAMETERS
+      - name: List available Gemini models
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          curl -s \
+            "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY" \
+            | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          models = data.get('models', [])
+          print('=== MODELS SUPPORTING generateContent ===')
+          for m in models:
+              name    = m.get('name', '')
+              methods = m.get('supportedGenerationMethods', [])
+              if 'generateContent' in methods:
+                  print(name)
+          print('=== END OF LIST ===')
+            "
+
+      # ── 4. Generate PR description with Gemini ─────────────────────────
+      - name: Generate PR description with Gemini AI
+        id: gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BRANCH:         ${{ github.head_ref }}
+          BASE_BRANCH:    ${{ github.base_ref }}
+        run: |
+          python3 << 'PYEOF'
+          import os, json, urllib.request, sys
+
+          branch      = os.environ.get("BRANCH",      "unknown")
+          base_branch = os.environ.get("BASE_BRANCH", "main")
+
+          try:
+              with open("/tmp/diff_stat.txt") as f:
+                  stat = f.read()[:300]
+              with open("/tmp/diff_code.txt") as f:
+                  code = f.read()[:3000]
+          except FileNotFoundError:
+              stat = "No stat"
+              code = "No diff"
+
+          print(f"📋 Branch:      {branch} → {base_branch}")
+          print(f"📋 Stat length: {len(stat)} chars")
+          print(f"📋 Code length: {len(code)} chars")
+
+          prompt = (
+              f"You are a senior developer. "
+              f"A PR was opened: '{branch}' → '{base_branch}'.\n\n"
+              f"Files changed:\n{stat}\n\n"
+              f"Code diff:\n{code}\n\n"
+              "Fill out this template. Return ONLY the markdown, nothing else.\n\n"
+              "## 📝 Summary\n\n"
+              "## 🔧 Type of Change\n"
+              "- [ ] Bug fix\n"
+              "- [ ] New feature\n"
+              "- [ ] Refactor\n"
+              "- [ ] UI/Frontend (React)\n"
+              "- [ ] Backend (PHP)\n"
+              "- [ ] Database (Supabase)\n"
+              "- [ ] Documentation\n\n"
+              "## 📦 Affected Services\n"
+              "- [ ] Frontend (React · port 5173)\n"
+              "- [ ] Backend API (PHP · port 3000)\n"
+              "- [ ] Database (Supabase)\n\n"
+              "## ✅ Checklist\n"
+              "- [ ] No hardcoded secrets or API keys\n"
+              "- [ ] package.json updated if new npm packages added\n"
+              "- [ ] requirements.txt updated if new pip packages added\n"
+              "- [ ] .env.example updated if new env vars added\n"
+              "- [ ] Self-reviewed the code\n\n"
+              "## 🧪 How to Test\n"
+          )
+
+          payload = json.dumps({
+              "contents": [{"parts": [{"text": prompt}]}]
+          }).encode("utf-8")
+
+          api_key = os.environ.get("GEMINI_API_KEY", "")
+          if not api_key:
+              print("⚠️ GEMINI_API_KEY not set — skipping", file=sys.stderr)
+              sys.exit(0)
+
+          url = (
+              "https://generativelanguage.googleapis.com"
+              "/v1/models/gemini-2.5-flash:generateContent"
+              f"?key={api_key}"
+          )
+
+          req = urllib.request.Request(
+              url, data=payload,
+              headers={"Content-Type": "application/json"}
+          )
+
+          try:
+              with urllib.request.urlopen(req, timeout=30) as res:
+                  data       = json.loads(res.read().decode("utf-8"))
+                  
+                  # Save Token Data
+                  usage = data.get("usageMetadata", {})
+                  with open("/tmp/token_usage.json", "w") as f:
+                      json.dump(usage, f)
+                  print("✅ Token usage data saved")
+
+                  candidates = data.get("candidates", [])
+                  print(f"📋 Candidates: {len(candidates)}")
+
+                  if not candidates:
+                      print("⚠️ No candidates returned", file=sys.stderr)
+                      print(f"Response: {json.dumps(data)[:300]}", file=sys.stderr)
+                      sys.exit(0)
+
+                  description = (
+                      candidates[0]
+                      .get("content", {})
+                      .get("parts", [{}])[0]
+                      .get("text", "")
+                  )
+
+                  if not description:
+                      print("⚠️ Empty description", file=sys.stderr)
+                      sys.exit(0)
+
+                  print(f"✅ Generated {len(description)} chars")
+                  print(f"📄 Preview: {description[:150]}...")
+
+                  github_output = os.environ.get("GITHUB_OUTPUT", "")
+                  if github_output:
+                      with open(github_output, "a") as f:
+                          f.write("description<<EOF\n")
+                          f.write(description + "\n")
+                          f.write("EOF\n")
+                      print("✅ Written to GITHUB_OUTPUT")
+
+          except urllib.error.HTTPError as e:
+              print(f"❌ HTTP {e.code}: {e.read().decode()}", file=sys.stderr)
+          except urllib.error.URLError as e:
+              print(f"❌ Network: {e.reason}", file=sys.stderr)
+          except Exception as e:
+              print(f"❌ Error: {e}", file=sys.stderr)
+
+          PYEOF
+
+
+      # ── 5. Update PR body ───────────────────────────────────────────────
+      - name: Update PR with AI description
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          DESCRIPTION: ${{ steps.gemini.outputs.description }}
+        run: |
+          if [ -z "$DESCRIPTION" ]; then
+            echo "⚠️ No description — skipping PR update"
+            exit 0
+          fi
+
+          printf '%s' "$DESCRIPTION" > /tmp/pr_body.txt
+
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --body-file /tmp/pr_body.txt || true
+
+          echo "✅ PR description updated"
+
+      # ── 6. Update PR body ───────────────────────────────────────────────
+      - name: Update PR with AI description
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          DESCRIPTION: ${{ steps.gemini.outputs.description }}
+        run: |
+          if [ -z "$DESCRIPTION" ]; then
+            echo "⚠️ No description — skipping PR update"
+            exit 0
+          fi
+
+          printf '%s' "$DESCRIPTION" > /tmp/pr_body.txt
+
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --body-file /tmp/pr_body.txt || true
+
+          echo "✅ PR description updated"
