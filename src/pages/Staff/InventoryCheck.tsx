@@ -82,7 +82,7 @@ export default function InventoryCheck() {
                   <td className="p-6">₱ {item.price}</td>
                   <td className="p-6 pr-10">
                     <div className="flex justify-center">
-                      {/* RESTORED: Original container size and styling */}
+                     
                       <input
                         type="number"
                         value={actualStocks[item.barcode] || ""}

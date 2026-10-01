@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Trash2, Plus, Minus, ScanLine, Check, Printer
+  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 
@@ -24,6 +24,8 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'GCash'>('Cash');
   const [cashTendered, setCashTendered] = useState("0.00");
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [transactionDiscount, setTransactionDiscount] = useState<number>(0.00);
 
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,9 +33,28 @@ export default function POS() {
     scanInputRef.current?.focus();
   }, []);
 
-  const total = useMemo(
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F10') {
+        e.preventDefault();
+        setShowPaymentModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const subTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart]
+  );
+
+  const total = useMemo(
+    () => Math.max(0, subTotal - transactionDiscount),
+    [subTotal, transactionDiscount]
   );
 
   const changeDue = useMemo(() => {
@@ -57,6 +78,7 @@ export default function POS() {
 
   const handleConfirm = () => {
     if (!cart.length) return alert("Cart is empty");
+    setShowPaymentModal(false);
     setShowReceiptModal(true);
   };
 
@@ -64,152 +86,242 @@ export default function POS() {
     setShowReceiptModal(false);
     setCart([]);
     setCashTendered("0.00");
-  };
-
-  const handleCancel = () => {
-    if (!cart.length) return;
-    if (confirm("Cancel transaction?")) {
-      setCart([]);
-      setCashTendered("0.00");
-    }
+    setTransactionDiscount(0.00);
   };
 
   return (
-    <div className="min-h-screen bg-[#1f3b6d] flex items-center justify-center px-4 py-6 relative" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
+    <div className="min-h-screen w-screen bg-gradient-to-br from-[#183478] via-[#12285e] to-[#0a183b] flex flex-col p-4 relative text-cyan-100 overflow-x-hidden shadow-[inset_0_0_100px_rgba(0,140,255,0.15)]" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
+      {/* Receipt Success Modal */}
       {showReceiptModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all">
-          <div className="bg-white w-[420px] rounded-[40px] p-10 flex flex-col items-center shadow-[0_20px_60px_rgba(0,0,0,0.3)] animate-in zoom-in-95 duration-200">
-            <div className="w-20 h-20 bg-[#4ade80] rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-100">
-              <Check size={40} className="text-white stroke-[4px]" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[450px] rounded-[30px] p-10 flex flex-col items-center shadow-[0_0_50px_rgba(0,180,255,0.3)]">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#1c3e8a] to-[#0e204c] border-2 border-cyan-400 rounded-full flex items-center justify-center mb-5 shadow-[0_0_20px_rgba(0,242,254,0.4)]">
+              <Check size={40} className="text-cyan-400 stroke-[3px]" />
             </div>
 
-            <h2 className="text-2xl font-black text-gray-800 mb-1">Transaction Success!</h2>
-            <p className="text-gray-500 text-center mb-8 font-medium">
-              Total Amount: <span className="font-bold text-[#0056b3]">₱{total.toFixed(2)}</span>
+            <h2 className="text-2xl font-black text-white mb-1 tracking-wider">TRANSACTION SUCCESS</h2>
+            <p className="text-cyan-300/70 text-center mb-6 font-medium text-sm">
+              Total Amount: <span className="font-bold text-cyan-400">₱{total.toFixed(2)}</span>
             </p>
 
             <div className="w-full space-y-3">
               <button 
                 onClick={finalizeTransaction}
-                className="w-full bg-[#0056b3] text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition shadow-lg shadow-blue-100"
+                className="w-full bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider flex items-center justify-center gap-2 hover:bg-cyan-400 active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]"
               >
-                <Printer size={20} />
-                Print Receipt
+                <Printer size={18} />
+                PRINT RECEIPT
               </button>
               
               <button 
                 onClick={() => setShowReceiptModal(false)}
-                className="w-full bg-gray-100 text-gray-500 py-4 rounded-2xl font-bold hover:bg-gray-200 active:scale-95 transition"
+                className="w-full bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]"
               >
-                Cancel
+                CANCEL
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="w-full max-w-[1400px] flex gap-5">
-        <div className="flex-[2] bg-white rounded-[30px] overflow-hidden shadow-xl flex flex-col">
-          <div className="bg-[#0056b3] text-white flex justify-between items-center px-6 py-4 rounded-xl shadow-md border-b-4 border-blue-900">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white">
-                <img src="/pictures/avatar.jpg" className="w-full h-full object-cover" alt="User Avatar" />
+      {/* Payment & Checkout Centered Window */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[460px] rounded-[30px] p-6 flex flex-col justify-between gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)] animate-in zoom-in-95 duration-150">
+            
+            <div className="space-y-4 flex flex-col">
+              <div className="flex justify-between items-center pb-2 border-b border-cyan-500/20">
+                <p className="text-xs text-cyan-400 font-black tracking-widest uppercase">PAYMENT & CHECKOUT</p>
+                <button onClick={() => setShowPaymentModal(false)} className="text-cyan-400 hover:text-white transition">
+                  <X size={20} />
+                </button>
               </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-bold uppercase tracking-wide">POS Terminal</span>
-                <span className="text-xs opacity-90">202603 - Bernice Partisala</span>
+
+              {/* Total Display Box */}
+              <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] rounded-xl p-4 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,140,255,0.25)]">
+                <p className="text-xs text-cyan-400 font-bold tracking-widest uppercase">TOTAL AMOUNT</p>
+                <div className="text-right text-3xl text-cyan-300 font-black tracking-wider mt-1 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">
+                  ₱ {total.toFixed(2)}
+                </div>
+              </div>
+
+              {/* Payment Section */}
+              <div className="bg-gradient-to-b from-[#183478]/90 to-[#0e214d]/90 rounded-xl p-4 border border-cyan-400/40 space-y-3.5 shadow-[0_0_20px_rgba(0,140,255,0.15)]">
+                <div>
+                  <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">PAYMENT METHOD</p>
+                  <div className="flex gap-2.5 mt-1.5">
+                    <button onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "Cash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>Cash</button>
+                    <button onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "GCash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>GCash</button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">CASH TENDERED</p>
+                  <div className="relative mt-1.5">
+                    <input 
+                      value={cashTendered} 
+                      onClick={() => setCashTendered("")} 
+                      onChange={(e) => setCashTendered(e.target.value)} 
+                      className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cyan-500">₱</span>
+                  </div>
+                  <div className="flex gap-2 mt-2 text-sm">
+                    {[100, 500, 1000].map((v) => (
+                      <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
+                    ))}
+                  </div>
+                  <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-cyan-300 mb-1.5 uppercase tracking-wide">CHANGE DUE</p>
+                  <div className="bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 text-cyan-300 p-3.5 rounded-xl text-center shadow-[0_0_15px_rgba(0,140,255,0.2)]">
+                    <span className="text-lg font-black tracking-wider text-cyan-400">₱ {changeDue.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => navigate("/cashregister")} 
-                className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition"
-              >
-                Cashier Out
-              </button>
-              <button className="bg-white text-black px-4 py-3 rounded-full text-xs font-bold hover:bg-gray-200 active:scale-95 transition">Settings</button>
-            </div> 
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-1">
+              <button onClick={handleConfirm} className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
+              <button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Full-Screen Main POS Workspace Panel */}
+      <div className="w-full flex-1 bg-slate-200 border-2 border-cyan-400/60 rounded-[26px] overflow-hidden shadow-[0_0_40px_rgba(0,140,255,0.25)] flex flex-col p-4 gap-4">
+        
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-200 flex flex-wrap justify-between items-center gap-4 px-6 py-4 border-2 border-cyan-400/60 rounded-2xl shadow-[0_0_25px_rgba(0,150,255,0.2)]">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-cyan-400 shadow-[0_0_15px_rgba(0,242,254,0.6)] flex items-center justify-center bg-gradient-to-br from-[#1c3e8a] to-[#112759] shrink-0">
+              <span className="text-xs font-bold text-cyan-200">User</span>
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm font-black uppercase tracking-wider text-white">POS TERMINAL</span>
+              <span className="text-xs text-cyan-300/70 mt-0.5">202603 - Bernice Partisala</span>
+            </div>
+          </div>
+          
+          <div className="flex gap-2.5">
+            <button 
+              onClick={() => navigate("/cashregister")} 
+              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
+            >
+              Cashier Out
+            </button>
+            <button 
+              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
+            >
+              Settings
+            </button>
           </div> 
+        </div> 
 
-          <div className="p-5 flex flex-col gap-5 flex-1">
-            <div className="relative">
-              <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                ref={scanInputRef}
-                placeholder="Scan Product Code"
-                className="w-full pl-12 pr-4 py-3 border-2 border-blue-400 rounded-full outline-none focus:ring-2 focus:ring-blue-600 transition-all"
-              />
-            </div>
+        {/* Body Content */}
+        <div className="bg-slate-200 border-2 border-cyan-400/50 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 flex-1 shadow-sm">
+          
+          {/* Scan Bar */}
+          <div className="relative">
+            <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={20} />
+            <input
+              ref={scanInputRef}
+              placeholder="SCAN Product Code"
+              className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 focus:shadow-[0_0_20px_rgba(0,200,255,0.4)] transition-all font-semibold text-sm shadow-[0_0_15px_rgba(0,140,255,0.2)]"
+            />
+          </div>
 
-            <div className="flex justify-between items-center">
-              <div className="flex gap-10">
-                <button className="flex flex-col items-center group">
-                  <span className="text-sm text-gray-600 mb-1">F5</span>
-                  <img src="/pictures/discount.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Discount" />
-                  <span className="text-sm font-medium mt-1">Discounts</span>
-                </button>
-                <button className="flex flex-col items-center group">
-                  <span className="text-sm text-gray-600 mb-1">F6</span>
-                  <img src="/pictures/recall.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Recall" />
-                  <span className="text-sm font-medium mt-1">Recall</span>
-                </button>
+          {/* Quick Actions & Search Row */}
+          <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+            <div className="flex gap-3.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-thin">
+              {[
+                { label: "Discounts", shortcut: "F5", img: "/pictures/discount.png" },
+                { label: "Recall", shortcut: "F6", img: "/pictures/recall.jpg" },
+                { label: "Dashboard", shortcut: "F7", img: "/pictures/dashboard.png", action: () => navigate("/admin/dashboard", { state: { fullScreen: true } }) },
+                { label: "Void", shortcut: "F8", img: "/pictures/void.jpg" },
+                { label: "Inventory", shortcut: "F9", img: "/pictures/inventory.jpg", action: () => navigate("/staff/inventorycheck") },
+                { label: "Payment", shortcut: "F10", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) }
+              ].map((btn, idx) => (
                 <button 
-                  onClick={() => navigate("/admin/dashboard", { state: { fullScreen: true } })} 
-                  className="flex flex-col items-center group"
+                  key={idx}
+                  onClick={btn.action}
+                  className="relative flex flex-col items-center justify-between overflow-hidden border border-cyan-400/50 hover:border-cyan-300 p-2.5 rounded-xl group hover:shadow-[0_0_20px_rgba(0,180,255,0.35)] transition w-24 h-24 shrink-0 shadow-[0_0_12px_rgba(0,140,255,0.2)]"
                 >
-                  <span className="text-sm text-gray-600 mb-1">F7</span>
-                  <img src="/pictures/dashboard.png" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Dashboard" />
-                  <span className="text-sm font-medium mt-1">Dashboard</span>
-                </button>
-                <button className="flex flex-col items-center group">
-                  <span className="text-sm text-gray-600 mb-1">F8</span>
-                  <img src="/pictures/void.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Void" />
-                  <span className="text-sm font-medium mt-1">Void</span>
-                </button>
-                <button onClick={() => navigate("/staff/inventorycheck")} className="flex flex-col items-center group">
-                  <span className="text-sm text-gray-600 mb-1">F9</span>
-                  <img src="/pictures/inventory.jpg" className="w-14 h-14 object-contain group-hover:scale-110 transition" alt="Inventory" />
-                  <span className="text-sm font-medium mt-1">Inventory</span>
-                </button>
-              </div>
+                  {/* Background Image */}
+                  <img 
+                    src={btn.img} 
+                    alt={btn.label} 
+                    className="absolute inset-0 w-full h-full object-cover brightness-75 group-hover:scale-110 group-hover:brightness-90 transition duration-300 z-0" 
+                  />
+                  
+                  {/* Overlay Gradient for Text Readability */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 z-10"></div>
 
-              <div className="relative w-[220px]">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input placeholder="Search Product Name" className="w-full px-3 py-2 border rounded-full text-sm outline-none focus:border-blue-500" />
-              </div>
+                  {/* Top Shortcut Text */}
+                  <span className="relative text-[10px] text-cyan-300 font-bold z-20 drop-shadow">{btn.shortcut}</span>
+
+                  {/* Bottom Label Text */}
+                  <span className="relative text-xs font-semibold text-white z-20 drop-shadow">{btn.label}</span>
+                </button>
+              ))}
             </div>
 
-            <div className="border rounded-xl flex-1 overflow-hidden shadow-md">
-              <div className="h-full overflow-y-auto">
-                <table className="w-full table-fixed text-sm">
-                  <thead className="bg-[#0056b3] text-white border-b-4 border-blue-900 sticky top-0 z-10">
+            <div className="relative w-full lg:w-[300px]">
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400" size={18} />
+              <input placeholder="Search Product Name" className="w-full pl-4 pr-11 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border border-cyan-400/50 rounded-xl text-sm text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition shadow-[0_0_12px_rgba(0,140,255,0.2)]" />
+            </div>
+          </div>
+
+          {/* Stacked Layout: Full-Width Table + Bottom Summary Box */}
+          <div className="flex flex-col gap-4 flex-1">
+            
+            {/* Cart Table Grid (Full Width with precise alignment) */}
+            <div className="border border-cyan-400/50 bg-white rounded-xl flex-1 overflow-hidden shadow-inner flex flex-col min-h-[220px]">
+              <div className="overflow-y-auto flex-1">
+                <table className="w-full table-fixed text-sm text-slate-800 border-collapse">
+                  <colgroup>
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '18%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '14%' }} />
+                  </colgroup>
+                  <thead className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-300 border-b-2 border-cyan-400/60 sticky top-0 z-10 shadow-[0_4px_10px_rgba(0,140,255,0.2)]">
                     <tr>
-                      <th className="p-3 w-[6%] text-center">No.</th>
-                      <th className="p-3 w-[20%] text-left">Code</th>
-                      <th className="p-3 w-[24%] text-left">Name</th>
-                      <th className="p-3 w-[20%] text-left">Desc</th>
-                      <th className="p-3 w-[15%] text-center">Qty</th>
-                      <th className="p-3 w-[15%] text-center">Price</th>
+                      <th className="p-3 text-center font-bold">No.</th>
+                      <th className="p-3 text-left font-bold">Code</th>
+                      <th className="p-3 text-left font-bold">Name</th>
+                      <th className="p-3 text-left font-bold">Desc</th>
+                      <th className="p-3 text-center font-bold">Qty</th>
+                      <th className="p-3 text-center font-bold">Price</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-200">
                     {cart.map((item, i) => (
-                      <tr key={item.id} className="border-b hover:bg-blue-50 transition-colors">
-                        <td className="p-3 text-center">{i + 1}</td>
-                        <td className="p-3 truncate">{item.code}</td>
-                        <td className="p-3 truncate font-bold">{item.name}</td>
-                        <td className="p-3 truncate text-gray-500">{item.description}</td>
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-3 text-center font-medium text-slate-600">{i + 1}</td>
+                        <td className="p-3 truncate font-mono text-slate-700">{item.code}</td>
+                        <td className="p-3 truncate font-bold text-slate-900">{item.name}</td>
+                        <td className="p-3 truncate text-slate-500">{item.description}</td>
                         <td className="p-3">
-                          <div className="flex justify-center items-center gap-2">
-                            <button onClick={() => updateQty(item.id, -1)} className="border w-7 h-7 rounded-full flex items-center justify-center bg-white hover:bg-gray-100 active:scale-90"><Minus size={12} /></button>
-                            <span className="font-bold w-4 text-center">{item.qty}</span>
-                            <button onClick={() => updateQty(item.id, 1)} className="border w-7 h-7 rounded-full flex items-center justify-center bg-white hover:bg-gray-100 active:scale-90"><Plus size={12} /></button>
+                          <div className="flex justify-center items-center gap-1.5">
+                            <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Minus size={12} /></button>
+                            <span className="font-bold w-5 text-center text-slate-800 text-xs">{item.qty}</span>
+                            <button onClick={() => updateQty(item.id, 1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Plus size={12} /></button>
                           </div>
                         </td>
-                        <td className="p-3 text-center font-bold relative">
-                          ₱ {item.price.toFixed(2)}
-                          <button onClick={() => removeItem(item.id)} className="absolute right-2 top-1/2 -translate-y-1/2 text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={14} /></button>
+                        <td className="p-3 text-center font-bold text-slate-900 relative">
+                          <div className="flex items-center justify-center gap-2">
+                            <span>₱{item.price.toFixed(2)}</span>
+                            <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={15} /></button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -217,51 +329,58 @@ export default function POS() {
                 </table>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="flex-[1] max-w-[380px] bg-[#e9e9e9] rounded-[30px] p-5 border-4 border-blue-600 shadow-xl flex flex-col gap-5">
-          <div className="bg-black rounded-xl px-5 py-5 border-2 border-orange-500">
-            <p className="text-xs text-gray-300 font-bold">TOTAL</p>
-            <div className="text-right text-3xl text-gray-300 font-extrabold">₱ {total.toFixed(2)}</div>
-          </div>
-          <hr className="border-gray-400" />
-          <div className="bg-[#f4f4f4] rounded-xl p-4 border space-y-4">
-            <div>
-              <p className="text-xs font-bold">Payment Method</p>
-              <div className="flex gap-2 mt-2">
-                <button onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2 rounded-xl font-bold transition ${paymentMethod === "Cash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300 text-gray-600"}`}>Cash</button>
-                <button onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2 rounded-xl font-bold transition ${paymentMethod === "GCash" ? "bg-[#0056b3] text-white shadow-md border-b-4 border-blue-900" : "bg-gray-300 text-gray-600"}`}>GCash</button>
+            {/* Bottom Transaction Total Panel */}
+            <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3.5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center shadow-[0_0_30px_rgba(0,150,255,0.3)] text-cyan-200">
+              <div className="min-w-0 flex items-center gap-4 sm:gap-6 flex-wrap">
+                <div className="flex items-center gap-3 pr-4 border-r border-cyan-500/30">
+                  <div className="w-10 h-10 rounded-xl border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shadow-[0_0_10px_rgba(0,140,255,0.3)] shrink-0">
+                    <span className="font-black text-lg">📄</span>
+                  </div>
+                  <span className="text-amber-400 font-bold tracking-widest text-xs sm:text-sm uppercase whitespace-nowrap">--- TRANSACTION TOTAL ---</span>
+                </div>
+
+                <div className="flex items-center gap-6 flex-wrap">
+                  <div className="flex items-center gap-3 pr-6 border-r border-cyan-500/30">
+                    <div className="w-9 h-9 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shadow-[0_0_10px_rgba(0,140,255,0.2)] shrink-0">
+                      💳
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide">Sub Total</span>
+                      <strong className="text-white font-mono text-base sm:text-lg">Php {subTotal.toFixed(2)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shadow-[0_0_10px_rgba(0,140,255,0.2)] shrink-0">
+                      %
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide">Discount</span>
+                      <strong className="text-white font-mono text-base sm:text-lg">Php {transactionDiscount.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-cyan-400/50 rounded-xl px-6 py-2.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] flex items-center justify-between gap-6 shadow-[0_0_20px_rgba(0,140,255,0.25)] shrink-0">
+                <div className="flex items-center gap-3 pr-4 border-r border-cyan-500/30">
+                  <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shrink-0 text-xs">
+                    💰
+                  </div>
+                  <span className="font-black text-amber-400 tracking-wider text-xs uppercase">TOTAL</span>
+                </div>
+                <span className="font-black text-amber-400 tracking-wider text-xl sm:text-2xl font-mono drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                  Php {total.toFixed(2)}
+                </span>
               </div>
             </div>
-            <div>
-              <p className="text-xs font-bold">Cash Tendered</p>
-              <input 
-                value={cashTendered} 
-                onClick={() => setCashTendered("")} 
-                onChange={(e) => setCashTendered(e.target.value)} 
-                className="w-full bg-[#ddd] rounded p-2 text-center font-bold outline-none border-2 border-transparent focus:border-blue-400" 
-              />
-              <div className="flex gap-2 mt-2 text-sm">
-                {[100, 500, 1000].map((v) => (
-                  <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 transition">₱{v}</button>
-                ))}
-              </div>
-              <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border-2 border-gray-600 rounded-md py-1 font-bold bg-[#efefef] active:scale-95 transition">EXACT</button>
-            </div>
-            <div className="mt-2">
-              <p className="text-xs font-bold mb-1 uppercase tracking-wide">Change Due</p>
-              <div className="bg-[#0056b3] text-white p-4 rounded-xl shadow-md border-b-4 border-blue-900 text-center">
-                <span className="text-xl font-extrabold tracking-wide">₱ {changeDue.toFixed(2)}</span>
-              </div>
-            </div>
+
           </div>
-          <div className="flex gap-2 mt-auto">
-            <button onClick={handleConfirm} className="flex-1 bg-[#102c44] text-white py-3 rounded-xl font-bold active:scale-95 hover:bg-slate-800 transition">Confirm</button>
-            <button onClick={handleCancel} className="flex-1 bg-gray-300 py-3 rounded-xl font-bold active:scale-95 hover:bg-gray-400 transition text-gray-700">Cancel</button>
-          </div>
+
         </div>
       </div>
+
     </div>
   );
 }

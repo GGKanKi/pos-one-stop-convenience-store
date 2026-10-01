@@ -40,9 +40,8 @@ $password = $data->password;
 try {
     // USER FETCH with staff_id check (LEFT JOIN for SetStaffId flow - BLACKBOXAI)
     $stmt = $pdo->prepare("
-        SELECT u.*, s.staff_id, s.avatar as staff_avatar 
+        SELECT u.*
         FROM users u 
-        LEFT JOIN staff_ids s ON u.id = s.user_id 
         WHERE u.email = ?
     ");
     $stmt->execute([$email]);

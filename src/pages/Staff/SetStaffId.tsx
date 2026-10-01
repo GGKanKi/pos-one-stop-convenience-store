@@ -69,7 +69,7 @@ export default function SetStaffId() {
 
       if (result.success) {
         alert("Staff ID set successfully!");
-        navigate("/POS");
+        navigate("/pos");
       } else {
         setError(result.message || "Failed to save Staff ID.");
       }

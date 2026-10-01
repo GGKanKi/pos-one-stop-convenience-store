@@ -83,7 +83,7 @@ try {
     $userId = $user['id'];
 
     // 2. Check if staff_id already taken (unique check)
-    $stmt = $pdo->prepare("SELECT user_id FROM staff_ids WHERE staff_id = ?");
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ?");
     $stmt->execute([$staffId]);
     if ($stmt->fetch()) {
         $pdo->rollBack();
@@ -96,7 +96,7 @@ try {
     }
 
     // 3. Check if user already has staff_id (prevent duplicate)
-    $stmt = $pdo->prepare("SELECT id FROM staff_ids WHERE user_id = ?");
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND staff_id IS NOT NULL");
     $stmt->execute([$userId]);
     if ($stmt->fetch()) {
         $pdo->rollBack();
@@ -109,8 +109,8 @@ try {
     }
 
     // 4. Insert into staff_ids
-    $stmt = $pdo->prepare("INSERT INTO staff_ids (user_id, staff_id, avatar) VALUES (?, ?, ?)");
-    $stmt->execute([$userId, $staffId, $avatar]);
+    $stmt = $pdo->prepare("UPDATE users SET staff_id = ?, avatar = ? WHERE id = ?");
+    $stmt->execute([$staffId, $avatar, $userId]);
 
     $pdo->commit();
 

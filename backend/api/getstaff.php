@@ -18,9 +18,8 @@ require __DIR__ . '/../config/db.php';
 try {
     // Fetch all staff (role='staff') LEFT JOIN staff_ids
     $stmt = $pdo->prepare("
-        SELECT u.id, u.first_name, u.last_name, s.staff_id, s.avatar 
+        SELECT u.id, u.first_name, u.last_name, u.staff_id, u.avatar 
         FROM users u 
-        LEFT JOIN staff_ids s ON u.id = s.user_id 
         WHERE u.role = 'staff' 
         ORDER BY u.first_name ASC, u.last_name ASC
     ");

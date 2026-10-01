@@ -34,7 +34,7 @@ if ($token) {
 }
 // Method 2: staff_id in JSON body (from LoginId.tsx)
 elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT user_id FROM staff_ids WHERE staff_id = ?");
+    $stmt = $pdo->prepare("SELECT user_id FROM users WHERE staff_id = ?");
     $stmt->execute([$staffIdFromBody]);
     $row = $stmt->fetch();
     $userId = $row ? (int)$row['user_id'] : 0;

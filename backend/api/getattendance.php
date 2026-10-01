@@ -41,7 +41,7 @@ if ($token) {
 }
 // Method 2: staff_id in JSON body (staff mode)
 elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT user_id FROM staff_ids WHERE staff_id = ?");
+    $stmt = $pdo->prepare("SELECT user_id FROM users WHERE staff_id = ?");
     $stmt->execute([$staffIdFromBody]);
     $row = $stmt->fetch();
     $userId = $row ? (int)$row['user_id'] : 0;
@@ -60,14 +60,13 @@ try {
         $stmt = $pdo->prepare("
             SELECT 
                 u.id as user_id,
-                s.staff_id,
+                u.staff_id,
                 u.first_name,
                 u.last_name,
                 a.clock_in,
                 a.clock_out,
                 a.date
             FROM users u
-            LEFT JOIN staff_ids s ON u.id = s.user_id
             LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
             WHERE u.role = 'staff'
             ORDER BY u.first_name ASC, u.last_name ASC, a.clock_in DESC

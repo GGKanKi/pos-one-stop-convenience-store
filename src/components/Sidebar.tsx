@@ -1,10 +1,9 @@
 // sidebar used to update the whole app instantly. instead of just the main content.
 // so that the sidebar can also reflect the active page.
 
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp,
+  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp 
 } from 'lucide-react';
 
 export default function Sidebar() {

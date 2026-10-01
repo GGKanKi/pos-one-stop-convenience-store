@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost/One-Convenience/backend/api";
@@ -11,7 +11,6 @@ export default function LoginId() {
   const [successMsg, setSuccessMsg] = useState("");
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -61,7 +60,7 @@ export default function LoginId() {
         localStorage.setItem("staff_id", fullPin);
         localStorage.setItem("pending_clock_in", "true");
         setTimeout(() => {
-          navigate("/POS");
+          navigate("/pos");
         }, 1500);
       } else {
         setErrorMsg(data.message || "Clock-in failed.");
