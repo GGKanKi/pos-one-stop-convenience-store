@@ -29,7 +29,7 @@ export default function InventoryCheck() {
 
   return (
     <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
-      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left">
+      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full">
         
         {/* Centered Header */}
         <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900">
@@ -45,7 +45,7 @@ export default function InventoryCheck() {
             <input
               type="text"
               placeholder="Search or Scan barcode to find products"
-              className="w-full pl-14 pr-6 py-3 bg-gray-50 rounded-full border-2 border-transparent focus:border-blue-400 focus:bg-white outline-none transition-all font-medium"
+              className="w-full pl-14 pr-6 py-3 bg-gray-50 rounded-full border-2 border-transparent focus:border-blue-400 focus:bg-white outline-none transition-all font-medium text-gray-800"
             />
           </div>
           
@@ -82,13 +82,12 @@ export default function InventoryCheck() {
                   <td className="p-6">₱ {item.price}</td>
                   <td className="p-6 pr-10">
                     <div className="flex justify-center">
-                     
                       <input
                         type="number"
                         value={actualStocks[item.barcode] || ""}
                         onChange={(e) => handleStockChange(item.barcode, e.target.value)}
                         placeholder="Enter count"
-                        className="w-[180px] h-[50px] px-6 py-2 rounded-full border-2 border-blue-200 text-center text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-gray-300 shadow-inner bg-gray-50/50"
+                        className="w-[180px] h-[50px] px-6 py-2 rounded-full border-2 border-blue-200 text-center text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all placeholder:text-gray-300 shadow-inner bg-gray-50/50 font-bold"
                       />
                     </div>
                   </td>

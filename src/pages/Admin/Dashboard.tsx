@@ -18,7 +18,7 @@ export default function AdminDashboard() {
       <main className="flex-1 p-6 flex flex-col gap-6">
         
         {/* 2. HEADER: Modified to show Back Button if Full Screen */}
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">
             {isFullScreen ? "Store Analytics" : "Dashboard"}
           </h1>
