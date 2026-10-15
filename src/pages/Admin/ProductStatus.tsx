@@ -20,13 +20,13 @@ export default function ProductStatus() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
+    <div className="flex min-h-screen bg-[#cfdcfc] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       <Sidebar />
       
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         
         {/* Header Bar */}
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Product Status</h1>
           <PackageSearch size={20} className="opacity-50 mr-2" />
         </header>
@@ -34,14 +34,13 @@ export default function ProductStatus() {
         {/* Top Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
           {summaryCards.map((card, i) => (
-            <div key={i} className="bg-[#0056b3] p-6 rounded-2xl shadow-lg relative overflow-hidden group border-b-4 border-blue-900 transition-transform hover:scale-[1.02]">
+            <div key={i} className="bg-[#17347a] p-6 rounded-2xl shadow-lg relative overflow-hidden group border-b-4 border-blue-900 transition-transform hover:scale-[1.02]">
               <div className="relative z-10">
                 <p className="text-white/70 text-[11px] font-black tracking-widest mb-1 uppercase">
                   {card.label}
                 </p>
                 <h3 className="text-4xl font-black text-white">{card.count}</h3>
               </div>
-              <card.icon className="absolute right-[-5px] bottom-[-5px] text-white/10 group-hover:text-white/20 transition-all" size={70} />
             </div>
           ))}
         </div>
@@ -73,9 +72,9 @@ export default function ProductStatus() {
         </div>
 
         {/* Table Content Area */}
-        <section className="flex-1 bg-white rounded-[2rem] overflow-hidden flex flex-col min-h-[400px] shadow-lg">
+        <section className="flex-1 bg-white rounded-[1rem] overflow-hidden flex flex-col min-h-[400px] shadow-lg">
           {/* Vibrant Blue Header */}
-          <div className="bg-[#0056b3] text-white flex items-center px-8 py-5">
+          <div className="bg-[#17347a] text-white flex items-center px-8 py-5">
             <div className="flex-1 text-sm font-bold">Product</div>
             <div className="flex-1 text-sm font-bold">Barcode</div>
             <div className="flex-1 text-sm font-bold text-center">Status</div>

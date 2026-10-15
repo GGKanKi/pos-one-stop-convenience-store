@@ -1,6 +1,7 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Store, ShoppingCart, Package, BarChart3 } from "lucide-react";
+import { apiRequest } from "../../services/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,45 +17,40 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      const res = await fetch("http://localhost/One-Convenience/backend/api/login.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await apiRequest("/login.php", "POST", { email, password });
 
-      const data = await res.json();
+      if (response.success) {
+        // Safely access user and token whether nested in data or at root
+        const userData = response.data?.user || response.user;
+        const tokenData = response.data?.token || response.token;
 
-        if (data.success) {
-          localStorage.setItem("user", JSON.stringify(data.user));
-
-          if (data.user && data.user.id) {
-            localStorage.setItem("userId", data.user.id);
+        if (userData) {
+          localStorage.setItem("user", JSON.stringify(userData));
+          if (userData.id) {
+            localStorage.setItem("userId", userData.id);
           }
+        }
 
-          if (data.token) {
-            localStorage.setItem("authToken", data.token);
-          } else if (data.authToken) {
-            localStorage.setItem("authToken", data.authToken);
-          }
+        if (tokenData) {
+          localStorage.setItem("authToken", tokenData);
+        }
 
-          // SetStaffId flow integration 
-          if (data.user.role === 'admin') {
-            navigate("/admin/dashboard");
-          } else if (data.user.role === 'staff') {
-            if (data.user.hasStaffId) {
-              navigate("/LoginId");
-            } else {
-              navigate("/setstaffid", { state: { email: email } });
-            }
+        // Route navigation based on user role & staff status
+        if (userData?.role === "admin") {
+          navigate("/admin/dashboard");
+        } else if (userData?.role === "staff") {
+          if (userData.hasStaffId) {
+            navigate("/LoginId");
+          } else {
+            navigate("/setstaffid", { state: { email } });
           }
-        } else {
-        setErrorMsg(data.message || "Invalid email or password");
+        }
+      } else {
+        setErrorMsg(response.message || "Invalid email or password.");
       }
     } catch (error: unknown) {
-      setErrorMsg("Server error. Make sure your Laragon/Apache is running.");
-      console.log("Login Error: ", error);
+      setErrorMsg("Server error. Make sure your Laragon/Apache service is active.");
+      console.error("Login Error: ", error);
     } finally {
       setLoading(false);
     }
@@ -62,32 +58,30 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-
       {/* LEFT PANEL */}
       <div className="hidden md:flex flex-1 relative overflow-hidden">
-
         <img
           src="/pictures/store.jpg"
           className="absolute inset-0 w-full h-full object-cover"
+          alt="Store Environment"
         />
 
         <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 via-blue-800/70 to-blue-950/90" />
 
         <div className="relative z-10 flex flex-col justify-between w-full text-white p-6 md:p-10 lg:p-16">
-
           <div>
             <div className="flex items-center gap-3 mb-6 md:mb-8">
               <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-2xl flex items-center justify-center">
                 <Store className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-xl md:text-2xl lg:text-3xl">One Stop</h1>
+                <h1 className="text-xl md:text-2xl lg:text-3xl font-bold">One Stop</h1>
                 <p className="text-blue-200 text-sm">Convenience Store</p>
               </div>
             </div>
 
             <div className="max-w-md">
-              <h2 className="text-2xl md:text-4xl lg:text-5xl leading-tight mb-4 md:mb-6">
+              <h2 className="text-2xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-4 md:mb-6">
                 InBentalytix
               </h2>
 
@@ -99,7 +93,6 @@ export default function LoginPage() {
 
           {/* FEATURES */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-md">
-
             <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm">
               <ShoppingCart className="w-6 h-6 text-white" />
               <span className="text-sm text-center">Fast Checkout</span>
@@ -114,22 +107,17 @@ export default function LoginPage() {
               <BarChart3 className="w-6 h-6 text-white" />
               <span className="text-sm text-center">Analytics</span>
             </div>
-
           </div>
         </div>
       </div>
 
       {/* RIGHT PANEL */}
       <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 px-6 py-12">
-
         <div className="w-full max-w-md">
-
           <form
             onSubmit={handleSignIn}
-            className="flex flex-col gap-6 p-6 rounded-xl 
-                       bg-white/10 backdrop-blur-md border border-white/20 shadow-xl text-white"
+            className="flex flex-col gap-6 p-6 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-xl text-white"
           >
-
             {errorMsg && (
               <div className="bg-red-500/20 border border-red-400 text-red-200 px-4 py-2 rounded-lg text-sm">
                 {errorMsg}
@@ -156,11 +144,11 @@ export default function LoginPage() {
               required
             />
 
-            {/* BUTTON */}
+            {/* SUBMIT BUTTON */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-lg shadow-blue-500/30"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/30 active:scale-95 disabled:opacity-50"
             >
               {loading ? "Checking..." : "Sign In"}
             </button>
@@ -176,7 +164,6 @@ export default function LoginPage() {
                 Sign up here
               </Link>
             </p>
-
           </form>
         </div>
       </div>

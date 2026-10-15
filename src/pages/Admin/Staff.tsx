@@ -63,19 +63,19 @@ export default function StaffPage() {
     }
     fetchData();
   }, []);
-
+        // bg
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans">
+    <div className="flex min-h-screen bg-[#cfdcfc] font-sans"> 
       <Sidebar />
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         
         {/* Staff Attendance Header */}
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Staff Attendance</h1>
         </header>
 
         {/* Controls Bar */}
-        <div className="bg-white p-3 rounded-[2rem] shadow-sm flex items-center gap-4">
+        <div className="bg-white p-3 rounded-[1rem] shadow-sm flex items-center gap-4">
           <div className="flex items-center gap-3 border-2 border-gray-100 p-2 rounded-xl px-6 font-bold text-gray-500">
             <Calendar size={18} className="text-[#1A3E7A]" /> 04/21/2026 <Calendar size={18} className="text-[#1A3E7A]" />
           </div>
@@ -102,10 +102,10 @@ export default function StaffPage() {
         </div>
 
         {/* Attendance Content Area */}
-        <div className="bg-white rounded-[2.5rem] shadow-sm border-2 border-gray-50 overflow-hidden min-h-[300px]">
+        <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-50 overflow-hidden min-h-[300px]">
           {view === 'daily' ? (
             <table className="w-full text-left">
-              <thead className="bg-[#0056b3] text-white font-bold uppercase text-[13px]">
+              <thead className="bg-[#17347a] text-white font-bold uppercase text-[13px]">
                 <tr>
                   <th className="p-6 flex items-center gap-2"><User size={16}/> Staff Id</th>
                   <th className="p-6">Staff Name</th>
@@ -156,12 +156,11 @@ export default function StaffPage() {
           )}
         </div>
 
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Staff Directory</h1>
         </header>
 
 {/* Directory Grid */}
-        {/* FIXED: Use staff.id as key instead of staff.staff_id (which can be NULL) - BLACKBOXAI */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10">
           {staffData.length === 0 ? (
             <div className="col-span-3 p-10 text-center text-gray-400">No staff found</div>

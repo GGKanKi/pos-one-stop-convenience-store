@@ -22,7 +22,7 @@ export default function Discrepancies() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
+    <div className="flex min-h-screen bg-[#cfdcfc] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
       {/* Sidebar */}
       <Sidebar />
@@ -30,17 +30,17 @@ export default function Discrepancies() {
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         
         {/* Header */}
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">
             Inventory Discrepancies
           </h1>
           <Scale size={20} className="opacity-50 mr-2" />
         </header>
 
-        {/* Summary Cards */}
+        {/* Summary 3 Box Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {summaryCards.map((card, i) => (
-            <div key={i} className="bg-[#0056b3] p-6 rounded-2xl shadow-lg relative overflow-hidden group border-b-4 border-blue-900 transition-transform hover:scale-[1.02]">
+            <div key={i} className="bg-[#17347a] p-6 rounded-2xl shadow-lg relative overflow-hidden group border-b-4 border-blue-900 transition-transform hover:scale-[1.02]">
               <div className="relative z-10 text-left">
                 <p className="text-white/70 text-[11px] font-black tracking-widest mb-1 uppercase">
                   {card.label}
@@ -49,7 +49,6 @@ export default function Discrepancies() {
                   {card.count}
                 </h3>
               </div>
-              <card.icon className="absolute right-[-5px] bottom-[-5px] text-white/10 group-hover:text-white/20 transition-all" size={70} />
             </div>
           ))}
         </div>

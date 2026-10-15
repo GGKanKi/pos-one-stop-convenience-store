@@ -17,6 +17,7 @@ import Inventory from './pages/Admin/Inventory';
 import InventoryCheck from './pages/Staff/InventoryCheck';
 import Discrepancies from './pages/Admin/Discrepancies'; // Added Import
 import Transactions from './pages/Admin/Transaction'; 
+import ProductStatus from './pages/Admin/ProductStatus';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
         <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
         <Route path="/admin/discrepancies" element={<Discrepancies />} /> {/* Added Route */}
         <Route path="/admin/transactions" element={<Transactions />} />
+        <Route path="/admin/productstatus" element={<ProductStatus />} /> {/* Added Route */}
 
         {/** DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />

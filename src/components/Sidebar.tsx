@@ -22,7 +22,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-72 bg-[#1A3E7A] text-white flex flex-col p-4 rounded-[1.5rem] shadow-xl min-h-screen shrink-0">
+    <aside className="w-72 bg-[#17347a] text-white flex flex-col p-4 rounded-[1.5rem] shadow-xl min-h-screen shrink-0">
       
       {/* Workspace Header */}
       <div className="bg-white/10 p-5 rounded-2xl mb-8 flex items-center gap-4 border border-white/5">

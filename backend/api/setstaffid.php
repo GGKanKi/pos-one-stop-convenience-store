@@ -1,139 +1,87 @@
 <?php
-// MARK: NEW FILE - Backend API for SetStaffId feature
-// Allows staff to set unique 6-char staffId + avatar after login
-// Payload: POST JSON {email, staffId (6 alphanum), avatar}
-// Response: {success, message, user data} or error
-
-// Standard headers: JSON + CORS
-header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Content-Type: application/json; charset=UTF-8");
 
-// Handle preflight OPTIONS for CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
+    exit(0);
+}
+
+// Locate db config and response helper
+$dbPath = realpath(__DIR__ . '/../config/db.php');
+$responseHelperPath = realpath(__DIR__ . '/helpers/response.php') 
+                   ?: realpath(__DIR__ . '/../helpers/response.php');
+
+if (!$dbPath || !file_exists($dbPath)) {
+    echo json_encode(["success" => false, "message" => "Database config file missing."]);
     exit;
 }
 
-require __DIR__ . '/../config/db.php'; // PDO connection
-
-// Get raw JSON input
-$rawInput = file_get_contents("php://input");
-$data = json_decode($rawInput, true); // Assoc array
-
-// Validate required fields
-if (!$data || !isset($data['email']) || !isset($data['staffId']) || !isset($data['avatar'])) {
-    http_response_code(400);
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid request. Requires email, staffId (6 chars), avatar."
-    ]);
+if (!$responseHelperPath || !file_exists($responseHelperPath)) {
+    echo json_encode(["success" => false, "message" => "Response helper file missing."]);
     exit;
 }
 
-$email = trim($data['email']);
-$staffId = strtoupper(trim(preg_replace('/[^A-Z0-9]/', '', $data['staffId']))); // Clean/upper alphanum
-$avatar = trim($data['avatar']);
+require_once $dbPath;
+require_once $responseHelperPath;
 
-// Additional validation
-if (strlen($staffId) !== 6 || !preg_match('/^[A-Z0-9]{6}$/', $staffId)) {
-    http_response_code(400);
-    echo json_encode([
-        "success" => false,
-        "message" => "staffId must be exactly 6 alphanumeric characters."
-    ]);
-    exit;
+// Get decoded JSON input
+$input = getJsonInput();
+
+$userId  = $input['user_id'] ?? null;
+$email   = trim($input['email'] ?? '');
+$staffId = trim($input['staff_id'] ?? $input['staffId'] ?? '');
+$avatar  = trim($input['avatar'] ?? '/pictures/avatar1.jpg');
+
+// Look up user_id from email if user_id was not explicitly sent
+if (empty($userId) && !empty($email)) {
+    try {
+        $userStmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $userStmt->execute([$email]);
+        $userRow = $userStmt->fetch(PDO::FETCH_ASSOC);
+        if ($userRow) {
+            $userId = $userRow['id'];
+        }
+    } catch (PDOException $e) {
+        sendJsonResponse(false, "Failed to locate user account.", null, 500);
+    }
 }
 
-// Allowed avatars (from frontend)
-$allowedAvatars = ['/pictures/avatar1.jpg', '/pictures/avatar2.jpg', '/pictures/avatar3.jpg', '/pictures/avatar4.jpg'];
-
-// Validate avatar - either a local path or a URL
-$isValidUrl = filter_var($avatar, FILTER_VALIDATE_URL) !== false;
-$isAllowedAvatar = in_array($avatar, $allowedAvatars);
-
-if (!$isValidUrl && !$isAllowedAvatar) {
-    http_response_code(400);
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid avatar. Must be one of the allowed profile pictures."
-    ]);
-    exit;
+if (empty($userId) || empty($staffId)) {
+    sendJsonResponse(false, "User ID / Email and Staff ID are required.", null, 400);
 }
 
 try {
-    $pdo->beginTransaction();
-
-    // 1. Find user by email + staff role
-    $stmt = $pdo->prepare("SELECT id, first_name, last_name FROM users WHERE email = ? AND role = 'staff'");
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
-
-    if (!$user) {
-        $pdo->rollBack();
-        http_response_code(404);
-        echo json_encode([
-            "success" => false,
-            "message" => "Staff user not found with this email."
-        ]);
-        exit;
+    // 1. Check if this Staff ID is already used by another user
+    $checkStmt = $pdo->prepare("SELECT user_id FROM staff_ids WHERE staff_id = ? AND user_id != ?");
+    $checkStmt->execute([$staffId, $userId]);
+    
+    if ($checkStmt->fetch()) {
+        sendJsonResponse(false, "This Staff ID is already registered to another user.", null, 400);
     }
 
-    $userId = $user['id'];
-
-    // 2. Check if staff_id already taken (unique check)
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ?");
-    $stmt->execute([$staffId]);
-    if ($stmt->fetch()) {
-        $pdo->rollBack();
-        http_response_code(409); // Conflict
-        echo json_encode([
-            "success" => false,
-            "message" => "Staff ID already assigned to another user."
-        ]);
-        exit;
+    // 2. Insert or update the staff_ids table matching HeidiSQL columns (user_id, staff_id, avatar)
+    $stmt = $pdo->prepare("
+        INSERT INTO staff_ids (user_id, staff_id, avatar) 
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE 
+            staff_id = VALUES(staff_id), 
+            avatar = VALUES(avatar)
+    ");
+    
+    if ($stmt->execute([$userId, $staffId, $avatar])) {
+        sendJsonResponse(true, "Profile saved successfully!", [
+            "staff_id" => $staffId,
+            "avatar"   => $avatar
+        ], 200);
+    } else {
+        sendJsonResponse(false, "Failed to save profile.", null, 500);
     }
 
-    // 3. Check if user already has staff_id (prevent duplicate)
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND staff_id IS NOT NULL");
-    $stmt->execute([$userId]);
-    if ($stmt->fetch()) {
-        $pdo->rollBack();
-        http_response_code(409);
-        echo json_encode([
-            "success" => false,
-            "message" => "Staff ID already set for this user."
-        ]);
-        exit;
-    }
-
-    // 4. Insert into staff_ids
-    $stmt = $pdo->prepare("UPDATE users SET staff_id = ?, avatar = ? WHERE id = ?");
-    $stmt->execute([$staffId, $avatar, $userId]);
-
-    $pdo->commit();
-
-    // Success response with user data
-    echo json_encode([
-        "success" => true,
-        "message" => "Staff ID set successfully.",
-        "user" => [
-            'id' => $userId,
-            'first_name' => $user['first_name'],
-            'last_name' => $user['last_name'],
-            'staff_id' => $staffId,
-            'avatar' => $avatar
-        ]
-    ]);
-
-} catch (Exception $e) {
-    $pdo->rollBack();
-    http_response_code(500);
-    echo json_encode([
-        "success" => false,
-        "message" => "Server error: " . $e->getMessage()
-    ]);
+} catch (PDOException $e) {
+    error_log("Set Staff ID Error: " . $e->getMessage());
+    sendJsonResponse(false, "Database query error: " . $e->getMessage(), null, 500);
 }
 ?>
-

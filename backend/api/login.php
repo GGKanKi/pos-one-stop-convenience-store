@@ -1,82 +1,92 @@
 <?php
-require __DIR__ . '/../config/db.php'; //database connection (pdo)
-
-//response type json  and allow cross-origin requests from any domain
-header("Content-Type: application/json"); 
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Content-Type: application/json; charset=UTF-8");
 
-//handle preflight OPTIONS request for CORS
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    exit;
+    exit(0);
 }
-//get the raw input and decode the json data
-$rawInput = file_get_contents("php://input");
-$data = json_decode($rawInput);
 
-// DEBUG LINE
-if (!$data) {
-    echo json_encode([
-        "success" => false, 
-        "message" => "JSON Decode Failed. Raw input was: " . $rawInput
-    ]);
+// Include required files
+$dbPath = realpath(__DIR__ . '/../config/db.php');
+$responseHelperPath = realpath(__DIR__ . '/helpers/response.php') ?: realpath(__DIR__ . '/../helpers/response.php');
+
+if (!$dbPath || !file_exists($dbPath)) {
+    echo json_encode(["success" => false, "message" => "Database config file missing."]);
     exit;
 }
 
-//validate the input data and check if email and password are provided
-if (!$data || !isset($data->email, $data->password)) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Invalid request. Email and password are required."
-    ]);
+if (!$responseHelperPath || !file_exists($responseHelperPath)) {
+    echo json_encode(["success" => false, "message" => "Response helper file missing."]);
     exit;
 }
 
-$email = trim($data->email);
-$password = $data->password;
+require_once $dbPath;
+require_once $responseHelperPath;
+
+$input = getJsonInput();
+
+$email = trim($input['email'] ?? '');
+$password = $input['password'] ?? '';
+
+if (empty($email) || empty($password)) {
+    sendJsonResponse(false, "Please enter both email and password.", null, 400);
+}
 
 try {
-    // USER FETCH with staff_id check (LEFT JOIN for SetStaffId flow - BLACKBOXAI)
+    // 1. Query users table 
     $stmt = $pdo->prepare("
-        SELECT u.*
-        FROM users u 
-        WHERE u.email = ?
+        SELECT id, first_name, last_name, email, password_hash, role 
+        FROM users 
+        WHERE email = ?
     ");
     $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($user && password_verify($password, $user['password_hash'])){
+    // 2. Verify Bcrypt hash
+    if ($user && password_verify($password, $user['password_hash'])) {
+        
+        $staffInfo = null;
 
-        // Token Generation For User Session
-        $tokenData = $user['id'] . ':'  .time();
-        $token = base64_encode($tokenData); // User Data Encryption
+        // 3. Query staff_ids table using exact column name 'avatar'
+        try {
+            $staffStmt = $pdo->prepare("
+                SELECT staff_id, avatar 
+                FROM staff_ids 
+                WHERE user_id = ? 
+                LIMIT 1
+            ");
+            $staffStmt->execute([$user['id']]);
+            $staffInfo = $staffStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Staff ID fetch error: " . $e->getMessage());
+        }
 
-        echo json_encode([
-            "success" => true,
-            "token" => $token, // Token Response to Frontend
+        $token = base64_encode($user['id'] . ':' . time());
+
+        $responseData = [
+            "token" => $token,
             "user" => [
                 'id' => $user['id'],
                 'first_name' => $user['first_name'],
                 'last_name' => $user['last_name'],
                 'role' => $user['role'],
-                'hasStaffId' => !empty($user['staff_id']), // New: true if staff_id set
-                'staff_id' => $user['staff_id'] ?? null,
-                'staff_avatar' => $user['staff_avatar'] ?? null
+                'hasStaffId' => !empty($staffInfo['staff_id']),
+                'staff_id' => $staffInfo['staff_id'] ?? null,
+                'staff_avatar' => $staffInfo['avatar'] ?? null
             ]
-        ]);
+        ];
+
+        sendJsonResponse(true, "Login successful.", $responseData, 200);
+
     } else {
-        echo json_encode([
-            "success" => false,
-            "message" => "Invalid email or password."
-        ]);
+        sendJsonResponse(false, "Invalid email or password.", null, 401);
     }
-// Catch Database Error for Specific Debugging problems - always use this!
+
 } catch (PDOException $e) {
-    echo json_encode([
-        "success" => false,
-        "message" => "Database error: " . $e->getMessage()
-    ]);
+    error_log("Login DB Error: " . $e->getMessage());
+    sendJsonResponse(false, "Database connection or query error.", null, 500);
 }
 ?>

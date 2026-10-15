@@ -1,18 +1,23 @@
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { apiRequest } from "../../services/api";
 
 export default function SetStaffId() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const email = location.state?.email || "";
+  // Extract email from navigation state or localStorage fallback
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const email = location.state?.email || storedUser.email || "";
 
   const [staffId, setStaffId] = useState<string[]>(["", "", "", "", "", ""]);
   const [selectedAvatar, setSelectedAvatar] = useState("/pictures/avatar1.jpg");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
-  // HANDLE INPUT
+  // HANDLE INPUT CHANGE
   const handleChange = (value: string, index: number) => {
     const cleanValue = value.replace(/[^a-zA-Z0-9]/g, "");
 
@@ -25,17 +30,14 @@ export default function SetStaffId() {
     }
   };
 
-  // BACKSPACE
+  // BACKSPACE NAVIGATION
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key === "Backspace" && !staffId[index] && index > 0) {
       inputsRef.current[index - 1]?.focus();
     }
   };
 
-  // SAVE: POST to /api/setstaffid.php
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
+  // SAVE STAFF ID
   const handleSave = async () => {
     const finalId = staffId.join("");
 
@@ -46,35 +48,39 @@ export default function SetStaffId() {
 
     if (!email) {
       alert("Email not found. Please login again.");
+      navigate("/login");
       return;
     }
 
     setLoading(true);
     setError("");
 
-    const payload = {
-      email,
-      staffId: finalId,
-      avatar: selectedAvatar,
-    };
-
     try {
-      const response = await fetch("http://localhost/One-Convenience/backend/api/setstaffid.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const response = await apiRequest("/setstaffid.php", "POST", {
+        email: email,
+        user_id: storedUser.id || null,
+        staff_id: finalId,
+        avatar: selectedAvatar,
       });
 
-      const result = await response.json();
+      if (response.success) {
+        // Update user record in LocalStorage
+        const updatedUser = {
+          ...storedUser,
+          hasStaffId: true,
+          staff_id: finalId,
+          staff_avatar: selectedAvatar,
+        };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
 
-      if (result.success) {
         alert("Staff ID set successfully!");
         navigate("/pos");
       } else {
-        setError(result.message || "Failed to save Staff ID.");
+        setError(response.message || "Failed to save Staff ID.");
       }
     } catch (err) {
-      setError("Network error. Please try again.");
+      setError("Server error. Please check your network and PHP service.");
+      console.error("SetStaffId Error:", err);
     } finally {
       setLoading(false);
     }
@@ -100,7 +106,7 @@ export default function SetStaffId() {
         bg-white/10 backdrop-blur-xl border border-white/20
         rounded-3xl shadow-2xl flex overflow-hidden z-10"
       >
-        {/* LEFT PART */}
+        {/* LEFT PART: AVATAR SELECTION */}
         <div className="w-1/2 bg-gradient-to-br from-blue-600 to-indigo-700 flex flex-col items-center justify-center px-10 text-center">
           <h2 className="text-2xl font-bold mb-2">Select your avatar</h2>
           <p className="text-sm text-blue-200 mb-6">
@@ -108,7 +114,7 @@ export default function SetStaffId() {
           </p>
 
           <div className="w-32 h-32 rounded-full border-4 border-white/40 flex items-center justify-center mb-6 overflow-hidden">
-            <img src={selectedAvatar} className="w-full h-full object-cover" />
+            <img src={selectedAvatar} className="w-full h-full object-cover" alt="Avatar Preview" />
           </div>
 
           <div className="flex gap-3">
@@ -116,6 +122,7 @@ export default function SetStaffId() {
               <img
                 key={i}
                 src={avatar}
+                alt={`Avatar option ${i + 1}`}
                 onClick={() => setSelectedAvatar(avatar)}
                 className={`w-24 h-24 rounded-full cursor-pointer border-2 transition
                 ${
@@ -132,7 +139,7 @@ export default function SetStaffId() {
           </p>
         </div>
 
-        {/* RIGHT PART */}
+        {/* RIGHT PART: STAFF ID INPUT */}
         <div className="w-1/2 flex flex-col justify-center px-12">
           <h1 className="text-3xl font-bold mb-2">Setup Your Profile</h1>
           <p className="text-gray-300 mb-6">Enter your staff ID below</p>
@@ -157,12 +164,11 @@ export default function SetStaffId() {
           </div>
 
           <p className="text-xs text-gray-400 mb-4">
-            6-digit unique identifier
+            6-character unique identifier
           </p>
 
           <div className="bg-blue-400/20 border border-blue-300/30 rounded-xl p-4 text-sm text-blue-100 mb-6">
-            Note: Your Staff ID is assigned by your manager for system
-            identification.
+            Note: Your Staff ID is assigned by your manager for system identification.
           </div>
 
           <button
