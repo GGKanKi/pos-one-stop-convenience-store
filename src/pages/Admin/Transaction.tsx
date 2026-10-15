@@ -9,13 +9,13 @@ const TRANSACTION_DATA = [
 
 export default function Transactions() {
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "Inter, ui-sans-serif, system-ui" }}>
+    <div className="flex min-h-screen bg-[#cfdcfc] font-sans" style={{ fontFamily: "Inter, ui-sans-serif, system-ui" }}>
       <Sidebar />
 
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         
          {/* Dashboard Header Bar */}
-         <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
+         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
           <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Transaction History</h1>
         </header>
 
@@ -68,7 +68,7 @@ export default function Transactions() {
         </div>
 
         {/* Table Container */}
-        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
+        <div className="bg-white rounded-[1rem] shadow-sm border border-gray-200 overflow-hidden min-h-[400px]">
             {/* Pagination/Status Bar */}
             <div className="p-4">
                 <span className="bg-gray-300 text-gray-700 px-4 py-1.5 rounded-full text-[10px] font-black uppercase">
@@ -77,7 +77,7 @@ export default function Transactions() {
             </div>
 
             <table className="w-full text-left">
-              <thead className="bg-[#0056b3] text-white font-bold text-[11px] uppercase tracking-wider">
+              <thead className="bg-[#17347a] text-white font-bold text-[11px] uppercase tracking-wider">
                 <tr>
                   <th className="p-4 pl-8">Date & Time</th>
                   <th className="p-4">Action</th>
