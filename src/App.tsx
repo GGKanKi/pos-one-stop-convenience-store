@@ -1,3 +1,4 @@
+```tsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import LoginPage from './pages/Public/Login';
@@ -7,46 +8,48 @@ import ResetPasswordPage from './pages/Public/ResetPassword';
 
 import CashRegister from './pages/Staff/CashRegister';
 import LoginId from './pages/Staff/LoginId';
-import LogoutId from './pages/Staff/LogoutId'; 
+import LogoutId from './pages/Staff/LogoutId';
 import POS from './pages/Staff/POS';
 
-import SetStaffId from "./pages/Staff/SetStaffId";
+import SetStaffId from './pages/Staff/SetStaffId';
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
 import InventoryCheck from './pages/Staff/InventoryCheck';
-import Discrepancies from './pages/Admin/Discrepancies'; // Added Import
-import Transactions from './pages/Admin/Transaction'; 
+import Discrepancies from './pages/Admin/Discrepancies';
+import Transactions from './pages/Admin/Transaction';
+
+// Add this import only if the component file exists
 import ProductStatus from './pages/Admin/ProductStatus';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/** PUBLIC ROUTES */}
+        {/* PUBLIC ROUTES */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/setstaffid" element={<SetStaffId />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-        {/** STAFF ROUTES - Matches the POS navigation */}
+        {/* STAFF ROUTES */}
         <Route path="/cashregister" element={<CashRegister />} />
         <Route path="/loginid" element={<LoginId />} />
         <Route path="/logoutid" element={<LogoutId />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/staff/pos" element={<POS />} />
 
-        {/** ADMIN ROUTES */}
+        {/* ADMIN ROUTES */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/staff" element={<StaffPage />} />
         <Route path="/admin/inventory" element={<Inventory />} />
         <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
-        <Route path="/admin/discrepancies" element={<Discrepancies />} /> {/* Added Route */}
+        <Route path="/admin/discrepancies" element={<Discrepancies />} />
         <Route path="/admin/transactions" element={<Transactions />} />
-        <Route path="/admin/productstatus" element={<ProductStatus />} /> {/* Added Route */}
+        <Route path="/admin/productstatus" element={<ProductStatus />} />
 
-        {/** DEFAULT ROUTE */}
+        {/* DEFAULT ROUTE */}
         <Route path="/" element={<LoginPage />} />
       </Routes>
     </Router>
@@ -54,3 +57,4 @@ function App() {
 }
 
 export default App;
+```
