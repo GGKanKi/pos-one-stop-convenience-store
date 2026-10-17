@@ -3,6 +3,7 @@ import {
   Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
+import { apiRequest } from "../../services/api";
 
 interface Product {
   id: number;
@@ -15,6 +16,38 @@ interface Product {
 
 export default function POS() {
   const navigate = useNavigate(); 
+  const [clockInError, setClockInError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    let userId: string | number | null = localStorage.getItem("userId");
+
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      userId = user.id || userId;
+    } catch {
+      userId = localStorage.getItem("userId");
+    }
+
+    if (!userId) {
+      setClockInError("Could not clock in: user session was not found. Please sign in again.");
+      return () => { cancelled = true; };
+    }
+
+    apiRequest("/clockin.php", "POST", { user_id: userId })
+      .then((data) => {
+        if (!data.success) {
+          throw new Error(data.message || "Clock-in failed.");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setClockInError(error instanceof Error ? error.message : "Clock-in failed.");
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   const [cart, setCart] = useState<Product[]>([
     { id: 1, code: '8801073411432', name: 'Buldak Carbonara', description: '200g Pink', price: 95, qty: 2 },
@@ -92,6 +125,11 @@ export default function POS() {
   return (
     <div className="min-h-screen w-screen bg-gradient-to-br from-[#183478] via-[#12285e] to-[#0a183b] flex flex-col p-4 relative text-cyan-100 overflow-x-hidden shadow-[inset_0_0_100px_rgba(0,140,255,0.15)]" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
+      {clockInError && (
+        <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100">
+          {clockInError}
+        </div>
+      )}
       {/* Receipt Success Modal */}
       {showReceiptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
@@ -211,7 +249,7 @@ export default function POS() {
           
           <div className="flex gap-2.5">
             <button 
-              onClick={() => navigate("/cashregister")} 
+              onClick={() => navigate("/cashregister", { state: { cashierOut: true } })}
               className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
             >
               Cashier Out

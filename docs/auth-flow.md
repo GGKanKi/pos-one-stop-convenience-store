@@ -1,6 +1,6 @@
 # User Onboarding and Operational Flows Documentation
 
-## Login, Signup, and Staff ID Setup Process
+## Login and Staff Shift Flow
 
 The Login and Signup pages serve as the primary authentication gateway for the One-Convenience Store system, ensuring only authorized personnel can access the platform. The interface uses role-based routing for streamlined access.
 
@@ -10,43 +10,18 @@ The Login and Signup pages serve as the primary authentication gateway for the O
 3. Redirects to Login page.
 
 ### Login Flow
-1. **Login** page (`src/pages/Public/Login.tsx`) → `backend/api/login.php`.
-2. Returns `role`, `hasStaffId` (checks staff_ids table).
-3. Routes:
-   - **Admin** (`role='admin'`, pre-seeded `admin@gmail.com`): `/admin/dashboard`.
-   - **Staff** + staff_id: `/LoginId` (clock-in page).
-   - **Staff** - no staff_id: `/setstaffid` (setup required).
-
-### SetStaffId Process (New Staff Setup)
-**Purpose:** Assign unique 6-alphanum staff_id + avatar to new staff users (one-time).
-
-1. **Triggered:** First login for new staff (no staff_id in DB).
-2. **UI** (`src/pages/Staff/SetStaffId.tsx`):
-   - Auto-populates email from login state.
-   - 6-input PIN-style form (alphanum, auto-advance).
-   - Avatar picker (4 options).
-3. **Submit** → POST `backend/api/setstaffid.php`:
-   - Validates: staff role/email exists, staff_id unique/not duplicate, avatar allowed.
-   - Inserts `staff_ids` table: `user_id`, `staff_id` (unique), `avatar`.
-   - Transaction-protected.
-4. **Success:** Alert + redirect `/POS`.
-5. **Future logins:** Now `hasStaffId=true` → `/LoginId` (clock-in).
-
-**Note:** staff_id uniqueness enforced DB-side, prevents reuse.
-
-This ensures staff identification before operational access, separating admin from staff securely.
-
+1. The Login page (`src/pages/Public/Login.tsx`) sends credentials to `backend/api/login.php`.
+2. Admin users go to `/admin/dashboard`.
+3. Staff users go to `/cashregister` to enter the starting cash float.
+4. Confirming the cash float opens `/pos`. When POS loads, it sends the signed-in user's ID to `backend/api/clockin.php` to start the shift. Returning to POS during an already open shift reuses that attendance record.
 ## Cash Register (Cashier Float Setup - UI Stub)
-**Purpose:** Record starting cash drawer amount before shift (denominations → total fund).
+**Purpose:** Enter the starting cash drawer amount before the shift.
 
 **Flow (`src/pages/Staff/CashRegister.tsx`, `/cashregister`):**
-1. **Triggered:** From POS header "Cashier Out" button.
-2. **UI:** Inputs for counts (Php1000 to Php1), auto-subtotals, grand total.
-3. **Confirm:** localStorage/nav? → `/logoutid` (end shift?).
-4. **Status:** Client-side only, **no backend**. Future: Save float to DB/transactions.
-
-**Note:** Completes shift cycle: LoginId (clock-in) → POS → CashRegister (close drawer) → LogoutId.
-
+1. Staff arrive here after login.
+2. The UI accepts denomination counts and calculates the total fund.
+3. Confirm navigates to `/pos`; POS then triggers clock-in.
+4. From POS, the Cashier Out button opens the same page in closing-count mode; confirming calls `backend/api/clockout.php`, clears the signed-in browser state, and returns to `/login`. The cash count itself is currently client-side only and is not saved to the backend.
 ## Forgot Password and Reset Process (UI Stubs)
 - **Forgot Password** (`src/pages/Public/ForgotPassword.tsx`, `/forgot-password`): Form for email input to send reset link. **No backend integration yet** (placeholder UI).
 - **Reset Password** (`src/pages/Public/ResetPassword.tsx`, `/reset-password`): Form for new password confirmation. **Static simulation** – client-side validation, fake success, auto-redirect to login after 3s. **No backend API**.
@@ -56,4 +31,4 @@ This ensures staff identification before operational access, separating admin fr
 - POS static demo; needs product/transaction APIs.
 - Future: Full backend for cash register, POS sales, forgot/reset.
 
-**Corrections applied:** Grammar, clarity, code alignment, all requested flows (auth + SetStaffId + CashRegister).
+**Current flow:** Staff login, cash-register setup, POS attendance, and cashier out.

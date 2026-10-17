@@ -23,23 +23,26 @@ $token = str_replace('Bearer ', '', $authHeader);
 $rawInput = file_get_contents("php://input");
 $jsonData = json_decode($rawInput, true);
 $staffIdFromBody = $jsonData['staff_id'] ?? null;
+$userIdFromBody = (int)($jsonData['user_id'] ?? 0);
 
 $userId = 0;
 
-// Method 1: JWT token in Authorization header
-if ($token) {
+// Prefer the active client user ID; retain token and staff-ID support for older callers.
+if ($userIdFromBody) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'staff'");
+    $stmt->execute([$userIdFromBody]);
+    $row = $stmt->fetch();
+    $userId = $row ? (int)$row['id'] : 0;
+} elseif ($token) {
     $decoded = base64_decode($token);
     $parts = explode(':', $decoded);
     $userId = (int)($parts[0] ?? 0);
-}
-// Method 2: staff_id in JSON body (from LoginId.tsx)
-elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT user_id FROM users WHERE staff_id = ?");
+} elseif ($staffIdFromBody) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ? AND role = 'staff'");
     $stmt->execute([$staffIdFromBody]);
     $row = $stmt->fetch();
-    $userId = $row ? (int)$row['user_id'] : 0;
+    $userId = $row ? (int)$row['id'] : 0;
 }
-
 if (!$userId) {
     http_response_code(401);
     echo json_encode(["success" => false, "message" => "Unauthorized."]);

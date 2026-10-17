@@ -7,10 +7,8 @@ import ForgotPasswordPage from './pages/Public/ForgotPassword';
 import ResetPasswordPage from './pages/Public/ResetPassword';
 
 import CashRegister from './pages/Staff/CashRegister';
-import LoginId from './pages/Staff/LoginId';
 import LogoutId from './pages/Staff/LogoutId';
 import POS from './pages/Staff/POS';
-import SetStaffId from './pages/Staff/SetStaffId';
 import InventoryCheck from './pages/Staff/InventoryCheck';
 
 import AdminDashboard from './pages/Admin/Dashboard';
@@ -27,13 +25,11 @@ function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/setstaffid" element={<SetStaffId />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* STAFF ROUTES */}
         <Route path="/cashregister" element={<CashRegister />} />
-        <Route path="/loginid" element={<LoginId />} />
         <Route path="/logoutid" element={<LogoutId />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/staff/pos" element={<POS />} />
