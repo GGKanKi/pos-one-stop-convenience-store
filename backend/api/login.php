@@ -1,4 +1,4 @@
-```php
+
 <?php
 
 header("Access-Control-Allow-Origin: *");
@@ -64,4 +64,47 @@ try {
     ");
 
     $stmt->execute([$email]);
-    $user =
+
+    // FIX: Fetch the user record
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // 2. Verify user credentials
+    if (!$user || !password_verify($password, $user['password_hash'])) {
+        sendJsonResponse(
+            false,
+            "Invalid email or password.",
+            null,
+            401
+        );
+        exit;
+    }
+
+    // 3. Return user information without the password hash
+    unset($user['password_hash']);
+
+    sendJsonResponse(
+        true,
+        "Login successful.",
+        ["user" => $user],
+        200
+    );
+
+} catch (PDOException $e) {
+    error_log("Login database error: " . $e->getMessage());
+
+    sendJsonResponse(
+        false,
+        "A database error occurred. Please try again.",
+        null,
+        500
+    );
+} catch (Throwable $e) {
+    error_log("Login error: " . $e->getMessage());
+
+    sendJsonResponse(
+        false,
+        "An unexpected error occurred. Please try again.",
+        null,
+        500
+    );
+}
