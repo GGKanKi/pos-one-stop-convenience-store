@@ -23,23 +23,26 @@ $token = str_replace('Bearer ', '', $authHeader);
 $rawInput = file_get_contents("php://input");
 $jsonData = json_decode($rawInput, true);
 $staffIdFromBody = $jsonData['staff_id'] ?? null;
+$userIdFromBody = (int)($jsonData['user_id'] ?? 0);
 
 $userId = 0;
 
-// Method 1: JWT token in Authorization header
-if ($token) {
+// Prefer the active client user ID; retain token and staff-ID support for older callers.
+if ($userIdFromBody) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'staff'");
+    $stmt->execute([$userIdFromBody]);
+    $row = $stmt->fetch();
+    $userId = $row ? (int)$row['id'] : 0;
+} elseif ($token) {
     $decoded = base64_decode($token);
     $parts = explode(':', $decoded);
     $userId = (int)($parts[0] ?? 0);
-}
-// Method 2: staff_id in JSON body (from LoginId.tsx)
-elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT user_id FROM users WHERE staff_id = ?");
+} elseif ($staffIdFromBody) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ? AND role = 'staff'");
     $stmt->execute([$staffIdFromBody]);
     $row = $stmt->fetch();
-    $userId = $row ? (int)$row['user_id'] : 0;
+    $userId = $row ? (int)$row['id'] : 0;
 }
-
 if (!$userId) {
     http_response_code(401);
     echo json_encode(["success" => false, "message" => "Unauthorized."]);
@@ -50,13 +53,19 @@ try {
 
     $pdo->beginTransaction();
 
-    // Check today status
-    $stmt = $pdo->prepare("SELECT id FROM attendance WHERE user_id = ? AND date = CURDATE() AND clock_out IS NULL");
+    // Reuse an existing open shift if POS is revisited during the same day.
+    $stmt = $pdo->prepare("SELECT id, clock_in, clock_out, date FROM attendance WHERE user_id = ? AND date = CURDATE() AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1");
     $stmt->execute([$userId]);
-    if ($stmt->fetch()) {
-        $pdo->rollBack();
-        http_response_code(409);
-        echo json_encode(["success" => false, "message" => "Already clocked in today. Clock out first."]);
+    $existingRecord = $stmt->fetch();
+    if ($existingRecord) {
+        $pdo->commit();
+        echo json_encode([
+            "success" => true,
+            "message" => "Already clocked in today.",
+            "already_clocked_in" => true,
+            "time_in" => date("h:i A", strtotime($existingRecord['clock_in'])),
+            "record" => $existingRecord
+        ]);
         exit;
     }
 

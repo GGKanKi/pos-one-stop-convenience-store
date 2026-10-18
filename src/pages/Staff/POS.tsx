@@ -17,7 +17,127 @@ interface Product {
 }
 
 export default function POS() {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); 
+  const [clockInError, setClockInError] = useState("");
+
+  // Auto Clock-In Logic
+  useEffect(() => {
+    let cancelled = false;
+    let userId: string | number | null = localStorage.getItem("userId");
+
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      userId = user.id || userId;
+    } catch {
+      userId = localStorage.getItem("userId");
+    }
+
+    if (!userId) {
+      setClockInError("Could not clock in: user session was not found. Please sign in again.");
+      return () => { cancelled = true; };
+    }
+
+    apiRequest("/clockin.php", "POST", { user_id: userId })
+      .then((data) => {
+        if (!data.success) {
+          throw new Error(data.message || "Clock-in failed.");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setClockInError(error instanceof Error ? error.message : "Clock-in failed.");
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cart & Transaction State
+  const [cart, setCart] = useState<Product[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'GCash'>('Cash');
+  const [cashTendered, setCashTendered] = useState("0.00");
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [transactionDiscount, setTransactionDiscount] = useState<number>(0.00);
+
+  // Scan & Search Window State
+  const [scanCode, setScanCode] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const modalSearchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Ref para sa Scrollable Cart Box
+  const cartTableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Focus scanner input on load
+  useEffect(() => {
+    scanInputRef.current?.focus();
+  }, []);
+
+  // AUTO-SCROLL TO BOTTOM KAPAG MAY BAGONG NADAGDAG NA PRODUCT
+  useEffect(() => {
+    if (cartTableContainerRef.May **Git Merge Conflict** sa iyong code (kitang-kita sa mga marker na `<<<<<<<`, `=======`, at `>>>>>>>` sa VS Code / GitHub editor)[cite: 10, 11]. Nangyayari ito kapag dalawang magkaibang branch (`searchproducts` at `main`) ang pinagsasama at hindi alam ng Git kung aling version ang dapat panatilihin[cite: 10, 11].
+
+Ito ang pinag-isang (resolved) kumpletong code na walang merge conflict markers at pinagkasundo ang dalawang branch (isinama ang **clock-in logic** at **search overlay/scrollable cart features**):
+
+```tsx
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag
+} from 'lucide-react';
+import { useNavigate } from "react-router-dom";
+import { apiRequest } from "../../services/api";
+
+interface Product {
+  id: number;
+  code: string;
+  name: string;
+  description: string;
+  price: number;
+  qty: number;
+  stock?: number;
+  category?: string;
+}
+
+export default function POS() {
+  const navigate = useNavigate(); 
+  const [clockInError, setClockInError] = useState("");
+
+  // Clock-in Session Check
+  useEffect(() => {
+    let cancelled = false;
+    let userId: string | number | null = localStorage.getItem("userId");
+
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      userId = user.id || userId;
+    } catch {
+      userId = localStorage.getItem("userId");
+    }
+
+    if (!userId) {
+      setClockInError("Could not clock in: user session was not found. Please sign in again.");
+      return () => { cancelled = true; };
+    }
+
+    apiRequest("/clockin.php", "POST", { user_id: userId })
+      .then((data) => {
+        if (!data.success) {
+          throw new Error(data.message || "Clock-in failed.");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setClockInError(error instanceof Error ? error.message : "Clock-in failed.");
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, []);
 
   // Cart & Transaction State
   const [cart, setCart] = useState<Product[]>([]);
@@ -225,21 +345,28 @@ export default function POS() {
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-[#183478] via-[#12285e] to-[#0a183b] flex flex-col p-4 relative text-cyan-100 overflow-hidden shadow-[inset_0_0_100px_rgba(0,140,255,0.15)]" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
+      {/* Clock In Error Alert */}
+      {clockInError && (
+        <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
+          {clockInError}
+        </div>
+      )}
+
       {/* SEARCH OVERLAY MODAL */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-6">
           <div className="bg-[#0e214d] border-2 border-cyan-400/60 w-full max-w-3xl h-[75vh] rounded-[26px] p-6 flex flex-col gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)] animate-in zoom-in-95 duration-150">
             
             <div className="flex justify-between items-center pb-2 border-b border-cyan-500/30">
-              <span className="text-sm text-cyan-400 font-black tracking-widest uppercase">SEARCH PRODUCTS</span>
+              <span className="text-sm text-cyan-400 font-black tracking-widest uppercase">SEARCH PRODUCTS CATALOG</span>
               <button onClick={() => setShowSearchModal(false)} className="text-cyan-400 hover:text-white transition">
-                <X size={22} />
+                <X size="{22}"/>
               </button>
             </div>
 
             {/* Search Bar Inside Modal */}
             <form onSubmit={handleModalSubmit} className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={20} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size="{20}"/>
               <input 
                 ref={modalSearchInputRef}
                 value={searchQuery}
@@ -290,6 +417,8 @@ export default function POS() {
                 <div className="p-10 text-center text-sm text-cyan-300/60 font-bold">Type a name above or press Enter to add top result directly to POS.</div>
               )}
             </div>
+
+            <p className="text-xs text-cyan-300/60 text-center">Pressing <strong className="text-cyan-300">Enter</strong> adds the top search item and returns directly to POS.</p>
           </div>
         </div>
       )}
@@ -299,7 +428,7 @@ export default function POS() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[450px] rounded-[30px] p-10 flex flex-col items-center shadow-[0_0_50px_rgba(0,180,255,0.3)]">
             <div className="w-20 h-20 bg-gradient-to-br from-[#1c3e8a] to-[#0e204c] border-2 border-cyan-400 rounded-full flex items-center justify-center mb-5 shadow-[0_0_20px_rgba(0,242,254,0.4)]">
-              <Check size={40} className="text-cyan-400 stroke-[3px]" />
+              <Check className="text-cyan-400 stroke-[3px]" size="{40}"/>
             </div>
 
             <h2 className="text-2xl font-black text-white mb-1 tracking-wider">TRANSACTION SUCCESS</h2>
@@ -312,7 +441,7 @@ export default function POS() {
                 onClick={finalizeTransaction}
                 className="w-full bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider flex items-center justify-center gap-2 hover:bg-cyan-400 active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]"
               >
-                <Printer size={18} />
+                <Printer size="{18}"/>
                 PRINT RECEIPT
               </button>
               
@@ -336,7 +465,7 @@ export default function POS() {
               <div className="flex justify-between items-center pb-2 border-b border-cyan-500/20">
                 <p className="text-xs text-cyan-400 font-black tracking-widest uppercase">PAYMENT & CHECKOUT</p>
                 <button onClick={() => setShowPaymentModal(false)} className="text-cyan-400 hover:text-white transition">
-                  <X size={20} />
+                  <X size="{20}"/>
                 </button>
               </div>
 
@@ -413,7 +542,7 @@ export default function POS() {
           
           <div className="flex gap-2.5">
             <button 
-              onClick={() => navigate("/cashregister")} 
+              onClick={() => navigate("/cashregister", { state: { cashierOut: true } })} 
               className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
             >
               Cashier Out
@@ -431,7 +560,7 @@ export default function POS() {
           
           {/* Scan Bar */}
           <form onSubmit={handleScanSubmit} className="relative shrink-0">
-            <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={20} />
+            <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size="{20}"/>
             <input
               ref={scanInputRef}
               value={scanCode}
@@ -475,7 +604,7 @@ export default function POS() {
                 type="submit" 
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-white transition z-10"
               >
-                <Search size={18} />
+                <Search size="{18}"/>
               </button>
               <input 
                 value={searchQuery}
@@ -526,9 +655,9 @@ export default function POS() {
                           <td className="p-3 truncate text-slate-500">{item.description}</td>
                           <td className="p-3">
                             <div className="flex justify-center items-center gap-1.5">
-                              <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Minus size={12} /></button>
+                              <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Minus size="{12}"/></button>
                               <span className="font-bold w-5 text-center text-slate-800 text-xs">{item.qty}</span>
-                              <button onClick={() => updateQty(item.id, 1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Plus size={12} /></button>
+                              <button onClick={() => updateQty(item.id, 1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Plus size="{12}"/></button>
                             </div>
                           </td>
                           <td className="p-3 text-center font-medium text-slate-600">
@@ -537,7 +666,7 @@ export default function POS() {
                           <td className="p-3 text-center font-bold text-slate-900">
                             <div className="flex items-center justify-center gap-2">
                               <span>₱{itemSubtotal.toFixed(2)}</span>
-                              <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={15} /></button>
+                              <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size="{15}"/></button>
                             </div>
                           </td>
                         </tr>
@@ -547,7 +676,7 @@ export default function POS() {
                     <tr>
                       <td colSpan={7} className="p-12 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
-                          <ShoppingBag size={32} className="text-slate-300" />
+                          <ShoppingBag className="text-slate-300" size="{32}"/>
                           <p className="font-semibold text-sm text-slate-500">Cart is empty</p>
                           <p className="text-xs text-slate-400">Scan a barcode or search product name to add items.</p>
                         </div>

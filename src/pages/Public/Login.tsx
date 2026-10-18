@@ -39,11 +39,7 @@ export default function LoginPage() {
         if (userData?.role === "admin") {
           navigate("/admin/dashboard");
         } else if (userData?.role === "staff") {
-          if (userData.hasStaffId) {
-            navigate("/LoginId");
-          } else {
-            navigate("/setstaffid", { state: { email } });
-          }
+          navigate("/cashregister");
         }
       } else {
         setErrorMsg(response.message || "Invalid email or password.");
