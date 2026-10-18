@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { apiRequest } from "../../services/api";
 
 interface Denomination {
   label: string;
@@ -19,7 +20,48 @@ const DENOMINATIONS: Denomination[] = [
 ];
 
 export default function CashRegister() {
+  const location = useLocation();
+  const isCashierOut = Boolean(location.state?.cashierOut);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
+  const handleConfirm = async () => {
+    if (!isCashierOut) {
+      navigate("/pos");
+      return;
+    }
+
+    let userId: string | number | null = localStorage.getItem("userId");
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      userId = user.id || userId;
+    } catch {
+      userId = localStorage.getItem("userId");
+    }
+
+    if (!userId) {
+      setError("Could not end the shift because the signed-in user was not found. Please sign in again.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await apiRequest("/clockout.php", "POST", { user_id: userId });
+      if (!response.success) {
+        throw new Error(response.message || "Could not clock out.");
+      }
+
+      ["user", "userId", "authToken", "staff_id", "pending_clock_in"].forEach((key) => {
+        localStorage.removeItem(key);
+      });
+      navigate("/login", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not end the shift. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
   
   const [counts, setCounts] = useState<{ [key: number]: string }>(
     Object.fromEntries(DENOMINATIONS.map((d) => [d.value, ""]))
@@ -43,9 +85,9 @@ export default function CashRegister() {
       <div className="w-full max-w-md bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl p-8 text-white">
         
         <div className="flex flex-col items-center mb-6">
-          <h1 className="text-white text-xl font-bold tracking-tight">Cash Register Start Amount</h1>
+          <h1 className="text-white text-xl font-bold tracking-tight">{isCashierOut ? "Cash Register Closing Count" : "Cash Register Start Amount"}</h1>
           <p className="text-blue-100/60 text-[15px] mt-1 text-center font-medium">
-            Please enter initial cash fund
+            {isCashierOut ? "Enter the closing cash count" : "Please enter initial cash fund"}
           </p>
         </div>
 
@@ -82,12 +124,14 @@ export default function CashRegister() {
         </div>
 
         <button 
-          onClick={() => navigate("/logoutid")}
+          onClick={handleConfirm}
+          disabled={submitting}
           className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition uppercase tracking-widest shadow-lg shadow-blue-500/30 active:scale-[0.98]"
         >
-          Confirm
+          {submitting ? "Processing..." : isCashierOut ? "End Shift & Return to Login" : "Confirm"}
         </button>
 
+        {error && <p role="alert" className="mt-3 text-center text-sm text-red-300">{error}</p>}
         {/* Back to POS Button - Positioned to prevent layout jumping */}
         <div className="flex justify-center mt-4">
           <button
