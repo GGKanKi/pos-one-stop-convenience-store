@@ -22,6 +22,7 @@ interface Product {
   expirationDate: string | null;
   expiryBatches: ExpiryBatch[];
   threshold: number;
+  actualCount?: number | string | null;
 }
 
 interface InputFieldProps {
@@ -93,12 +94,13 @@ export default function Inventory() {
   const [formData, setFormData] = useState(emptyForm);
 
   useEffect(() => {
-    const fontId = 'google-font-inter';
+    const fontId = "google-font-inter";
     if (!document.getElementById(fontId)) {
-      const link = document.createElement('link');
+      const link = document.createElement("link");
       link.id = fontId;
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+      link.rel = "stylesheet";
+      link.href =
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
       document.head.appendChild(link);
     }
   }, []);
@@ -116,9 +118,16 @@ export default function Inventory() {
         ? data.products
         : [];
 
+      // Kunin ang nai-save na counts at confirmed barcodes mula sa InventoryCheck
+      const savedCountsRaw = localStorage.getItem("inventory_actual_counts");
+      const savedConfirmedRaw = localStorage.getItem("inventory_confirmed_barcodes");
+      const savedCounts: Record<string, string> = savedCountsRaw ? JSON.parse(savedCountsRaw) : {};
+      const savedConfirmed: string[] = savedConfirmedRaw ? JSON.parse(savedConfirmedRaw) : [];
+
       const mappedProducts: Product[] = rawList.map((item: any) => {
         const rawExpiry = item.expirationDate || item.expiration_date || null;
         const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
+        const barcode = String(item.barcode || item.code || "").trim();
 
         let defaultBatches: ExpiryBatch[] = [];
         if (Array.isArray(item.expiryBatches) && item.expiryBatches.length > 0) {
@@ -127,10 +136,16 @@ export default function Inventory() {
           defaultBatches = [{ date: String(rawExpiry), qty: currentStock }];
         }
 
+        // Ilagay ang actual count kapag confirmed na ito sa InventoryCheck
+        const actualVal =
+          savedConfirmed.includes(barcode) && savedCounts[barcode] !== undefined
+            ? Number(savedCounts[barcode])
+            : null;
+
         return {
           id: Number(item.id),
           productName: String(item.productName || item.name || "").trim(),
-          barcode: String(item.barcode || item.code || "").trim(),
+          barcode: barcode,
           description: item.description ? String(item.description).trim() : null,
           stockQuantity: currentStock,
           costPrice: Number(item.costPrice || 0),
@@ -140,6 +155,7 @@ export default function Inventory() {
           expirationDate: rawExpiry,
           expiryBatches: defaultBatches,
           threshold: Number(item.threshold || 5),
+          actualCount: actualVal,
         };
       });
 
@@ -158,7 +174,7 @@ export default function Inventory() {
 
   useEffect(() => {
     void loadProducts();
-  }, [loadProducts]);
+  }, [loadProducts, view]);
 
   const displayedItems = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -181,7 +197,7 @@ export default function Inventory() {
     });
   }, [products, searchTerm]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((previous) => ({ ...previous, [e.target.name]: e.target.value }));
   };
 
@@ -254,7 +270,11 @@ export default function Inventory() {
     setEditExpiryBatches((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleBatchChange = (index: number, field: "date" | "qty", value: string | number) => {
+  const handleBatchChange = (
+    index: number,
+    field: "date" | "qty",
+    value: string | number
+  ) => {
     setEditExpiryBatches((prev) =>
       prev.map((batch, i) =>
         i === index ? { ...batch, [field]: value } : batch
@@ -264,7 +284,8 @@ export default function Inventory() {
 
   const handleSaveEditProduct = () => {
     if (editingProduct) {
-      const primaryExpiry = editExpiryBatches[0]?.date || formData.expirationDate || null;
+      const primaryExpiry =
+        editExpiryBatches[0]?.date || formData.expirationDate || null;
       const updatedList = products.map((p) =>
         p.id === editingProduct.id
           ? {
@@ -290,11 +311,19 @@ export default function Inventory() {
 
   const modalBatchesToDisplay = useMemo(() => {
     if (!expiryModalProduct) return [];
-    if (expiryModalProduct.expiryBatches && expiryModalProduct.expiryBatches.length > 0) {
+    if (
+      expiryModalProduct.expiryBatches &&
+      expiryModalProduct.expiryBatches.length > 0
+    ) {
       return expiryModalProduct.expiryBatches;
     }
     if (expiryModalProduct.expirationDate) {
-      return [{ date: expiryModalProduct.expirationDate, qty: expiryModalProduct.stockQuantity }];
+      return [
+        {
+          date: expiryModalProduct.expirationDate,
+          qty: expiryModalProduct.stockQuantity,
+        },
+      ];
     }
     return [];
   }, [expiryModalProduct]);
@@ -307,24 +336,37 @@ export default function Inventory() {
       <Sidebar />
 
       <main className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto text-left">
+        {/* HEADER */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
-          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Inventory Management</h1>
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">
+            {view === "check" ? "Manual Count Log" : "Inventory Management"}
+          </h1>
         </header>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div
+            role="alert"
+            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+          >
             {error}
           </div>
         )}
         {notice && (
-          <div role="status" className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+          <div
+            role="status"
+            className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"
+          >
             {notice}
           </div>
         )}
 
+        {/* SEARCH & ACTIONS BAR */}
         <div className="bg-white p-3 rounded-[1rem] shadow-sm flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
+            />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -332,7 +374,7 @@ export default function Inventory() {
               className="w-full pl-10 pr-10 py-2 border rounded-xl outline-none focus:border-blue-500 text-sm font-medium"
             />
             {searchTerm && (
-              <button 
+              <button
                 onClick={() => setSearchTerm("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title="Clear Search"
@@ -353,6 +395,8 @@ export default function Inventory() {
                   <Upload size={14} />
                   Import Product
                 </button>
+
+                {/* ADD PRODUCT BUTTON */}
                 <button
                   type="button"
                   onClick={() => {
@@ -365,6 +409,7 @@ export default function Inventory() {
                 >
                   Add Product
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setView("check")}
@@ -385,163 +430,85 @@ export default function Inventory() {
           </div>
         </div>
 
-        {/* EXPIRY DATES VIEW MODAL */}
-        {expiryModalProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-[1.5rem] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
-              <div className="flex justify-between items-center border-b pb-3">
-                <div className="flex items-center gap-2 text-[#17347a]">
-                  <Calendar size={18} />
-                  <h2 className="font-extrabold text-base">Expiration Dates Batch</h2>
-                </div>
-                <button onClick={() => setExpiryModalProduct(null)} className="text-gray-400 hover:text-gray-600">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div>
-                <p className="font-extrabold text-sm text-[#0284C7]">{expiryModalProduct.productName}</p>
-                <p className="text-xs font-mono text-gray-500 mt-0.5">Barcode: {expiryModalProduct.barcode}</p>
-              </div>
-
-              <div className="border rounded-xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#17347a] text-white font-extrabold uppercase">
-                    <tr>
-                      <th className="p-3">Expiry Date</th>
-                      <th className="p-3 text-right">Batch Quantity</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
-                    {modalBatchesToDisplay.length > 0 ? (
-                      modalBatchesToDisplay.map((batch, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="p-3 font-mono">{batch.date || "No Expiry Date"}</td>
-                          <td className="p-3 text-right font-bold text-gray-900">{batch.qty} pcs</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={2} className="p-4 text-center text-gray-400">No expiration dates recorded.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button 
-                  onClick={() => setExpiryModalProduct(null)}
-                  className="px-6 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* EDIT MODAL WITH EXPIRY DATES BATCH MANAGER */}
-        {editingProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center border-b pb-3">
-                <h2 className="font-extrabold text-[#17347a] text-lg">Edit Product Details</h2>
-                <button onClick={() => setEditingProduct(null)} className="text-gray-400 hover:text-gray-600">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleChange} />
-                <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleChange} />
-                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleChange} />
-                <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleChange} />
-                <InputField label="Category" name="category" value={formData.category} onChange={handleChange} />
-                <InputField label="Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleChange} />
-              </div>
-
-              <div className="border-t pt-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
-                    <Calendar size={16} className="text-[#17347a]" /> Multiple Expiration Dates & Batches
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddBatch}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
-                  >
-                    <Plus size={14} /> Add Expiry Date
-                  </button>
-                </div>
-
-                {editExpiryBatches.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No expiry date batches assigned yet. Click "Add Expiry Date" to add one.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {editExpiryBatches.map((batch, index) => (
-                      <div key={index} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
-                        <div className="flex-1">
-                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">Expiry Date</label>
-                          <input
-                            type="date"
-                            value={batch.date}
-                            onChange={(e) => handleBatchChange(index, "date", e.target.value)}
-                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono"
-                          />
-                        </div>
-                        <div className="w-28">
-                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">Quantity</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={batch.qty}
-                            onChange={(e) => handleBatchChange(index, "qty", Number(e.target.value))}
-                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBatch(index)}
-                          className="text-red-500 hover:text-red-700 p-2 mt-4 transition"
-                          title="Remove batch"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button onClick={() => setEditingProduct(null)} className="px-6 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={handleSaveEditProduct} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">Save Changes</button>
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* ADD PRODUCT FORM */}
         {showAdd && view === "list" && (
-          <form onSubmit={handleAddProduct} className="bg-[#ECECEC] p-8 rounded-[1.5rem] border border-gray-400 shadow-sm w-full">
+          <form
+            onSubmit={handleAddProduct}
+            className="bg-[#ECECEC] p-8 rounded-[1.5rem] border border-gray-400 shadow-sm w-full"
+          >
             <div className="flex flex-col gap-6">
               <div className="flex flex-wrap gap-6">
-                <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleChange} />
-                <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleChange} />
-                <InputField label="Description" name="description" value={formData.description} onChange={handleChange} />
+                <InputField
+                  label="Product Name"
+                  name="productName"
+                  value={formData.productName}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                />
               </div>
               <div className="flex flex-wrap gap-6">
-                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleChange} />
-                <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleChange} />
-                <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleChange} />
+                <InputField
+                  label="Stock Quantity"
+                  name="stockQuantity"
+                  type="number"
+                  value={formData.stockQuantity}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Cost Price"
+                  name="costPrice"
+                  type="number"
+                  value={formData.costPrice}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Selling Price"
+                  name="sellingPrice"
+                  type="number"
+                  value={formData.sellingPrice}
+                  onChange={handleInputChange}
+                />
               </div>
               <div className="flex flex-wrap gap-6">
-                <InputField label="Category" name="category" value={formData.category} onChange={handleChange} />
-                <InputField label="Supplier" name="supplier" value={formData.supplier} onChange={handleChange} />
+                <InputField
+                  label="Category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Supplier"
+                  name="supplier"
+                  value={formData.supplier}
+                  onChange={handleInputChange}
+                />
               </div>
               <div className="flex flex-wrap gap-6">
-                <InputField label="Expiration Date" name="expirationDate" type="date" value={formData.expirationDate} onChange={handleChange} />
-                <InputField label="Low Stock Threshold for Replenishment" name="threshold" type="number" value={formData.threshold} onChange={handleChange} />
+                <InputField
+                  label="Expiration Date"
+                  name="expirationDate"
+                  type="date"
+                  value={formData.expirationDate}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Low Stock Threshold for Replenishment"
+                  name="threshold"
+                  type="number"
+                  value={formData.threshold}
+                  onChange={handleInputChange}
+                />
               </div>
             </div>
             <div className="flex gap-4 mt-10">
@@ -563,43 +530,298 @@ export default function Inventory() {
           </form>
         )}
 
+        {/* EXPIRY DATES VIEW MODAL */}
+        {expiryModalProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-[1.5rem] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2 text-[#17347a]">
+                  <Calendar size={18} />
+                  <h2 className="font-extrabold text-base">
+                    Expiration Dates Batch
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setExpiryModalProduct(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div>
+                <p className="font-extrabold text-sm text-[#0284C7]">
+                  {expiryModalProduct.productName}
+                </p>
+                <p className="text-xs font-mono text-gray-500 mt-0.5">
+                  Barcode: {expiryModalProduct.barcode}
+                </p>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#17347a] text-white font-extrabold uppercase">
+                    <tr>
+                      <th className="p-3">Expiry Date</th>
+                      <th className="p-3 text-right">Batch Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                    {modalBatchesToDisplay.length > 0 ? (
+                      modalBatchesToDisplay.map((batch, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="p-3 font-mono">
+                            {batch.date || "No Expiry Date"}
+                          </td>
+                          <td className="p-3 text-right font-bold text-gray-900">
+                            {batch.qty} pcs
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="p-4 text-center text-gray-400"
+                        >
+                          No expiration dates recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setExpiryModalProduct(null)}
+                  className="px-6 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EDIT MODAL */}
+        {editingProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b pb-3">
+                <h2 className="font-extrabold text-[#17347a] text-lg">
+                  Edit Product Details
+                </h2>
+                <button
+                  onClick={() => setEditingProduct(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <InputField
+                  label="Product Name"
+                  name="productName"
+                  value={formData.productName}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Stock Quantity"
+                  name="stockQuantity"
+                  type="number"
+                  value={formData.stockQuantity}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Selling Price"
+                  name="sellingPrice"
+                  type="number"
+                  value={formData.sellingPrice}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
+                />
+                <InputField
+                  label="Threshold"
+                  name="threshold"
+                  type="number"
+                  value={formData.threshold}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
+                    <Calendar size={16} className="text-[#17347a]" /> Multiple
+                    Expiration Dates & Batches
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddBatch}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                  >
+                    <Plus size={14} /> Add Expiry Date
+                  </button>
+                </div>
+
+                {editExpiryBatches.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">
+                    No expiry date batches assigned yet. Click "Add Expiry
+                    Date" to add one.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {editExpiryBatches.map((batch, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200"
+                      >
+                        <div className="flex-1">
+                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">
+                            Expiry Date
+                          </label>
+                          <input
+                            type="date"
+                            value={batch.date}
+                            onChange={(e) =>
+                              handleBatchChange(index, "date", e.target.value)
+                            }
+                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">
+                            Quantity
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={batch.qty}
+                            onChange={(e) =>
+                              handleBatchChange(
+                                index,
+                                "qty",
+                                Number(e.target.value)
+                              )
+                            }
+                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBatch(index)}
+                          className="text-red-500 hover:text-red-700 p-2 mt-4 transition"
+                          title="Remove batch"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button
+                  onClick={() => setEditingProduct(null)}
+                  className="px-6 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditProduct}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MAIN DATA TABLE */}
         {!showAdd && (
-          /* FIXED TABLE CONTAINER */
           <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-100 overflow-hidden w-full max-w-full flex flex-col">
-            <div 
+            <div
               className="max-h-[500px] overflow-y-auto overflow-x-auto w-full"
-              style={{
-                scrollbarGutter: "stable"
-              }}
+              style={{ scrollbarGutter: "stable" }}
             >
               <table className="w-full text-left min-w-[950px] border-collapse">
                 <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
-                  <tr>
-                    <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
-                    <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
-                    <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
-                    <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
-                    <th className="p-5 w-[11%] bg-[#17347a] text-center">{view === "check" ? "Expected Stock" : "Stock / Threshold"}</th>
-                    <th className="p-5 w-[10%] bg-[#17347a] text-center">Expiry Dates</th>
-                    <th className="p-5 w-[6%] bg-[#17347a] text-center">Action</th>
-                  </tr>
+                  {view === "list" ? (
+                    <tr>
+                      <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
+                      <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
+                      <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
+                      <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
+                      <th className="p-5 w-[11%] bg-[#17347a] text-center">
+                        Stock / Threshold
+                      </th>
+                      <th className="p-5 w-[10%] bg-[#17347a] text-center">
+                        Expiry Dates
+                      </th>
+                      <th className="p-5 w-[6%] bg-[#17347a] text-center">
+                        Action
+                      </th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
+                      <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
+                      <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
+                      <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
+                      <th className="p-5 w-[12%] bg-[#17347a] text-center">
+                        Expected Stock
+                      </th>
+                      <th className="p-5 w-[15%] bg-[#17347a] text-center">
+                        Actual Count
+                      </th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody className="divide-y divide-gray-200 text-sm font-semibold text-gray-700">
                   {loading ? (
-                    <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-bold">Loading products from database...</td></tr>
+                    <tr>
+                      <td
+                        colSpan={view === "list" ? 7 : 6}
+                        className="p-8 text-center text-gray-500 font-bold"
+                      >
+                        Loading products from database...
+                      </td>
+                    </tr>
                   ) : displayedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-gray-500 font-bold">
-                        {isSearching ? `No products found matching "${searchTerm}".` : "No products available in inventory."}
+                      <td
+                        colSpan={view === "list" ? 7 : 6}
+                        className="p-8 text-center text-gray-500 font-bold"
+                      >
+                        {isSearching
+                          ? `No products found matching "${searchTerm}".`
+                          : "No products available in inventory."}
                       </td>
                     </tr>
                   ) : (
                     displayedItems.map((item, index) => {
                       const isEven = index % 2 === 0;
                       return (
-                        <tr 
-                          key={item.id} 
-                          className={`transition-colors ${isEven ? 'bg-[#F8FAFC]' : 'bg-white'} hover:bg-blue-50/60`}
+                        <tr
+                          key={item.id}
+                          className={`transition-colors ${
+                            isEven ? "bg-[#F8FAFC]" : "bg-white"
+                          } hover:bg-blue-50/60`}
                         >
                           <td className="p-5 w-[28%]">
                             <div className="font-extrabold text-[#0284C7] text-[15px] tracking-tight leading-snug break-words">
@@ -614,27 +836,55 @@ export default function Inventory() {
                           <td className="p-5 w-[16%] font-mono text-xs font-bold text-gray-700 tracking-wider break-all">
                             {item.barcode}
                           </td>
-                          <td className="p-5 w-[18%] font-bold text-gray-800 break-words">{item.category}</td>
-                          <td className="p-5 w-[11%] font-extrabold text-gray-900 whitespace-nowrap">₱ {Number(item.sellingPrice).toFixed(2)}</td>
-                          <td className="p-5 w-[11%] text-center font-bold whitespace-nowrap">{Number(item.stockQuantity)} / {Number(item.threshold)}</td>
-                          
-                          <td className="p-5 w-[10%] text-center whitespace-nowrap">
-                            <button
-                              onClick={() => setExpiryModalProduct(item)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
-                            >
-                              <Calendar size={13} /> View Dates
-                            </button>
+                          <td className="p-5 w-[18%] font-bold text-gray-800 break-words">
+                            {item.category}
+                          </td>
+                          <td className="p-5 w-[11%] font-extrabold text-gray-900 whitespace-nowrap">
+                            ₱ {Number(item.sellingPrice).toFixed(2)}
                           </td>
 
-                          <td className="p-5 w-[6%] text-center whitespace-nowrap">
-                            <button 
-                              onClick={() => openEditModal(item)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 transition-colors"
-                            >
-                              <Edit3 size={13} /> Edit
-                            </button>
-                          </td>
+                          {view === "list" ? (
+                            <>
+                              <td className="p-5 w-[11%] text-center font-bold whitespace-nowrap">
+                                {Number(item.stockQuantity)} /{" "}
+                                {Number(item.threshold)}
+                              </td>
+                              <td className="p-5 w-[10%] text-center whitespace-nowrap">
+                                <button
+                                  onClick={() => setExpiryModalProduct(item)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
+                                >
+                                  <Calendar size={13} /> View Dates
+                                </button>
+                              </td>
+                              <td className="p-5 w-[6%] text-center whitespace-nowrap">
+                                <button
+                                  onClick={() => openEditModal(item)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 transition-colors"
+                                >
+                                  <Edit3 size={13} /> Edit
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-5 w-[12%] text-center font-bold whitespace-nowrap">
+                                {Number(item.stockQuantity)}
+                              </td>
+                              <td className="p-5 w-[15%] text-center whitespace-nowrap text-gray-500 font-normal">
+                                {item.actualCount !== null &&
+                                item.actualCount !== undefined ? (
+                                  <span className="font-extrabold text-[#17347a] bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200 text-sm">
+                                    {item.actualCount}
+                                  </span>
+                                ) : (
+                                  <div className="leading-tight text-gray-400 font-medium">
+                                    Not counted<br />yet
+                                  </div>
+                                )}
+                              </td>
+                            </>
+                          )}
                         </tr>
                       );
                     })
