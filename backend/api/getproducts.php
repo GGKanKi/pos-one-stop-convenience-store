@@ -24,37 +24,51 @@ try {
     $search = trim($_GET['search'] ?? '');
 
     if (!empty($search)) {
-        // Query products table by productName OR barcode
+        // Query products table by productName, barcode, category, OR supplier
         $stmt = $pdo->prepare("
             SELECT 
                 id, 
+                barcode,
                 barcode AS code, 
+                productName,
                 productName AS name, 
                 description, 
+                costPrice,
+                sellingPrice,
                 sellingPrice AS price, 
+                stockQuantity,
                 stockQuantity AS stock,
-                category
+                category,
+                supplier,
+                expirationDate,
+                threshold
             FROM products 
-            WHERE productName LIKE ? OR barcode LIKE ?
+            WHERE productName LIKE ? OR barcode LIKE ? OR category LIKE ? OR supplier LIKE ?
             ORDER BY productName ASC
-            LIMIT 25
         ");
         $likeSearch = "%" . $search . "%";
-        $stmt->execute([$likeSearch, $likeSearch]);
+        $stmt->execute([$likeSearch, $likeSearch, $likeSearch, $likeSearch]);
     } else {
-        // Fetch products list
+        // Kukunin ang LAHAT ng 111 products (WALANG LIMIT)
         $stmt = $pdo->query("
             SELECT 
                 id, 
+                barcode,
                 barcode AS code, 
+                productName,
                 productName AS name, 
                 description, 
+                costPrice,
+                sellingPrice,
                 sellingPrice AS price, 
+                stockQuantity,
                 stockQuantity AS stock,
-                category
+                category,
+                supplier,
+                expirationDate,
+                threshold
             FROM products 
             ORDER BY productName ASC
-            LIMIT 50
         ");
     }
 
@@ -70,7 +84,7 @@ try {
     error_log("Get products error: " . $e->getMessage());
     echo json_encode([
         "success" => false,
-        "message" => "Unable to retrieve products."
+        "message" => "Unable to retrieve products: " . $e->getMessage()
     ]);
 }
 ?>
