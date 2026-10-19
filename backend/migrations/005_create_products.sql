@@ -1,4 +1,4 @@
-
+-- from getproducts.sql
 -- Dumping structure for table onestop_store.products
 CREATE TABLE IF NOT EXISTS `products` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,

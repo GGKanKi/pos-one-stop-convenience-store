@@ -28,18 +28,18 @@ export default function InventoryCheck() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#EAE7DC] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
+    <div className="flex min-h-screen bg-[#cfdcfc] font-sans" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full">
         
         {/* Centered Header */}
-        <header className="bg-[#0056b3] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900">
           <h1 className="text-lg font-bold uppercase tracking-wide text-center">
             Inventory Check
           </h1>
         </header>
 
         {/* Search and Action Bar */}
-        <div className="bg-white p-4 rounded-[2.5rem] shadow-sm flex items-center gap-6 border-2 border-gray-100">
+        <div className="bg-white p-4 rounded-[1rem] shadow-sm flex items-center gap-6 border-2 border-gray-100">
           <div className="relative flex-1 max-w-2xl">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
@@ -52,7 +52,7 @@ export default function InventoryCheck() {
           <div className="flex gap-4 ml-auto">
             <button 
               onClick={handleComplete}
-              className="flex items-center gap-2 px-10 py-3 rounded-full font-bold text-xs uppercase bg-[#0056b3] text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
+              className="flex items-center gap-2 px-10 py-3 rounded-full font-bold text-xs uppercase bg-[#17347a] text-white shadow-lg hover:bg-blue-700 active:scale-95 transition-all"
             >
               <FileText size={16} /> Complete Check
             </button>
@@ -60,9 +60,9 @@ export default function InventoryCheck() {
         </div>
 
         {/* Inventory Table */}
-        <div className="bg-white rounded-[2.5rem] shadow-md border-2 border-gray-50 overflow-hidden">
+        <div className="bg-white rounded-[1rem] shadow-md border-2 border-gray-50 overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-[#0056b3] text-white font-bold uppercase text-[12px] tracking-wider">
+            <thead className="bg-[#17347a] text-white font-bold uppercase text-[12px] tracking-wider">
               <tr>
                 <th className="p-6 pl-10">Product</th>
                 <th className="p-6">Barcode</th>

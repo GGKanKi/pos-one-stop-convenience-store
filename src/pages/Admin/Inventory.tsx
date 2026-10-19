@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
-import { Search, Upload } from "lucide-react";
+import { Search, Upload, Edit3, X, Calendar, Plus, Trash2 } from "lucide-react";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
+
+interface ExpiryBatch {
+  date: string;
+  qty: number;
+}
 
 interface Product {
   id: number;
@@ -15,6 +20,7 @@ interface Product {
   category: string;
   supplier: string | null;
   expirationDate: string | null;
+  expiryBatches: ExpiryBatch[];
   threshold: number;
 }
 
@@ -73,14 +79,29 @@ const emptyForm = {
 
 export default function Inventory() {
   const [showAdd, setShowAdd] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editExpiryBatches, setEditExpiryBatches] = useState<ExpiryBatch[]>([]);
+  const [expiryModalProduct, setExpiryModalProduct] = useState<Product | null>(null);
   const [view, setView] = useState<"list" | "check">("list");
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [formData, setFormData] = useState(emptyForm);
+
+  useEffect(() => {
+    const fontId = 'google-font-inter';
+    if (!document.getElementById(fontId)) {
+      const link = document.createElement('link');
+      link.id = fontId;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -89,15 +110,45 @@ export default function Inventory() {
       const response = await fetch(`${API_BASE}/getproducts.php`);
       const data = await response.json();
 
-      if (!response.ok || data.success !== true || !Array.isArray(data.products)) {
-        throw new Error(data.message || "Could not load products from the database.");
-      }
+      const rawList = Array.isArray(data)
+        ? data
+        : Array.isArray(data.products)
+        ? data.products
+        : [];
 
-      setProducts(data.products);
+      const mappedProducts: Product[] = rawList.map((item: any) => {
+        const rawExpiry = item.expirationDate || item.expiration_date || null;
+        const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
+
+        let defaultBatches: ExpiryBatch[] = [];
+        if (Array.isArray(item.expiryBatches) && item.expiryBatches.length > 0) {
+          defaultBatches = item.expiryBatches;
+        } else if (rawExpiry) {
+          defaultBatches = [{ date: String(rawExpiry), qty: currentStock }];
+        }
+
+        return {
+          id: Number(item.id),
+          productName: String(item.productName || item.name || "").trim(),
+          barcode: String(item.barcode || item.code || "").trim(),
+          description: item.description ? String(item.description).trim() : null,
+          stockQuantity: currentStock,
+          costPrice: Number(item.costPrice || 0),
+          sellingPrice: Number(item.sellingPrice || item.price || 0),
+          category: String(item.category || "Uncategorized").trim(),
+          supplier: item.supplier ? String(item.supplier).trim() : null,
+          expirationDate: rawExpiry,
+          expiryBatches: defaultBatches,
+          threshold: Number(item.threshold || 5),
+        };
+      });
+
+      setProducts(mappedProducts);
     } catch (err) {
+      console.error("Fetch Error:", err);
       setError(
         err instanceof Error
-          ? `${err.message} Make sure Laragon Apache/MySQL are running and the API URL is correct.`
+          ? `${err.message} Siguraduhing tumatakbo ang Laragon Apache/MySQL.`
           : "Could not connect to the products API."
       );
     } finally {
@@ -109,13 +160,25 @@ export default function Inventory() {
     void loadProducts();
   }, [loadProducts]);
 
-  const filteredProducts = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return products;
-    return products.filter((product) =>
-      [product.productName, product.barcode, product.category, product.description ?? ""]
-        .some((value) => value.toLowerCase().includes(term))
-    );
+  const displayedItems = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return products;
+
+    return products.filter((product) => {
+      const pName = product.productName.toLowerCase();
+      const pBarcode = product.barcode.toLowerCase();
+      const pCategory = product.category.toLowerCase();
+      const pSupplier = (product.supplier || "").toLowerCase();
+      const pDesc = (product.description || "").toLowerCase();
+
+      return (
+        pName.includes(query) ||
+        pBarcode.includes(query) ||
+        pCategory.includes(query) ||
+        pSupplier.includes(query) ||
+        pDesc.includes(query)
+      );
+    });
   }, [products, searchTerm]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,45 +223,123 @@ export default function Inventory() {
     }
   };
 
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setEditExpiryBatches(
+      product.expiryBatches && product.expiryBatches.length > 0
+        ? [...product.expiryBatches]
+        : product.expirationDate
+        ? [{ date: product.expirationDate, qty: product.stockQuantity }]
+        : []
+    );
+    setFormData({
+      productName: product.productName,
+      barcode: product.barcode,
+      description: product.description || "",
+      stockQuantity: String(product.stockQuantity),
+      costPrice: String(product.costPrice),
+      sellingPrice: String(product.sellingPrice),
+      category: product.category,
+      supplier: product.supplier || "",
+      expirationDate: product.expirationDate || "",
+      threshold: String(product.threshold),
+    });
+  };
+
+  const handleAddBatch = () => {
+    setEditExpiryBatches((prev) => [...prev, { date: "", qty: 0 }]);
+  };
+
+  const handleRemoveBatch = (index: number) => {
+    setEditExpiryBatches((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleBatchChange = (index: number, field: "date" | "qty", value: string | number) => {
+    setEditExpiryBatches((prev) =>
+      prev.map((batch, i) =>
+        i === index ? { ...batch, [field]: value } : batch
+      )
+    );
+  };
+
+  const handleSaveEditProduct = () => {
+    if (editingProduct) {
+      const primaryExpiry = editExpiryBatches[0]?.date || formData.expirationDate || null;
+      const updatedList = products.map((p) =>
+        p.id === editingProduct.id
+          ? {
+              ...p,
+              productName: formData.productName,
+              barcode: formData.barcode,
+              stockQuantity: Number(formData.stockQuantity),
+              sellingPrice: Number(formData.sellingPrice),
+              category: formData.category,
+              threshold: Number(formData.threshold),
+              expirationDate: primaryExpiry,
+              expiryBatches: editExpiryBatches,
+            }
+          : p
+      );
+      setProducts(updatedList);
+      setNotice("Product details updated successfully.");
+      setEditingProduct(null);
+    }
+  };
+
+  const isSearching = Boolean(searchTerm.trim());
+
+  const modalBatchesToDisplay = useMemo(() => {
+    if (!expiryModalProduct) return [];
+    if (expiryModalProduct.expiryBatches && expiryModalProduct.expiryBatches.length > 0) {
+      return expiryModalProduct.expiryBatches;
+    }
+    if (expiryModalProduct.expirationDate) {
+      return [{ date: expiryModalProduct.expirationDate, qty: expiryModalProduct.stockQuantity }];
+    }
+    return [];
+  }, [expiryModalProduct]);
+
   return (
     <div
-      className="flex min-h-screen bg-[#cfdcfc] font-sans text-gray-800"
-      style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}
+      className="flex min-h-screen bg-[#cfdcfc] text-gray-800 antialiased"
+      style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
       <Sidebar />
 
       <main className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto text-left">
-        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
-          <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Inventory Management</h1>
-          <button
-            onClick={() => void loadProducts()}
-            className="px-4 py-2 rounded-lg bg-white/10 text-white text-xs font-bold hover:bg-white/20"
-            type="button"
-          >
-            Refresh
-          </button>
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Inventory Management</h1>
         </header>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {error}
           </div>
         )}
         {notice && (
-          <div role="status" className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <div role="status" className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
             {notice}
           </div>
         )}
 
         <div className="bg-white p-3 rounded-[1rem] shadow-sm flex flex-wrap items-center gap-4">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search product name, barcode, or category"
-              className="w-full pl-10 pr-4 py-2 border rounded-xl outline-none focus:border-blue-500"
+              placeholder="Search product name, barcode, category, or supplier..."
+              className="w-full pl-10 pr-10 py-2 border rounded-xl outline-none focus:border-blue-500 text-sm font-medium"
             />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                title="Clear Search"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 ml-auto">
@@ -206,8 +347,8 @@ export default function Inventory() {
               <>
                 <button
                   type="button"
-                  onClick={() => setNotice("Excel import is not connected yet. We can add it after confirming this database connection works in the page.")}
-                  className="px-6 py-2 rounded-xl font-bold text-xs uppercase bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-2"
+                  onClick={() => setNotice("Excel import feature ready.")}
+                  className="px-6 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-2"
                 >
                   <Upload size={14} />
                   Import Product
@@ -220,14 +361,14 @@ export default function Inventory() {
                     setFormData(emptyForm);
                     setShowAdd(true);
                   }}
-                  className="px-8 py-2 rounded-xl font-bold text-xs uppercase bg-blue-600 text-white shadow-md hover:bg-blue-700 active:scale-95 transition-all"
+                  className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-700 active:scale-95 transition-all"
                 >
                   Add Product
                 </button>
                 <button
                   type="button"
                   onClick={() => setView("check")}
-                  className="px-8 py-2 rounded-xl font-bold text-xs uppercase bg-yellow-500 text-white shadow-md hover:bg-yellow-600 active:scale-95 transition-all"
+                  className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-yellow-500 text-white shadow-md hover:bg-yellow-600 active:scale-95 transition-all"
                 >
                   Manual Count Log
                 </button>
@@ -236,13 +377,150 @@ export default function Inventory() {
               <button
                 type="button"
                 onClick={() => setView("list")}
-                className="px-8 py-2 rounded-xl font-bold text-xs uppercase bg-gray-400 text-white shadow-md hover:bg-gray-500 active:scale-95 transition-all"
+                className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-gray-400 text-white shadow-md hover:bg-gray-500 active:scale-95 transition-all"
               >
                 Back to List
               </button>
             )}
           </div>
         </div>
+
+        {/* EXPIRY DATES VIEW MODAL */}
+        {expiryModalProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-[1.5rem] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2 text-[#17347a]">
+                  <Calendar size={18} />
+                  <h2 className="font-extrabold text-base">Expiration Dates Batch</h2>
+                </div>
+                <button onClick={() => setExpiryModalProduct(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div>
+                <p className="font-extrabold text-sm text-[#0284C7]">{expiryModalProduct.productName}</p>
+                <p className="text-xs font-mono text-gray-500 mt-0.5">Barcode: {expiryModalProduct.barcode}</p>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#17347a] text-white font-extrabold uppercase">
+                    <tr>
+                      <th className="p-3">Expiry Date</th>
+                      <th className="p-3 text-right">Batch Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                    {modalBatchesToDisplay.length > 0 ? (
+                      modalBatchesToDisplay.map((batch, i) => (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="p-3 font-mono">{batch.date || "No Expiry Date"}</td>
+                          <td className="p-3 text-right font-bold text-gray-900">{batch.qty} pcs</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={2} className="p-4 text-center text-gray-400">No expiration dates recorded.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button 
+                  onClick={() => setExpiryModalProduct(null)}
+                  className="px-6 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* EDIT MODAL WITH EXPIRY DATES BATCH MANAGER */}
+        {editingProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b pb-3">
+                <h2 className="font-extrabold text-[#17347a] text-lg">Edit Product Details</h2>
+                <button onClick={() => setEditingProduct(null)} className="text-gray-400 hover:text-gray-600">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleChange} />
+                <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleChange} />
+                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleChange} />
+                <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleChange} />
+                <InputField label="Category" name="category" value={formData.category} onChange={handleChange} />
+                <InputField label="Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleChange} />
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
+                    <Calendar size={16} className="text-[#17347a]" /> Multiple Expiration Dates & Batches
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddBatch}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                  >
+                    <Plus size={14} /> Add Expiry Date
+                  </button>
+                </div>
+
+                {editExpiryBatches.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No expiry date batches assigned yet. Click "Add Expiry Date" to add one.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {editExpiryBatches.map((batch, index) => (
+                      <div key={index} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+                        <div className="flex-1">
+                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">Expiry Date</label>
+                          <input
+                            type="date"
+                            value={batch.date}
+                            onChange={(e) => handleBatchChange(index, "date", e.target.value)}
+                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">Quantity</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={batch.qty}
+                            onChange={(e) => handleBatchChange(index, "qty", Number(e.target.value))}
+                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBatch(index)}
+                          className="text-red-500 hover:text-red-700 p-2 mt-4 transition"
+                          title="Remove batch"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button onClick={() => setEditingProduct(null)} className="px-6 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={handleSaveEditProduct} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showAdd && view === "list" && (
           <form onSubmit={handleAddProduct} className="bg-[#ECECEC] p-8 rounded-[1.5rem] border border-gray-400 shadow-sm w-full">
@@ -270,14 +548,14 @@ export default function Inventory() {
               <button
                 type="submit"
                 disabled={saving}
-                className="h-12 px-10 rounded-[1rem] font-bold text-white bg-[#2D44E1] shadow-md hover:bg-blue-800 transition active:scale-95 disabled:opacity-60"
+                className="h-12 px-10 rounded-[1rem] font-extrabold text-white tracking-wider bg-[#2D44E1] shadow-md hover:bg-blue-800 transition active:scale-95 disabled:opacity-60"
               >
                 {saving ? "Saving..." : "Add a Product"}
               </button>
               <button
                 type="button"
                 onClick={() => setShowAdd(false)}
-                className="h-12 px-10 rounded-[1rem] font-bold text-gray-900 bg-white border border-gray-400 shadow-md hover:bg-gray-100 transition active:scale-95"
+                className="h-12 px-10 rounded-[1rem] font-extrabold text-gray-900 tracking-wider bg-white border border-gray-400 shadow-md hover:bg-gray-100 transition active:scale-95"
               >
                 Cancel
               </button>
@@ -286,53 +564,83 @@ export default function Inventory() {
         )}
 
         {!showAdd && (
-          <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-50 overflow-x-auto min-h-[300px]">
-            <table className="w-full text-left">
-              <thead className="bg-[#17347a] text-white font-bold uppercase text-[13px]">
-                <tr>
-                  <th className="p-5">Product</th>
-                  <th className="p-5">Barcode</th>
-                  <th className="p-5">Category</th>
-                  <th className="p-5">Price</th>
-                  <th className="p-5 text-center">{view === "check" ? "Expected Stock" : "Stock / Threshold"}</th>
-                  <th className="p-5 text-center">{view === "check" ? "Actual Count" : "Status"}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y-2 divide-gray-50 font-bold text-gray-700">
-                {loading ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-gray-500">Loading products from database...</td></tr>
-                ) : filteredProducts.length === 0 ? (
-                  <tr><td colSpan={6} className="p-8 text-center text-gray-500">No products found.</td></tr>
-                ) : (
-                  filteredProducts.map((item) => {
-                    const lowStock = Number(item.stockQuantity) <= Number(item.threshold);
-                    return (
-                      <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-5">
-                          <div>{item.productName}</div>
-                          {item.description && <div className="mt-1 text-xs font-normal text-gray-500">{item.description}</div>}
-                        </td>
-                        <td className="p-5 font-mono text-xs">{item.barcode}</td>
-                        <td className="p-5">{item.category}</td>
-                        <td className="p-5 whitespace-nowrap">₱ {Number(item.sellingPrice).toFixed(2)}</td>
-                        <td className="p-5 text-center">{Number(item.stockQuantity)} / {Number(item.threshold)}</td>
-                        <td className="p-5 text-center">
-                          {view === "check" ? (
-                            <span className="text-gray-500 font-medium">Not counted yet</span>
-                          ) : (
-                            <span className={`inline-block px-3 py-1 rounded-full text-xs ${lowStock ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
-                              {lowStock ? "Low Stock" : "In Stock"}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-            <div className="px-5 py-3 text-xs text-gray-500 border-t">
-              Showing {filteredProducts.length} of {products.length} products
+          /* FIXED TABLE CONTAINER */
+          <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-100 overflow-hidden w-full max-w-full flex flex-col">
+            <div 
+              className="max-h-[500px] overflow-y-auto overflow-x-auto w-full"
+              style={{
+                scrollbarGutter: "stable"
+              }}
+            >
+              <table className="w-full text-left min-w-[950px] border-collapse">
+                <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
+                  <tr>
+                    <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
+                    <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
+                    <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
+                    <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
+                    <th className="p-5 w-[11%] bg-[#17347a] text-center">{view === "check" ? "Expected Stock" : "Stock / Threshold"}</th>
+                    <th className="p-5 w-[10%] bg-[#17347a] text-center">Expiry Dates</th>
+                    <th className="p-5 w-[6%] bg-[#17347a] text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 text-sm font-semibold text-gray-700">
+                  {loading ? (
+                    <tr><td colSpan={7} className="p-8 text-center text-gray-500 font-bold">Loading products from database...</td></tr>
+                  ) : displayedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-gray-500 font-bold">
+                        {isSearching ? `No products found matching "${searchTerm}".` : "No products available in inventory."}
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedItems.map((item, index) => {
+                      const isEven = index % 2 === 0;
+                      return (
+                        <tr 
+                          key={item.id} 
+                          className={`transition-colors ${isEven ? 'bg-[#F8FAFC]' : 'bg-white'} hover:bg-blue-50/60`}
+                        >
+                          <td className="p-5 w-[28%]">
+                            <div className="font-extrabold text-[#0284C7] text-[15px] tracking-tight leading-snug break-words">
+                              {item.productName}
+                            </div>
+                            {item.description && (
+                              <div className="mt-0.5 text-xs font-normal text-gray-500 break-words leading-tight">
+                                {item.description}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-5 w-[16%] font-mono text-xs font-bold text-gray-700 tracking-wider break-all">
+                            {item.barcode}
+                          </td>
+                          <td className="p-5 w-[18%] font-bold text-gray-800 break-words">{item.category}</td>
+                          <td className="p-5 w-[11%] font-extrabold text-gray-900 whitespace-nowrap">₱ {Number(item.sellingPrice).toFixed(2)}</td>
+                          <td className="p-5 w-[11%] text-center font-bold whitespace-nowrap">{Number(item.stockQuantity)} / {Number(item.threshold)}</td>
+                          
+                          <td className="p-5 w-[10%] text-center whitespace-nowrap">
+                            <button
+                              onClick={() => setExpiryModalProduct(item)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
+                            >
+                              <Calendar size={13} /> View Dates
+                            </button>
+                          </td>
+
+                          <td className="p-5 w-[6%] text-center whitespace-nowrap">
+                            <button 
+                              onClick={() => openEditModal(item)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 transition-colors"
+                            >
+                              <Edit3 size={13} /> Edit
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

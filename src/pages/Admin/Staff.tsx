@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; //
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../../components/Sidebar';
 import { Calendar, User, Edit3 } from 'lucide-react';
 
@@ -35,6 +35,18 @@ export default function StaffPage() {
     return attendanceData.find((a) => a.user_id === userId) || null;
   };
 
+  // Automatically inject 'Inter' font link into head if not present
+  useEffect(() => {
+    const fontId = 'google-font-inter';
+    if (!document.getElementById(fontId)) {
+      const link = document.createElement('link');
+      link.id = fontId;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
+
   // Fetch both staff and attendance data
   useEffect(() => {
     async function fetchData() {
@@ -48,7 +60,7 @@ export default function StaffPage() {
           console.error('Staff API error:', staffJson.message);
         }
 
-// Fetch today's attendance data for all staff
+        // Fetch today's attendance data for all staff
         const today = new Date().toISOString().split('T')[0];
         const attendRes = await fetch(`http://localhost/One-Convenience/backend/api/getattendance.php?date=${today}`);
         const attendJson = await attendRes.json();
@@ -63,37 +75,40 @@ export default function StaffPage() {
     }
     fetchData();
   }, []);
-        // bg
+
   return (
-    <div className="flex min-h-screen bg-[#cfdcfc] font-sans"> 
+    <div 
+      className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased" 
+      style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
+    > 
       <Sidebar />
       <main className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto text-left">
         
         {/* Staff Attendance Header */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
-          <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Staff Attendance</h1>
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Staff Attendance</h1>
         </header>
 
         {/* Controls Bar */}
         <div className="bg-white p-3 rounded-[1rem] shadow-sm flex items-center gap-4">
-          <div className="flex items-center gap-3 border-2 border-gray-100 p-2 rounded-xl px-6 font-bold text-gray-500">
+          <div className="flex items-center gap-3 border-2 border-gray-100 p-2 rounded-xl px-6 font-bold text-gray-600 text-sm tracking-wide">
             <Calendar size={18} className="text-[#1A3E7A]" /> 04/21/2026 <Calendar size={18} className="text-[#1A3E7A]" />
           </div>
-          <button className="border-2 border-gray-100 px-8 py-2 rounded-xl font-bold text-xs uppercase text-gray-400 hover:bg-gray-50">Filter</button>
+          <button className="border-2 border-gray-100 px-8 py-2 rounded-xl font-bold text-xs uppercase text-gray-500 hover:bg-gray-50 tracking-wider transition-colors">Filter</button>
           
           <div className="flex gap-2 ml-auto">
             <button 
               onClick={() => setView('daily')}
-              className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'daily' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+              className={`px-8 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+                view === 'daily' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-500 hover:bg-gray-50"
               }`}
             >
               Daily View
             </button>
             <button 
               onClick={() => setView('monthly')}
-              className={`px-8 py-2 rounded-xl font-bold text-xs uppercase transition-all ${
-                view === 'monthly' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-400 hover:bg-gray-50"
+              className={`px-8 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all ${
+                view === 'monthly' ? "bg-[#0056b3] text-white shadow-lg scale-105" : "border-2 border-gray-100 text-gray-500 hover:bg-gray-50"
               }`}
             >
               Monthly View
@@ -105,16 +120,16 @@ export default function StaffPage() {
         <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-50 overflow-hidden min-h-[300px]">
           {view === 'daily' ? (
             <table className="w-full text-left">
-              <thead className="bg-[#17347a] text-white font-bold uppercase text-[13px]">
+              <thead className="bg-[#17347a] text-white font-bold uppercase text-[12px] tracking-wider">
                 <tr>
-                  <th className="p-6 flex items-center gap-2"><User size={16}/> Staff Id</th>
-                  <th className="p-6">Staff Name</th>
-                  <th className="p-6">Time In</th>
-                  <th className="p-6">Time Out</th>
-                  <th className="p-6">Duration</th>
+                  <th className="p-6 flex items-center gap-2 font-extrabold"><User size={16}/> Staff Id</th>
+                  <th className="p-6 font-extrabold">Staff Name</th>
+                  <th className="p-6 font-extrabold">Time In</th>
+                  <th className="p-6 font-extrabold">Time Out</th>
+                  <th className="p-6 font-extrabold">Duration</th>
                 </tr>
               </thead>
-<tbody className="divide-y-2 divide-gray-50 font-bold text-gray-700">
+              <tbody className="divide-y-2 divide-gray-50 font-bold text-gray-700 text-sm">
 
                 {staffData.map((staff) => {
                   const attendance = getAttendanceForUser(staff.id);
@@ -124,15 +139,15 @@ export default function StaffPage() {
                   
                   return (
                     <tr key={staff.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-6">{staff.staff_id || 'N/A'}</td>
-                      <td className="p-6">{staff.first_name} {staff.last_name}</td>
-                      <td className={`p-6 ${timeIn ? 'text-green-600' : 'text-gray-400'}`}>
+                      <td className="p-6 font-mono text-xs text-gray-600">{staff.staff_id || 'N/A'}</td>
+                      <td className="p-6 font-extrabold text-gray-800">{staff.first_name} {staff.last_name}</td>
+                      <td className={`p-6 font-semibold ${timeIn ? 'text-green-600' : 'text-gray-400'}`}>
                         {formatTime(timeIn)}
                       </td>
-                      <td className={`p-6 ${timeOut ? 'text-red-600' : (timeIn ? 'text-blue-500' : 'text-gray-400')}`}>
+                      <td className={`p-6 font-semibold ${timeOut ? 'text-red-600' : (timeIn ? 'text-blue-600' : 'text-gray-400')}`}>
                         {timeIn ? (timeOut ? formatTime(timeOut) : 'Active') : '--'}
                       </td>
-                      <td className="p-6">{duration}</td>
+                      <td className="p-6 font-semibold text-gray-600">{duration}</td>
                     </tr>
                   );
                 })}
@@ -157,13 +172,13 @@ export default function StaffPage() {
         </div>
 
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
-          <h1 className="text-lg font-bold ml-2 uppercase tracking-wide">Staff Directory</h1>
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Staff Directory</h1>
         </header>
 
-{/* Directory Grid */}
+        {/* Directory Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10">
           {staffData.length === 0 ? (
-            <div className="col-span-3 p-10 text-center text-gray-400">No staff found</div>
+            <div className="col-span-3 p-10 text-center text-gray-400 font-semibold">No staff found</div>
           ) : staffData.map((staff) => (
             <div key={staff.id} className="bg-white rounded-[2rem] shadow-lg flex flex-col overflow-hidden border border-gray-100">
               
@@ -179,12 +194,12 @@ export default function StaffPage() {
 
                 {/* Info */}
                 <div className="relative z-10 flex flex-col justify-end h-24 pb-0">
-                  <h3 className="font-black text-[#1A3E7A] uppercase text-[15px] leading-tight mb-4">
+                  <h3 className="font-extrabold text-[#1A3E7A] uppercase text-[15px] leading-tight mb-4 tracking-tight">
                     {staff.first_name} {staff.last_name}
                   </h3>
                   
                   <div className="h-10 flex items-center">
-                    <p className="text-white font-bold text-sm tracking-widest pl-1 leading-none">
+                    <p className="text-white font-black text-sm tracking-widest pl-1 leading-none font-mono">
                       {staff.staff_id || 'N/A'}
                     </p>
                   </div>
@@ -193,7 +208,7 @@ export default function StaffPage() {
 
               <div className="w-[90%] mx-auto h-[1px] bg-gray-100 mt-2" />
 
-              <button className="w-full py-4 flex items-center justify-center gap-2 text-[10px] font-bold text-gray-300 uppercase tracking-widest hover:text-[#1A3E7A] transition-colors">
+              <button className="w-full py-4 flex items-center justify-center gap-2 text-[11px] font-extrabold text-gray-400 uppercase tracking-widest hover:text-[#1A3E7A] transition-colors">
                 Edit ID <Edit3 size={12} />
               </button>
             </div>
@@ -203,4 +218,3 @@ export default function StaffPage() {
     </div>
   );
 }
-
