@@ -69,26 +69,22 @@ export default function POS() {
 
   const scanInputRef = useRef<HTMLInputElement>(null);
   const modalSearchInputRef = useRef<HTMLInputElement>(null);
-  
-  // Ref para sa Scrollable Cart Box
+  const cashInputRef = useRef<HTMLInputElement>(null);
   const cartTableContainerRef = useRef<HTMLDivElement>(null);
 
-  // Focus scanner input on load
   useEffect(() => {
     scanInputRef.current?.focus();
   }, []);
 
-  // AUTO-SCROLL TO BOTTOM KAPAG MAY BAGONG NADAGDAG NA PRODUCT
   useEffect(() => {
     if (cartTableContainerRef.current) {
       cartTableContainerRef.current.scrollTop = cartTableContainerRef.current.scrollHeight;
     }
   }, [cart]);
 
-  // Keyboard Shortcuts (F10 for Payment)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F10') {
+      if (e.key === 'F5') {
         e.preventDefault();
         setShowPaymentModal(true);
       }
@@ -98,7 +94,18 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Real-Time Product Search Query
+  // Auto-focus on Cash Input kapag inopen ang Payment Modal
+  useEffect(() => {
+    if (showPaymentModal) {
+      setTimeout(() => {
+        cashInputRef.current?.focus();
+        cashInputRef.current?.select();
+      }, 100);
+    } else {
+      scanInputRef.current?.focus();
+    }
+  }, [showPaymentModal]);
+
   const executeSearch = async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -137,18 +144,14 @@ export default function POS() {
     return () => clearTimeout(timer);
   }, [searchQuery, showSearchModal]);
 
-  // Focus input inside Search Modal when opened
   useEffect(() => {
     if (showSearchModal) {
       setTimeout(() => {
         modalSearchInputRef.current?.focus();
       }, 100);
-    } else {
-      scanInputRef.current?.focus();
     }
   }, [showSearchModal]);
 
-  // Trigger search modal on Enter key or Search Click
   const handleTriggerSearchModal = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setShowSearchModal(true);
@@ -157,7 +160,6 @@ export default function POS() {
     }
   };
 
-  // Add Item to Cart & Close Search Window
   const addToCart = (product: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id || item.code === product.code);
@@ -176,7 +178,6 @@ export default function POS() {
     setTimeout(() => scanInputRef.current?.focus(), 50);
   };
 
-  // Handle Enter Key inside Search Modal
   const handleModalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchResults.length > 0) {
@@ -184,7 +185,6 @@ export default function POS() {
     }
   };
 
-  // Handle Barcode Scan Submit
   const handleScanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scanCode.trim()) return;
@@ -211,7 +211,6 @@ export default function POS() {
     }
   };
 
-  // Financial Calculations
   const subTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart]
@@ -241,23 +240,72 @@ export default function POS() {
     setCart(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!cart.length) return alert("Cart is empty");
     setShowPaymentModal(false);
     setShowReceiptModal(true);
   };
 
-  const finalizeTransaction = () => {
+  // FINALIZE TRANSACTION: SINESAVE SA DATABASE AT CINI-CLEAR ANG POS CART
+  const finalizeTransaction = async () => {
+    if (cart.length === 0) return;
+
+    const transactionData = {
+      paymentMethod,
+      totalAmount: total,
+      items: cart.map((item) => ({
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+      })),
+    };
+
+    // 1. Send Request sa PHP backend (savetransaction.php)
+    try {
+      const res = await apiRequest("/savetransaction.php", "POST", transactionData);
+      console.log("DB Response:", res);
+      
+      if (!res || !res.success) {
+        alert("DB Warning: " + (res?.message || "Hindi na-save sa database. Pakitingnan ang F12 Console."));
+      }
+    } catch (err: any) {
+      console.error("Fetch/Server Error:", err);
+      alert("Connection Error: " + (err.message || "Failed to reach PHP server."));
+    }
+
+    // 2. Local storage sync para sa Recall Screen
+    try {
+      const existing = JSON.parse(localStorage.getItem("pos_completed_transactions") || "[]");
+      const newTx = {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
+        paymentMethod,
+        totalAmount: total,
+        items: transactionData.items,
+      };
+      
+      localStorage.setItem("pos_completed_transactions", JSON.stringify([newTx, ...existing]));
+      window.dispatchEvent(new Event("pos_transaction_saved"));
+    } catch (e) {
+      console.error("Local Sync Error:", e);
+    }
+
+    // 3. Clear POS State AFTER THE CHECKOUT
     setShowReceiptModal(false);
     setCart([]);
     setCashTendered("0.00");
     setTransactionDiscount(0.00);
+    setScanCode("");
+    setSearchQuery("");
   };
 
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-[#183478] via-[#12285e] to-[#0a183b] flex flex-col p-4 relative text-cyan-100 overflow-hidden shadow-[inset_0_0_100px_rgba(0,140,255,0.15)]" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
       
-      {/* Clock In Error Alert */}
       {clockInError && (
         <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
           {clockInError}
@@ -276,7 +324,6 @@ export default function POS() {
               </button>
             </div>
 
-            {/* Search Bar Inside Modal */}
             <form onSubmit={handleModalSubmit} className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400" size={20} />
               <input 
@@ -288,7 +335,6 @@ export default function POS() {
               />
             </form>
 
-            {/* Product Results Grid */}
             <div className="flex-1 overflow-y-auto pr-1">
               {isSearching ? (
                 <div className="p-10 text-center text-sm text-cyan-300 font-bold">Searching products catalog...</div>
@@ -305,7 +351,7 @@ export default function POS() {
                           {product.name}
                         </span>
                         <span className="text-xs text-slate-500 font-mono mt-0.5">
-                          {product.code} • {product.description || 'No desc'}
+                          {product.code} {product.description ? `- ${product.description}` : ''}
                         </span>
                       </div>
 
@@ -335,7 +381,7 @@ export default function POS() {
         </div>
       )}
 
-      {/* Receipt Success Modal */}
+      {/* RECEIPT SUCCESS MODAL */}
       {showReceiptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[450px] rounded-[30px] p-10 flex flex-col items-center shadow-[0_0_50px_rgba(0,180,255,0.3)]">
@@ -358,7 +404,7 @@ export default function POS() {
               </button>
               
               <button 
-                onClick={() => setShowReceiptModal(false)}
+                onClick={finalizeTransaction}
                 className="w-full bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]"
               >
                 CANCEL
@@ -368,20 +414,21 @@ export default function POS() {
         </div>
       )}
 
-      {/* Payment & Checkout Window */}
+      {/* PAYMENT MODAL */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
-          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[460px] rounded-[30px] p-6 flex flex-col justify-between gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)]">
-            
+          <form 
+            onSubmit={handleConfirm}
+            className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[460px] rounded-[30px] p-6 flex flex-col justify-between gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)]"
+          >
             <div className="space-y-4 flex flex-col">
               <div className="flex justify-between items-center pb-2 border-b border-cyan-500/20">
                 <p className="text-xs text-cyan-400 font-black tracking-widest uppercase">PAYMENT & CHECKOUT</p>
-                <button onClick={() => setShowPaymentModal(false)} className="text-cyan-400 hover:text-white transition">
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="text-cyan-400 hover:text-white transition">
                   <X size={20} />
                 </button>
               </div>
 
-              {/* Total Display Box */}
               <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] rounded-xl p-4 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,140,255,0.25)]">
                 <p className="text-xs text-cyan-400 font-bold tracking-widest uppercase">TOTAL AMOUNT</p>
                 <div className="text-right text-3xl text-cyan-300 font-black tracking-wider mt-1 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">
@@ -389,13 +436,12 @@ export default function POS() {
                 </div>
               </div>
 
-              {/* Payment Section */}
               <div className="bg-gradient-to-b from-[#183478]/90 to-[#0e214d]/90 rounded-xl p-4 border border-cyan-400/40 space-y-3.5 shadow-[0_0_20px_rgba(0,140,255,0.15)]">
                 <div>
                   <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">PAYMENT METHOD</p>
                   <div className="flex gap-2.5 mt-1.5">
-                    <button onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "Cash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>Cash</button>
-                    <button onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "GCash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>GCash</button>
+                    <button type="button" onClick={() => setPaymentMethod("Cash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "Cash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>Cash</button>
+                    <button type="button" onClick={() => setPaymentMethod("GCash")} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${paymentMethod === "GCash" ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,242,254,0.4)]" : "bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300"}`}>GCash</button>
                   </div>
                 </div>
 
@@ -403,8 +449,10 @@ export default function POS() {
                   <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">CASH TENDERED</p>
                   <div className="relative mt-1.5">
                     <input 
+                      ref={cashInputRef}
+                      type="text"
                       value={cashTendered} 
-                      onClick={() => setCashTendered("")} 
+                      onFocus={(e) => e.target.select()}
                       onChange={(e) => setCashTendered(e.target.value)} 
                       className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
                     />
@@ -412,10 +460,10 @@ export default function POS() {
                   </div>
                   <div className="flex gap-2 mt-2 text-sm">
                     {[100, 500, 1000].map((v) => (
-                      <button key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
+                      <button type="button" key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
                     ))}
                   </div>
-                  <button onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
+                  <button type="button" onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
                 </div>
 
                 <div>
@@ -427,17 +475,16 @@ export default function POS() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3 pt-1">
-              <button onClick={handleConfirm} className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
-              <button onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
             </div>
 
-          </div>
+          </form>
         </div>
       )}
 
-      {/* Main POS Workspace */}
+      {/* MAIN WORKSPACE BACKGROUND */}
       <div className="w-full flex-1 min-h-0 bg-slate-200 border-2 border-cyan-400/60 rounded-[26px] overflow-hidden shadow-[0_0_40px_rgba(0,140,255,0.25)] flex flex-col p-4 gap-4">
         
         {/* Header */}
@@ -467,10 +514,9 @@ export default function POS() {
           </div> 
         </div> 
 
-        {/* Body Content */}
         <div className="bg-slate-200 border-2 border-cyan-400/50 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 flex-1 min-h-0 shadow-sm overflow-hidden">
           
-          {/* Scan Bar */}
+          {/* FOR SCANNER OR Scan Bar */}
           <form onSubmit={handleScanSubmit} className="relative shrink-0">
             <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 pointer-events-none" size={20} />
             <input
@@ -482,16 +528,16 @@ export default function POS() {
             />
           </form>
 
-          {/* Quick Actions & Search Row */}
+          {/* F-Keys Quick Actions Bar */}
           <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 shrink-0">
             <div className="flex gap-3.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-thin shrink-0">
               {[
-                { label: "Discounts", shortcut: "F5", img: "/pictures/discount.png" },
-                { label: "Recall", shortcut: "F6", img: "/pictures/recall.jpg" },
-                { label: "Dashboard", shortcut: "F7", img: "/pictures/dashboard.png", action: () => navigate("/admin/dashboard", { state: { fullScreen: true } }) },
-                { label: "Void", shortcut: "F8", img: "/pictures/void.jpg" },
-                { label: "Inventory", shortcut: "F9", img: "/pictures/inventory.jpg", action: () => navigate("/staff/inventorycheck") },
-                { label: "Payment", shortcut: "F10", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) }
+                { label: "Payment", shortcut: "F5", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) },
+                { label: "Discounts", shortcut: "F6", img: "/pictures/discount.png" },
+                { label: "Recall", shortcut: "F7", img: "/pictures/recall.jpg", action: () => navigate("/staff/recall") },
+                { label: "Dashboard", shortcut: "F8", img: "/pictures/dashboard.png", action: () => navigate("/admin/dashboard", { state: { fullScreen: true } }) },
+                { label: "Inventory", shortcut: "F9", img: "/pictures/inventory.jpg", action: () => navigate("/staff/inventorycheck") }
+               
               ].map((btn, idx) => (
                 <button 
                   key={idx}
@@ -510,7 +556,6 @@ export default function POS() {
               ))}
             </div>
 
-            {/* SEARCH PRODUCT INPUT */}
             <form onSubmit={handleTriggerSearchModal} className="relative w-full lg:w-[320px] shrink-0">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 pointer-events-none" size={18} />
               <input 
@@ -523,7 +568,7 @@ export default function POS() {
             </form>
           </div>
 
-          {/* SCROLLABLE WHITE CART BOX WITH AUTO-SCROLL TO BOTTOM */}
+          {/* SCROLLABLE CART TABLE */}
           <div className="w-full bg-white border-2 border-cyan-400/50 rounded-xl shadow-inner flex flex-col flex-1 min-h-0 overflow-hidden">
             <div 
               ref={cartTableContainerRef}
@@ -595,7 +640,7 @@ export default function POS() {
             </div>
           </div>
 
-          {/* Bottom Transaction Total Panel */}
+          {/* Bottom Total Panel */}
           <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3.5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center shadow-[0_0_30px_rgba(0,150,255,0.3)] text-cyan-200 shrink-0">
             <div className="min-w-0 flex items-center gap-4 sm:gap-6 flex-wrap">
               <div className="flex items-center gap-3 pr-4 border-r border-cyan-500/30">
