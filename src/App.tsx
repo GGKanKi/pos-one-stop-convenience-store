@@ -16,6 +16,7 @@ import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
 import Discrepancies from './pages/Admin/Discrepancies';
 import Transactions from './pages/Admin/Transaction';
+import Recall from './pages/Staff/Recall';
 
 function App() {
   return (
@@ -33,9 +34,8 @@ function App() {
         <Route path="/logoutid" element={<LogoutId />} />
         <Route path="/pos" element={<POS />} />
         <Route path="/staff/pos" element={<POS />} />
-        <Route
-          path="/staff/inventorycheck"
-          element={<InventoryCheck />}
+        <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
+        <Route path="/staff/recall" element={<Recall />}
         />
 
         {/* ADMIN ROUTES */}

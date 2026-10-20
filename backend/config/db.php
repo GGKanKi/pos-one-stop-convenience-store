@@ -5,7 +5,7 @@ $dbname = "onestop_store";
 $user = "root";
 $pass = "";
 
-//create a pdo connection to the mysql database
+//creating a pdo connection to the mysql database
 try {
     $pdo = new PDO(
         "mysql:host=$host;dbname=$dbname;charset=utf8mb4",

@@ -118,7 +118,7 @@ export default function InventoryCheck() {
   const handleMarkDone = (barcode: string) => {
     const countVal = actualStocks[barcode];
     if (countVal === undefined || countVal === "") {
-      alert("Mangyaring maglagay ng bilang sa Actual Stock bago ipindot ang Done.");
+      alert("Input the Actual Stock first");
       return;
     }
 
@@ -132,7 +132,7 @@ export default function InventoryCheck() {
   const handleComplete = () => {
     if (confirmedBarcodes.length === 0) {
       alert(
-        "Mangyaring maglagay ng count at pindutin ang 'Done' para sa kahit isang produkto bago mag-complete."
+        "Are you sure you want to complete the inventory check without confirming any products? This will discard all entered counts."
       );
       return;
     }
@@ -148,23 +148,27 @@ export default function InventoryCheck() {
 
   return (
     <div
-      className="flex min-h-screen bg-[#cfdcfc] font-sans text-gray-800 antialiased"
+      className="flex h-screen bg-[#cfdcfc] font-sans text-gray-800 antialiased overflow-hidden"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full">
-        <header className="bg-[#17347a] text-white p-3.5 rounded-xl shadow-md border-b-4 border-blue-900">
+      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full h-full overflow-hidden">
+
+        
+        {/* Header */}
+        <header className="bg-[#17347a] text-white p-3.5 rounded-xl shadow-md border-b-4 border-blue-900 shrink-0">
           <h1 className="text-lg font-extrabold uppercase tracking-wide text-center">
             Inventory Check
           </h1>
         </header>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shrink-0">
             {error}
           </div>
         )}
 
-        <div className="bg-white p-4 rounded-[1rem] shadow-sm flex items-center gap-6 border-2 border-gray-100">
+        {/* Search & Actions Bar */}
+        <div className="bg-white p-3.5 rounded-[1rem] shadow-sm flex items-center gap-6 border-2 border-gray-100 shrink-0">
           <div className="relative flex-1 max-w-2xl">
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
@@ -172,7 +176,7 @@ export default function InventoryCheck() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search or Scan barcode to find products"
-              className="w-full pl-14 pr-10 py-3 bg-gray-50 rounded-full border-2 border-transparent focus:border-blue-400 focus:bg-white outline-none transition-all font-medium text-gray-800"
+              className="w-full pl-14 pr-10 py-2.5 bg-gray-50 rounded-full border-2 border-transparent focus:border-blue-400 focus:bg-white outline-none transition-all font-medium text-gray-800 text-sm"
             />
             {searchTerm && (
               <button
@@ -189,7 +193,7 @@ export default function InventoryCheck() {
             <button
               type="button"
               onClick={() => setShowSummaryModal(true)}
-              className="flex items-center gap-2 px-6 py-3 rounded-full font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-full font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition-all"
             >
               <ListChecks size={18} />
               Checked Results ({checkedProducts.length})
@@ -198,30 +202,28 @@ export default function InventoryCheck() {
             <button
               onClick={handleComplete}
               type="button"
-              className="flex items-center gap-2 px-9 py-3 rounded-full font-extrabold text-xs uppercase bg-[#17347a] text-white shadow-lg hover:bg-blue-800 active:scale-95 transition-all"
+              className="flex items-center gap-2 px-8 py-2.5 rounded-full font-extrabold text-xs uppercase bg-[#17347a] text-white shadow-lg hover:bg-blue-800 active:scale-95 transition-all"
             >
               <FileText size={16} /> Complete Check
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-[1rem] shadow-md border-2 border-gray-100 overflow-hidden">
-          <div
-            className="max-h-[550px] overflow-y-auto overflow-x-auto w-full"
-            style={{ scrollbarGutter: "stable" }}
-          >
+        {/* Table Container (Scrollable inside, page scrollbar hidden) */}
+        <div className="flex-1 bg-white rounded-[1rem] shadow-md border-2 border-gray-100 overflow-hidden min-h-0 flex flex-col">
+          <div className="w-full h-full overflow-y-auto overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[950px]">
               <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
                 <tr>
-                  <th className="p-5 pl-10 bg-[#17347a]">Product</th>
-                  <th className="p-5 bg-[#17347a]">Barcode</th>
-                  <th className="p-5 bg-[#17347a]">Description</th>
-                  <th className="p-5 bg-[#17347a]">Category</th>
-                  <th className="p-5 bg-[#17347a]">Price</th>
-                  <th className="p-5 text-center pr-10 bg-[#17347a]">Actual Stock</th>
+                  <th className="p-4 pl-8 bg-[#17347a]">Product</th>
+                  <th className="p-4 bg-[#17347a]">Barcode</th>
+                  <th className="p-4 bg-[#17347a]">Description</th>
+                  <th className="p-4 bg-[#17347a]">Category</th>
+                  <th className="p-4 bg-[#17347a]">Price</th>
+                  <th className="p-4 text-center pr-8 bg-[#17347a]">Actual Stock</th>
                 </tr>
               </thead>
-              <tbody className="divide-y-2 divide-gray-50 font-semibold text-gray-700">
+              <tbody className="divide-y-2 divide-gray-50 font-semibold text-gray-700 text-sm">
                 {loading ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-gray-500 font-bold">
@@ -252,20 +254,20 @@ export default function InventoryCheck() {
                             : "bg-white"
                         } hover:bg-blue-50/40`}
                       >
-                        <td className="p-5 pl-10 font-extrabold text-[#17347a] text-[15px] leading-snug">
+                        <td className="p-4 pl-8 font-extrabold text-[#17347a] text-[14px] leading-snug">
                           {item.productName}
                         </td>
-                        <td className="p-5 font-mono text-xs font-bold text-blue-900 tracking-wider">
+                        <td className="p-4 font-mono text-xs font-bold text-blue-900 tracking-wider">
                           {item.barcode}
                         </td>
-                        <td className="p-5 text-gray-500 font-medium">
+                        <td className="p-4 text-gray-500 font-medium">
                           {item.description || "—"}
                         </td>
-                        <td className="p-5 font-bold text-gray-800">{item.category}</td>
-                        <td className="p-5 font-extrabold text-gray-900 whitespace-nowrap">
+                        <td className="p-4 font-bold text-gray-800">{item.category}</td>
+                        <td className="p-4 font-extrabold text-gray-900 whitespace-nowrap">
                           ₱ {Number(item.sellingPrice).toFixed(2)}
                         </td>
-                        <td className="p-5 pr-10">
+                        <td className="p-4 pr-8">
                           <div className="flex items-center justify-center gap-3">
                             <input
                               type="number"
@@ -275,7 +277,7 @@ export default function InventoryCheck() {
                                 handleStockChange(item.barcode, e.target.value)
                               }
                               placeholder="Enter count"
-                              className={`w-[140px] h-[46px] px-4 py-2 rounded-full border-2 text-center text-blue-800 font-bold outline-none transition-all placeholder:text-gray-300 shadow-inner ${
+                              className={`w-[130px] h-[40px] px-3 py-1.5 rounded-full border-2 text-center text-blue-800 font-bold outline-none transition-all text-xs placeholder:text-gray-300 shadow-inner ${
                                 isDone
                                   ? "border-emerald-500 bg-white ring-2 ring-emerald-100"
                                   : "border-blue-200 bg-gray-50/50 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
@@ -284,7 +286,7 @@ export default function InventoryCheck() {
                             <button
                               type="button"
                               onClick={() => handleMarkDone(item.barcode)}
-                              className={`flex items-center gap-1 px-4 py-2.5 rounded-full text-xs font-extrabold uppercase transition-all shadow-sm active:scale-95 ${
+                              className={`flex items-center gap-1 px-4 py-2 rounded-full text-xs font-extrabold uppercase transition-all shadow-sm active:scale-95 ${
                                 isDone
                                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                   : "bg-[#17347a] text-white hover:bg-blue-800"
@@ -304,7 +306,7 @@ export default function InventoryCheck() {
           </div>
         </div>
 
-        {/* MODAL / RESULT LIST FOR OKAY / CHECKED PRODUCTS */}
+        {/* MINI MODAL / RESULT LIST FOR CHECKED PRODUCTS */}
         {showSummaryModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-150">
