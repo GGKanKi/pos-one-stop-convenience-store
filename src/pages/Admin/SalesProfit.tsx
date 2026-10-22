@@ -25,7 +25,7 @@ interface SalesReportItem {
   salesProfit: number;
 }
 
-export default function SalesReports() {
+export default function SalesProfit() {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -262,7 +262,7 @@ export default function SalesReports() {
                   <th className="py-3 px-3 border-b border-blue-900 text-center">Qty Sold</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Average Cost Price</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Average Selling Price</th>
-                  <th className="py-3 px-3 border-b border-blue-900 text-right">Gross Sales</th>
+                  <th className="py-3 px-4 border-b border-blue-900 text-right">Gross Sales</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Total Cost</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Sales Profit</th>
                 </tr>

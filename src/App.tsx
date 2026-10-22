@@ -15,7 +15,7 @@ import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
 import Discrepancies from './pages/Admin/Discrepancies';
 import Transactions from './pages/Admin/Transaction';
-import SalesReports from './pages/Admin/SalesReports';
+import SalesProfit from './pages/Admin/SalesProfit';
 import Recall from './pages/Staff/Recall';
 import ProductStatus from './pages/Admin/ProductStatus';
 
@@ -44,7 +44,7 @@ function App() {
         <Route path="/admin/inventory" element={<Inventory />} />
         <Route path="/admin/discrepancies" element={<Discrepancies />} />
         <Route path="/admin/transactions" element={<Transactions />} />
-        <Route path="/admin/salesreports" element={<SalesReports />} />
+        <Route path="/admin/salesprofit" element={<SalesProfit />} />
         <Route path="/admin/productstatus" element={<ProductStatus />} />
 
         {/* FALLBACK */}
