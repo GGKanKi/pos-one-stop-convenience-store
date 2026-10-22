@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Sidebar from "../../components/Sidebar";
-import { Search, Upload, Edit3, X, Calendar, Plus, Trash2 } from "lucide-react";
+import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText } from "lucide-react";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
 
@@ -81,6 +81,7 @@ const emptyForm = {
 export default function Inventory() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [originalStock, setOriginalStock] = useState<number>(0);
   const [editExpiryBatches, setEditExpiryBatches] = useState<ExpiryBatch[]>([]);
   const [expiryModalProduct, setExpiryModalProduct] = useState<Product | null>(null);
   const [view, setView] = useState<"list" | "check">("list");
@@ -92,6 +93,10 @@ export default function Inventory() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [formData, setFormData] = useState(emptyForm);
+
+  // States for Stock Adjustment Reason Modal
+  const [stockReasonModalOpen, setStockReasonModalOpen] = useState(false);
+  const [stockChangeReason, setStockChangeReason] = useState("");
 
   useEffect(() => {
     const fontId = "google-font-inter";
@@ -118,7 +123,6 @@ export default function Inventory() {
         ? data.products
         : [];
 
-      // Kunin ang nai-save na counts at confirmed barcodes mula sa InventoryCheck
       const savedCountsRaw = localStorage.getItem("inventory_actual_counts");
       const savedConfirmedRaw = localStorage.getItem("inventory_confirmed_barcodes");
       const savedCounts: Record<string, string> = savedCountsRaw ? JSON.parse(savedCountsRaw) : {};
@@ -136,7 +140,6 @@ export default function Inventory() {
           defaultBatches = [{ date: String(rawExpiry), qty: currentStock }];
         }
 
-        // Ilagay ang actual count kapag confirmed na ito sa InventoryCheck
         const actualVal =
           savedConfirmed.includes(barcode) && savedCounts[barcode] !== undefined
             ? Number(savedCounts[barcode])
@@ -148,7 +151,7 @@ export default function Inventory() {
           barcode: barcode,
           description: item.description ? String(item.description).trim() : null,
           stockQuantity: currentStock,
-          costPrice: Number(item.costPrice || 0),
+          costPrice: Number(item.costPrice || item.cost_price || 0),
           sellingPrice: Number(item.sellingPrice || item.price || 0),
           category: String(item.category || "Uncategorized").trim(),
           supplier: item.supplier ? String(item.supplier).trim() : null,
@@ -241,6 +244,7 @@ export default function Inventory() {
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
+    setOriginalStock(Number(product.stockQuantity));
     setEditExpiryBatches(
       product.expiryBatches && product.expiryBatches.length > 0
         ? [...product.expiryBatches]
@@ -282,28 +286,81 @@ export default function Inventory() {
     );
   };
 
-  const handleSaveEditProduct = () => {
-    if (editingProduct) {
-      const primaryExpiry =
-        editExpiryBatches[0]?.date || formData.expirationDate || null;
+  // Called when user clicks "Save Changes" on Edit Form
+  const handlePreSaveEditProduct = () => {
+    if (!editingProduct) return;
+
+    const newStock = Number(formData.stockQuantity);
+    // If stock quantity has changed, open reason prompt modal first
+    if (newStock !== originalStock) {
+      setStockChangeReason("");
+      setStockReasonModalOpen(true);
+    } else {
+      void handleSaveEditProduct();
+    }
+  };
+
+  const handleSaveEditProduct = async () => {
+    if (!editingProduct) return;
+
+    const primaryExpiry =
+      editExpiryBatches[0]?.date || formData.expirationDate || null;
+    const newStock = Number(formData.stockQuantity);
+
+    const updatedProductData = {
+      id: editingProduct.id,
+      productName: formData.productName,
+      barcode: formData.barcode,
+      stockQuantity: newStock,
+      costPrice: Number(formData.costPrice),
+      sellingPrice: Number(formData.sellingPrice),
+      category: formData.category,
+      supplier: formData.supplier || null,
+      description: formData.description || null,
+      threshold: Number(formData.threshold),
+      expirationDate: primaryExpiry,
+      expiryBatches: editExpiryBatches,
+      stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
+    };
+
+    setSaving(true);
+    try {
+      // API request call can be plugged here
+      /*
+      await fetch(`${API_BASE}/updateproduct.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedProductData),
+      });
+      */
+
       const updatedList = products.map((p) =>
         p.id === editingProduct.id
           ? {
               ...p,
               productName: formData.productName,
               barcode: formData.barcode,
-              stockQuantity: Number(formData.stockQuantity),
+              stockQuantity: newStock,
+              costPrice: Number(formData.costPrice),
               sellingPrice: Number(formData.sellingPrice),
               category: formData.category,
+              supplier: formData.supplier || null,
+              description: formData.description || null,
               threshold: Number(formData.threshold),
               expirationDate: primaryExpiry,
               expiryBatches: editExpiryBatches,
             }
           : p
       );
+
       setProducts(updatedList);
       setNotice("Product details updated successfully.");
       setEditingProduct(null);
+      setStockReasonModalOpen(false);
+    } catch (err) {
+      setError("Failed to update product details.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -396,7 +453,6 @@ export default function Inventory() {
                   Import Product
                 </button>
 
-                {/* ADD PRODUCT BUTTON */}
                 <button
                   type="button"
                   onClick={() => {
@@ -641,6 +697,13 @@ export default function Inventory() {
                   onChange={handleInputChange}
                 />
                 <InputField
+                  label="Cost Price"
+                  name="costPrice"
+                  type="number"
+                  value={formData.costPrice}
+                  onChange={handleInputChange}
+                />
+                <InputField
                   label="Selling Price"
                   name="sellingPrice"
                   type="number"
@@ -736,16 +799,77 @@ export default function Inventory() {
 
               <div className="flex justify-end gap-3 pt-3 border-t">
                 <button
+                  type="button"
                   onClick={() => setEditingProduct(null)}
                   className="px-6 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleSaveEditProduct}
+                  type="button"
+                  onClick={handlePreSaveEditProduct}
                   className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700"
                 >
                   Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* REASON / DESCRIPTION MODAL FOR STOCK ADJUSTMENT */}
+        {stockReasonModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-[1.5rem] p-9 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2 text-[#17347a]">
+                  <FileText size={28} />
+                  <h2 className="font-extrabold text-base">
+                    Reason for Stock Change
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setStockReasonModalOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <p className="text-[17px] font-bold text-gray-600">
+                  Stock quantity for <span className="text-[#0284C7] font-extrabold">{editingProduct?.productName}</span> changed from{" "}
+                  <span className="font-extrabold text-red-600">{originalStock}</span> to{" "}
+                  <span className="font-extrabold text-green-600">{formData.stockQuantity}</span>.
+                </p>
+                <label className="text-[12px] font-semibold text-gray-700 block">
+                  Please enter a reason or description for this stock adjustment:
+                </label>
+                <textarea
+                  rows={5}
+                  value={stockChangeReason}
+                  onChange={(e) => setStockChangeReason(e.target.value)}
+                  placeholder="e.g. Received new shipment, Damaged stock removal, Inventory correction..."
+                  className="w-full p-3 border border-gray-300 rounded-xl text-xs outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setStockReasonModalOpen(false)}
+                  className="px-5 py-2 border rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={!stockChangeReason.trim() || saving}
+                  onClick={handleSaveEditProduct}
+                  className="px-5 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Confirm & Save"}
                 </button>
               </div>
             </div>
@@ -763,14 +887,15 @@ export default function Inventory() {
                 <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
                   {view === "list" ? (
                     <tr>
-                      <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
-                      <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
-                      <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
-                      <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
+                      <th className="p-5 w-[24%] bg-[#17347a]">Product</th>
+                      <th className="p-5 w-[14%] bg-[#17347a]">Barcode</th>
+                      <th className="p-5 w-[16%] bg-[#17347a]">Category</th>
+                      <th className="p-5 w-[10%] bg-[#17347a]">Cost Price</th>
+                      <th className="p-5 w-[10%] bg-[#17347a]">Selling Price</th>
                       <th className="p-5 w-[11%] bg-[#17347a] text-center">
                         Stock / Threshold
                       </th>
-                      <th className="p-5 w-[10%] bg-[#17347a] text-center">
+                      <th className="p-5 w-[9%] bg-[#17347a] text-center">
                         Expiry Dates
                       </th>
                       <th className="p-5 w-[6%] bg-[#17347a] text-center">
@@ -779,14 +904,15 @@ export default function Inventory() {
                     </tr>
                   ) : (
                     <tr>
-                      <th className="p-5 w-[28%] bg-[#17347a]">Product</th>
-                      <th className="p-5 w-[16%] bg-[#17347a]">Barcode</th>
-                      <th className="p-5 w-[18%] bg-[#17347a]">Category</th>
-                      <th className="p-5 w-[11%] bg-[#17347a]">Price</th>
+                      <th className="p-5 w-[24%] bg-[#17347a]">Product</th>
+                      <th className="p-5 w-[14%] bg-[#17347a]">Barcode</th>
+                      <th className="p-5 w-[16%] bg-[#17347a]">Category</th>
+                      <th className="p-5 w-[10%] bg-[#17347a]">Cost Price</th>
+                      <th className="p-5 w-[10%] bg-[#17347a]">Selling Price</th>
                       <th className="p-5 w-[12%] bg-[#17347a] text-center">
                         Expected Stock
                       </th>
-                      <th className="p-5 w-[15%] bg-[#17347a] text-center">
+                      <th className="p-5 w-[14%] bg-[#17347a] text-center">
                         Actual Count
                       </th>
                     </tr>
@@ -796,7 +922,7 @@ export default function Inventory() {
                   {loading ? (
                     <tr>
                       <td
-                        colSpan={view === "list" ? 7 : 6}
+                        colSpan={view === "list" ? 8 : 7}
                         className="p-8 text-center text-gray-500 font-bold"
                       >
                         Loading products from database...
@@ -805,7 +931,7 @@ export default function Inventory() {
                   ) : displayedItems.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={view === "list" ? 7 : 6}
+                        colSpan={view === "list" ? 8 : 7}
                         className="p-8 text-center text-gray-500 font-bold"
                       >
                         {isSearching
@@ -823,7 +949,7 @@ export default function Inventory() {
                             isEven ? "bg-[#F8FAFC]" : "bg-white"
                           } hover:bg-blue-50/60`}
                         >
-                          <td className="p-5 w-[28%]">
+                          <td className="p-5 w-[24%]">
                             <div className="font-extrabold text-[#0284C7] text-[15px] tracking-tight leading-snug break-words">
                               {item.productName}
                             </div>
@@ -833,13 +959,16 @@ export default function Inventory() {
                               </div>
                             )}
                           </td>
-                          <td className="p-5 w-[16%] font-mono text-xs font-bold text-gray-700 tracking-wider break-all">
+                          <td className="p-5 w-[14%] font-mono text-xs font-bold text-gray-700 tracking-wider break-all">
                             {item.barcode}
                           </td>
-                          <td className="p-5 w-[18%] font-bold text-gray-800 break-words">
+                          <td className="p-5 w-[16%] font-bold text-gray-800 break-words">
                             {item.category}
                           </td>
-                          <td className="p-5 w-[11%] font-extrabold text-gray-900 whitespace-nowrap">
+                          <td className="p-5 w-[10%] font-extrabold text-gray-600 whitespace-nowrap">
+                            ₱ {Number(item.costPrice).toFixed(2)}
+                          </td>
+                          <td className="p-5 w-[10%] font-extrabold text-gray-900 whitespace-nowrap">
                             ₱ {Number(item.sellingPrice).toFixed(2)}
                           </td>
 
@@ -849,10 +978,10 @@ export default function Inventory() {
                                 {Number(item.stockQuantity)} /{" "}
                                 {Number(item.threshold)}
                               </td>
-                              <td className="p-5 w-[10%] text-center whitespace-nowrap">
+                              <td className="p-5 w-[9%] text-center whitespace-nowrap">
                                 <button
                                   onClick={() => setExpiryModalProduct(item)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
+                                  className="inline-flex items-center gap-0.3 px-3 py-1 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
                                 >
                                   <Calendar size={13} /> View Dates
                                 </button>
@@ -871,7 +1000,7 @@ export default function Inventory() {
                               <td className="p-5 w-[12%] text-center font-bold whitespace-nowrap">
                                 {Number(item.stockQuantity)}
                               </td>
-                              <td className="p-5 w-[15%] text-center whitespace-nowrap text-gray-500 font-normal">
+                              <td className="p-5 w-[14%] text-center whitespace-nowrap text-gray-500 font-normal">
                                 {item.actualCount !== null &&
                                 item.actualCount !== undefined ? (
                                   <span className="font-extrabold text-[#17347a] bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200 text-sm">

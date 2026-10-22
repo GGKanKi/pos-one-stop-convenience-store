@@ -33,6 +33,7 @@ export default function Transactions() {
             </div>
           </div>
 
+            {/* Transaction Action type */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Start Date</label>
@@ -45,19 +46,16 @@ export default function Transactions() {
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Action Type</label>
               <select className="p-2 border rounded-lg text-sm outline-none bg-white">
-                <option>Select an Option</option>
+                <option>All Actions</option>
+                <option>Stock Deduction</option>
+                <option>Stock Addition</option>
                 <option>Sale</option>
-                <option>Inventory Update</option>
+                <option>Voided Items/Invoice</option>
+                <option>Added New Product</option>
+                <option>Product Details Update</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Entity Type</label>
-              <select className="p-2 border rounded-lg text-sm outline-none bg-white">
-                <option>All Entities</option>
-                <option>Product</option>
-                <option>Staff</option>
-              </select>
-            </div>
+  
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-bold text-gray-400 uppercase ml-1">Search</label>
               <div className="relative">
