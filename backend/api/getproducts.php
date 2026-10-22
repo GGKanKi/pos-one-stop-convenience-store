@@ -9,6 +9,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit(0);
 }
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405);
+    echo json_encode(["success" => false, "message" => "Method not allowed."]);
+    exit;
+}
 
 // Locate database configuration
 $dbPath = realpath(__DIR__ . '/../config/db.php');
@@ -41,6 +46,7 @@ try {
                 category,
                 supplier,
                 expirationDate,
+                expiry_batches,
                 threshold
             FROM products 
             WHERE productName LIKE ? OR barcode LIKE ? OR category LIKE ? OR supplier LIKE ?
@@ -66,6 +72,7 @@ try {
                 category,
                 supplier,
                 expirationDate,
+                expiry_batches,
                 threshold
             FROM products 
             ORDER BY productName ASC
@@ -74,17 +81,23 @@ try {
 
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Decode the JSON column so the inventory editor receives a real batch array.
+    foreach ($products as &$product) {
+        $decodedBatches = json_decode((string)($product['expiry_batches'] ?? ''), true);
+        $product['expiryBatches'] = is_array($decodedBatches) ? $decodedBatches : [];
+        unset($product['expiry_batches']);
+    }
+    unset($product);
+
     echo json_encode([
         "success" => true,
         "count" => count($products),
         "products" => $products
     ]);
 
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     error_log("Get products error: " . $e->getMessage());
-    echo json_encode([
-        "success" => false,
-        "message" => "Unable to retrieve products: " . $e->getMessage()
-    ]);
+    http_response_code(500);
+    echo json_encode(["success" => false, "message" => "Unable to retrieve products."]);
 }
 ?>

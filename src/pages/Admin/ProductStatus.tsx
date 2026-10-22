@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   AlertTriangle, 
   Clock, 
   Search, 
   ArrowLeft, 
-  Package, 
   Trash2, 
-  RefreshCw,
   FileSpreadsheet,
   FileText
 } from 'lucide-react';

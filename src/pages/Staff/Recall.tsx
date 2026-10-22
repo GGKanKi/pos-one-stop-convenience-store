@@ -6,15 +6,18 @@ const API_BASE = "http://localhost/One-Convenience/backend/api";
 
 interface PurchasedItem {
   id: number;
+  transactionItemId?: number;
   code: string;
   name: string;
   description?: string;
   price: number;
+  discount?: number;
   qty: number;
 }
 
 interface Transaction {
   id: string | number;
+  dbTransactionId?: number;
   time: string;
   itemCount: number;
   paymentMethod: string;
@@ -69,6 +72,7 @@ export default function RecallTransactions() {
         const rawList = Array.isArray(data) ? data : Array.isArray(data?.transactions) ? data.transactions : [];
         const mapped: Transaction[] = rawList.map((tx: any, idx: number) => ({
           id: tx.id ? String(tx.id) : String(idx + 1).padStart(2, '0'),
+          dbTransactionId: Number(tx.dbTransactionId || tx.id) || undefined,
           time: String(tx.time || tx.created_at || "09:15 AM"),
           itemCount: Number(tx.itemCount || tx.total_items || 1),
           paymentMethod: String(tx.paymentMethod || tx.payment_type || "Cash"),
@@ -76,7 +80,9 @@ export default function RecallTransactions() {
           items: tx.items || [],
         }));
 
-        setTransactions([...localTxList, ...mapped]);
+        const databaseIds = new Set(mapped.map((tx) => tx.dbTransactionId).filter(Boolean));
+        const localOnly = localTxList.filter((tx) => !tx.dbTransactionId || !databaseIds.has(tx.dbTransactionId));
+        setTransactions([...localOnly, ...mapped]);
         return;
       }
     } catch {
@@ -187,20 +193,34 @@ export default function RecallTransactions() {
 
     const currentTx = openTx || transactions.find(t => t.id === selectedTxId);
     if (!currentTx) return;
+    const targetItem = openTx?.items?.find((item) => item.id === selectedItemId);
+    if (!currentTx.dbTransactionId || (voidType === 'item' && !targetItem?.transactionItemId)) {
+      alert('This older transaction has no database record to void.');
+      return;
+    }
 
     try {
-      await fetch(`${API_BASE}/voidtransaction.php`, {
+      const response = await fetch(`${API_BASE}/voidtransaction.php`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: voidType,
-          transaction_id: currentTx.id,
-          item_id: selectedItemId,
-          reason: voidReason
+          transaction_id: currentTx.dbTransactionId,
+          item_id: targetItem?.transactionItemId,
+          reason: voidReason,
+          actor: (() => {
+            try {
+              const user = JSON.parse(localStorage.getItem("user") || "{}");
+              return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
+            } catch { return { name: "Unknown" }; }
+          })(),
         })
       });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Unable to void transaction.');
     } catch (err) {
-      console.error("Failed to void on backend:", err);
+      alert(err instanceof Error ? err.message : 'Failed to void transaction.');
+      return;
     }
 
     let updatedTxList = [...transactions];
@@ -210,9 +230,8 @@ export default function RecallTransactions() {
       setOpenTx(null);
       setSelectedTxId(null);
     } else if (voidType === "item" && openTx) {
-      const targetItem = openTx.items?.find(i => i.id === selectedItemId);
       const updatedItems = (openTx.items || []).filter(i => i.id !== selectedItemId);
-      const newTotal = Math.max(0, openTx.totalAmount - ((targetItem?.price || 0) * (targetItem?.qty || 1)));
+      const newTotal = Math.max(0, openTx.totalAmount - ((targetItem?.price || 0) * (targetItem?.qty || 1) - (targetItem?.discount || 0)));
 
       if (updatedItems.length === 0) {
         updatedTxList = updatedTxList.filter(t => t.id !== openTx.id);
@@ -507,7 +526,7 @@ export default function RecallTransactions() {
                       </td>
                     </tr>
                   ) : (
-                    displayedTransactions.map((tx, idx) => {
+                    displayedTransactions.map((tx) => {
                       const isTxSelected = selectedTxId === tx.id;
                       return (
                         <tr

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/Sidebar';
-import { Calendar, User, Edit3, Clock, Users } from 'lucide-react';
+import { Calendar, User, Edit3, Users } from 'lucide-react';
 
 type AttendanceRow = {
   user_id: number;
@@ -111,8 +111,16 @@ export default function StaffPage() {
     ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-GB')
     : new Date(`${selectedDate.slice(0, 7)}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
-  // In daily view, display all rows directly as returned by backend
-  const displayRows = view === 'daily' ? rows : rows.filter((row) => row.clock_in || row.clock_out);
+  // Keep the directory complete, and show only one (latest) attendance row per staff per day.
+  const displayRows = view === 'daily'
+    ? Array.from(rows.reduce((unique, row) => {
+        if (row.clock_in || row.clock_out) {
+          const key = String(row.user_id) + '-' + (row.date || selectedDate);
+          if (!unique.has(key)) unique.set(key, row);
+        }
+        return unique;
+      }, new Map<string, AttendanceRow>()).values())
+    : rows.filter((row) => row.clock_in || row.clock_out);
 
   return (
     <div className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
