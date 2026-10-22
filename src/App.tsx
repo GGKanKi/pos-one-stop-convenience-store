@@ -17,6 +17,7 @@ import Discrepancies from './pages/Admin/Discrepancies';
 import Transactions from './pages/Admin/Transaction';
 import SalesReports from './pages/Admin/SalesReports';
 import Recall from './pages/Staff/Recall';
+import ProductStatus from './pages/Admin/ProductStatus';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
         <Route path="/admin/discrepancies" element={<Discrepancies />} />
         <Route path="/admin/transactions" element={<Transactions />} />
         <Route path="/admin/salesreports" element={<SalesReports />} />
+        <Route path="/admin/productstatus" element={<ProductStatus />} />
 
         {/* FALLBACK */}
         <Route
