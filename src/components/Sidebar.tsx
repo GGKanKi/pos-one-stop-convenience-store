@@ -16,8 +16,8 @@ export default function Sidebar() {
     { name: 'Inventory', path: '/admin/inventory', icon: Package },
     { name: 'Transaction History', path: '/admin/transactions', icon: History },
     { name: 'Product Status', path: '/admin/productstatus', icon: BarChart3 },
-    { name: 'Inventory Discrepancies', path: '/admin/Discrepancies', icon: Scale }, // to be followed
-    { name: 'Sales Reports', path: '/admin/salesreports', icon: TrendingUp }, // to be followed
+    { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale },
+    { name: 'Sales And Profit', path: '/admin/salesprofit', icon: TrendingUp },
   ];
 
   return (
@@ -45,20 +45,20 @@ export default function Sidebar() {
         </p>
 
         {navItems.map((item) => {
-          // Check if the current URL matches the item path for active styling
-          const active = location.pathname === item.path;
+          // Case-insensitive active check matching App.tsx routes
+          const active = location.pathname.toLowerCase() === item.path.toLowerCase();
 
           return (
-            <Link key={item.path} to={item.path} className="no-underline">
-              <button
-                className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-300 border border-transparent
+            <Link 
+              key={item.path} 
+              to={item.path} 
+              className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-300 border border-transparent no-underline
                 ${active 
-                  ? 'bg-[#007BFF] text-white shadow-[0_0_20px_rgba(0,123,255,0.4)] scale-[1.03] border-blue-400/30' 
-                  : 'text-gray-300 hover:bg-white/10 hover:text-white'}`}
-              >
-                <item.icon size={18} />
-                <span className="text-sm font-medium">{item.name}</span>
-              </button>
+                  ? 'bg-[#007BFF] text-white shadow-[0_0_20px_rgba(0,123,255,0.4)] scale-[1.03] border-blue-400/30 font-bold' 
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white font-medium'}`}
+            >
+              <item.icon size={18} />
+              <span className="text-sm">{item.name}</span>
             </Link>
           );
         })}
@@ -66,11 +66,12 @@ export default function Sidebar() {
 
       {/* Logout Section */}
       <div className="mt-auto pt-4 border-t border-white/10">
-        <Link to="/login" className="no-underline">
-          <button className="flex items-center gap-3 w-full p-3 rounded-xl text-red-300 hover:bg-red-500/10 transition-all font-medium group">
-            <LogOut size={18} className="group-hover:translate-x-1 transition-transform" />
-            <span className="text-sm">Logout</span>
-          </button>
+        <Link 
+          to="/login" 
+          className="flex items-center gap-3 w-full p-3 rounded-xl text-red-300 hover:bg-red-500/10 transition-all font-medium group no-underline"
+        >
+          <LogOut size={18} className="group-hover:translate-x-1 transition-transform" />
+          <span className="text-sm">Logout</span>
         </Link>
       </div>
     </aside>
