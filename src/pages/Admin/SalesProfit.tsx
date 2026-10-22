@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   FileSpreadsheet, 
@@ -6,6 +6,7 @@ import {
   ArrowLeft, 
   TrendingUp, 
   DollarSign, 
+  PieChart, 
   Search,
   Filter
 } from 'lucide-react';
@@ -24,7 +25,7 @@ interface SalesReportItem {
   salesProfit: number;
 }
 
-export default function SalesReports() {
+export default function SalesProfit() {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -45,7 +46,7 @@ export default function SalesReports() {
   };
 
   // Sample data initialized from your screenshots
-  const [reportData] = useState<SalesReportItem[]>([
+  const [reportData, setReportData] = useState<SalesReportItem[]>([
     { id: '1', inventoryName: 'MOBY CARAMEL PUFFS 25G', qtySold: 1.00, avgCostPrice: 6.20, avgSellingPrice: 10.00, grossSales: 10.00, totalCost: 6.20, salesProfit: 3.80 },
     { id: '2', inventoryName: 'NISSIN RAMEN SPICY SEAFOOD NOO...', qtySold: 1.00, avgCostPrice: 13.75, avgSellingPrice: 20.00, grossSales: 20.00, totalCost: 13.75, salesProfit: 6.25 },
     { id: '3', inventoryName: 'EGG XL', qtySold: 5.00, avgCostPrice: 8.33, avgSellingPrice: 10.00, grossSales: 50.00, totalCost: 41.67, salesProfit: 8.33 },
@@ -261,7 +262,7 @@ export default function SalesReports() {
                   <th className="py-3 px-3 border-b border-blue-900 text-center">Qty Sold</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Average Cost Price</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Average Selling Price</th>
-                  <th className="py-3 px-3 border-b border-blue-900 text-right">Gross Sales</th>
+                  <th className="py-3 px-4 border-b border-blue-900 text-right">Gross Sales</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Total Cost</th>
                   <th className="py-3 px-3 border-b border-blue-900 text-right">Sales Profit</th>
                 </tr>
