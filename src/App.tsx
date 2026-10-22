@@ -1,4 +1,3 @@
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import LoginPage from './pages/Public/Login';
@@ -16,6 +15,7 @@ import StaffPage from './pages/Admin/Staff';
 import Inventory from './pages/Admin/Inventory';
 import Discrepancies from './pages/Admin/Discrepancies';
 import Transactions from './pages/Admin/Transaction';
+import SalesReports from './pages/Admin/SalesReports';
 import Recall from './pages/Staff/Recall';
 
 function App() {
@@ -35,8 +35,7 @@ function App() {
         <Route path="/pos" element={<POS />} />
         <Route path="/staff/pos" element={<POS />} />
         <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
-        <Route path="/staff/recall" element={<Recall />}
-        />
+        <Route path="/staff/recall" element={<Recall />} />
 
         {/* ADMIN ROUTES */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -44,6 +43,7 @@ function App() {
         <Route path="/admin/inventory" element={<Inventory />} />
         <Route path="/admin/discrepancies" element={<Discrepancies />} />
         <Route path="/admin/transactions" element={<Transactions />} />
+        <Route path="/admin/salesreports" element={<SalesReports />} />
 
         {/* FALLBACK */}
         <Route

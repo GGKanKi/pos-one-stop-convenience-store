@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, ArrowLeft, ShoppingBag } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { Search, ArrowLeft, ShoppingBag, X, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
@@ -14,7 +14,7 @@ interface PurchasedItem {
 }
 
 interface Transaction {
-  id: number;
+  id: string | number;
   time: string;
   itemCount: number;
   paymentMethod: string;
@@ -29,9 +29,15 @@ export default function RecallTransactions() {
   const [activeFilter, setActiveFilter] = useState<"today" | "today_only">("today");
   
   // Selection States
-  const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
+  const [selectedTxId, setSelectedTxId] = useState<string | number | null>(null);
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+
+  // Void Modal States
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const [voidType, setVoidType] = useState<"item" | "invoice">("item");
+  const [voidReason, setVoidReason] = useState("");
+  const reasonInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fontId = "google-font-inter";
@@ -62,7 +68,7 @@ export default function RecallTransactions() {
         const data = await response.json();
         const rawList = Array.isArray(data) ? data : Array.isArray(data?.transactions) ? data.transactions : [];
         const mapped: Transaction[] = rawList.map((tx: any, idx: number) => ({
-          id: Number(tx.id || idx + 1),
+          id: tx.id ? String(tx.id) : String(idx + 1).padStart(2, '0'),
           time: String(tx.time || tx.created_at || "09:15 AM"),
           itemCount: Number(tx.itemCount || tx.total_items || 1),
           paymentMethod: String(tx.paymentMethod || tx.payment_type || "Cash"),
@@ -93,6 +99,58 @@ export default function RecallTransactions() {
     };
   }, [loadTransactions]);
 
+  // Trigger Void Item Action
+  const triggerVoidItem = useCallback(() => {
+    if (!openTx) {
+      alert("Please double click a transaction to open its items breakdown first.");
+      return;
+    }
+    if (!selectedItemId) {
+      alert("Please select an item from the breakdown table to void.");
+      return;
+    }
+    setVoidType("item");
+    setVoidReason("");
+    setShowVoidModal(true);
+  }, [openTx, selectedItemId]);
+
+  // Trigger Void Invoice Action
+  const triggerVoidInvoice = useCallback(() => {
+    const targetTx = openTx || transactions.find(t => t.id === selectedTxId);
+    if (!targetTx) {
+      alert("Please select or double click a transaction to void.");
+      return;
+    }
+    setVoidType("invoice");
+    setVoidReason("");
+    setShowVoidModal(true);
+  }, [openTx, transactions, selectedTxId]);
+
+  // Keyboard Shortcuts (F1, F2, F3)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        triggerVoidItem();
+      } else if (e.key === 'F3') {
+        e.preventDefault();
+        triggerVoidInvoice();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [triggerVoidItem, triggerVoidInvoice]);
+
+  // Auto-focus on reason input when modal opens
+  useEffect(() => {
+    if (showVoidModal) {
+      setTimeout(() => {
+        reasonInputRef.current?.focus();
+      }, 100);
+    }
+  }, [showVoidModal]);
+
   const displayedTransactions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return transactions;
@@ -109,7 +167,7 @@ export default function RecallTransactions() {
     });
   }, [transactions, searchTerm]);
 
-  const handleTxClick = (txId: number) => {
+  const handleTxClick = (txId: string | number) => {
     setSelectedTxId(txId);
   };
 
@@ -119,6 +177,65 @@ export default function RecallTransactions() {
     setSelectedItemId(null);
   };
 
+  // Submit Void Request
+  const submitVoid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voidReason.trim()) {
+      alert("Please state a reason for voiding.");
+      return;
+    }
+
+    const currentTx = openTx || transactions.find(t => t.id === selectedTxId);
+    if (!currentTx) return;
+
+    try {
+      await fetch(`${API_BASE}/voidtransaction.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: voidType,
+          transaction_id: currentTx.id,
+          item_id: selectedItemId,
+          reason: voidReason
+        })
+      });
+    } catch (err) {
+      console.error("Failed to void on backend:", err);
+    }
+
+    let updatedTxList = [...transactions];
+
+    if (voidType === "invoice") {
+      updatedTxList = updatedTxList.filter(t => t.id !== currentTx.id);
+      setOpenTx(null);
+      setSelectedTxId(null);
+    } else if (voidType === "item" && openTx) {
+      const targetItem = openTx.items?.find(i => i.id === selectedItemId);
+      const updatedItems = (openTx.items || []).filter(i => i.id !== selectedItemId);
+      const newTotal = Math.max(0, openTx.totalAmount - ((targetItem?.price || 0) * (targetItem?.qty || 1)));
+
+      if (updatedItems.length === 0) {
+        updatedTxList = updatedTxList.filter(t => t.id !== openTx.id);
+        setOpenTx(null);
+      } else {
+        const updatedTx = {
+          ...openTx,
+          items: updatedItems,
+          itemCount: updatedItems.reduce((sum, i) => sum + i.qty, 0),
+          totalAmount: newTotal
+        };
+
+        updatedTxList = updatedTxList.map(t => t.id === openTx.id ? updatedTx : t);
+        setOpenTx(updatedTx);
+      }
+      setSelectedItemId(null);
+    }
+
+    setTransactions(updatedTxList);
+    localStorage.setItem("pos_completed_transactions", JSON.stringify(updatedTxList));
+    setShowVoidModal(false);
+  };
+
   return (
     <div
       className="flex h-screen bg-[#cfdcfc] font-sans text-gray-800 antialiased overflow-hidden"
@@ -126,6 +243,63 @@ export default function RecallTransactions() {
     >
       <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full h-full overflow-hidden">
         
+        {/* VOID REASON MODAL WINDOW */}
+        {showVoidModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <form onSubmit={submitVoid} className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-full max-w-md rounded-2xl p-6 shadow-2xl flex flex-col gap-4 text-cyan-100">
+              <div className="flex justify-between items-center pb-2 border-b border-cyan-500/30">
+                <div className="flex items-center gap-2 text-amber-400 font-black">
+                  <AlertTriangle size={20} />
+                  <span className="uppercase text-sm tracking-wider">
+                    {voidType === "item" ? "VOID SINGLE ITEM" : "VOID ENTIRE INVOICE"}
+                  </span>
+                </div>
+                <button type="button" onClick={() => setShowVoidModal(false)} className="text-cyan-400 hover:text-white">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="text-xs text-cyan-200/80 font-medium">
+                {voidType === "item" ? (
+                  <p>You are about to void selected item from Transaction <strong>#{String(openTx?.id).padStart(2, '0')}</strong>.</p>
+                ) : (
+                  <p>You are about to void the complete transaction invoice <strong>#{String(openTx?.id || selectedTxId).padStart(2, '0')}</strong>.</p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-cyan-300 uppercase tracking-wide">
+                  Reason for Void *
+                </label>
+                <input
+                  ref={reasonInputRef}
+                  type="text"
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  placeholder="Type description / reason (e.g., Damaged item, Customer cancel)..."
+                  className="w-full bg-[#0c1d45] border border-cyan-400/50 rounded-xl p-3 text-xs text-white placeholder-cyan-400/50 outline-none focus:border-cyan-300 focus:ring-2 focus:ring-cyan-400/30 font-semibold"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
+                >
+                  Confirm Void
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowVoidModal(false)}
+                  className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         {/* TOP TITLE BAR WITH BACK TO POS BUTTON */}
         <header className="bg-[#17347a] text-white p-3 px-4 rounded-xl shadow-md border-b-4 border-blue-900 shrink-0 flex items-center justify-between">
           <button
@@ -133,7 +307,7 @@ export default function RecallTransactions() {
             className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-blue-800/80 hover:bg-blue-700 active:scale-95 text-xs font-extrabold uppercase transition-all border border-blue-400/30 shadow-xs"
           >
             <ArrowLeft size={16} />
-            <span>POS</span>
+            <span>POS Terminal</span>
           </button>
 
           <h1 className="text-lg font-extrabold uppercase tracking-wide text-center flex-1 pr-24">
@@ -152,8 +326,16 @@ export default function RecallTransactions() {
 
           <div className="h-8 w-[1px] bg-[#00d2ff]/30" />
 
-          <button className="flex-1 bg-[#092b7a] hover:bg-[#0c39a0] rounded-xl py-2.5 px-4 flex items-center justify-center gap-3 transition-all border border-[#00d2ff]/30">
-            <span className="text-2xl font-black text-white">F2</span>
+          {/* F2 VOID ITEM BUTTON */}
+          <button 
+            onClick={triggerVoidItem}
+            className={`flex-1 rounded-xl py-2.5 px-4 flex items-center justify-center gap-3 transition-all border ${
+              openTx && selectedItemId 
+                ? "bg-red-700 hover:bg-red-600 border-red-400 text-white shadow-lg animate-pulse" 
+                : "bg-[#092b7a] hover:bg-[#0c39a0] border-[#00d2ff]/30 text-white"
+            }`}
+          >
+            <span className="text-2xl font-black">F2</span>
             <span className="text-[11px] font-extrabold text-[#99ccff] text-left leading-tight">
               Void<br />Item
             </span>
@@ -161,8 +343,16 @@ export default function RecallTransactions() {
 
           <div className="h-8 w-[1px] bg-[#00d2ff]/30" />
 
-          <button className="flex-1 bg-[#092b7a] hover:bg-[#0c39a0] rounded-xl py-2.5 px-4 flex items-center justify-center gap-3 transition-all border border-[#00d2ff]/30">
-            <span className="text-2xl font-black text-white">F3</span>
+          {/* F3 VOID INVOICE BUTTON */}
+          <button 
+            onClick={triggerVoidInvoice}
+            className={`flex-1 rounded-xl py-2.5 px-4 flex items-center justify-center gap-3 transition-all border ${
+              !openTx && selectedTxId 
+                ? "bg-red-700 hover:bg-red-600 border-red-400 text-white shadow-lg" 
+                : "bg-[#092b7a] hover:bg-[#0c39a0] border-[#00d2ff]/30 text-white"
+            }`}
+          >
+            <span className="text-2xl font-black">F3</span>
             <span className="text-[11px] font-extrabold text-[#99ccff] text-left leading-tight">
               Void<br />Invoice
             </span>
@@ -198,7 +388,7 @@ export default function RecallTransactions() {
           </div>
         </div>
 
-        {/* WHITE CONTAINER BOX WORKSPACE */}
+        {/* WHITE CONTAINER BOX */}
         <div className="flex-1 bg-white rounded-2xl overflow-hidden min-h-0 flex flex-col shadow-md border-2 border-gray-100">
           {openTx ? (
             <div className="w-full h-full flex flex-col justify-between">
@@ -338,7 +528,7 @@ export default function RecallTransactions() {
                                   : "bg-blue-100 text-[#17347a]"
                               }`}
                             >
-                              {idx + 1}
+                              {String(tx.id).padStart(2, '0')}
                             </span>
                           </td>
                           <td className={`py-4 px-6 ${isTxSelected ? "text-blue-100" : "text-gray-600"}`}>

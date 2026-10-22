@@ -14,6 +14,7 @@ interface Product {
   qty: number;
   stock?: number;
   category?: string;
+  discount?: number; // Per-item discount amount
 }
 
 export default function POS() {
@@ -52,13 +53,19 @@ export default function POS() {
     return () => { cancelled = true; };
   }, []);
 
-  // Cart & Transaction State
+  // Cart & Selected Item State
   const [cart, setCart] = useState<Product[]>([]);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+
+  // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'GCash'>('Cash');
   const [cashTendered, setCashTendered] = useState("0.00");
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [transactionDiscount, setTransactionDiscount] = useState<number>(0.00);
+
+  // Discount Modal State
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountInput, setDiscountInput] = useState<string>("0.00");
 
   // Scan & Search Window State
   const [scanCode, setScanCode] = useState("");
@@ -70,6 +77,7 @@ export default function POS() {
   const scanInputRef = useRef<HTMLInputElement>(null);
   const modalSearchInputRef = useRef<HTMLInputElement>(null);
   const cashInputRef = useRef<HTMLInputElement>(null);
+  const discountInputRef = useRef<HTMLInputElement>(null);
   const cartTableContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -82,17 +90,44 @@ export default function POS() {
     }
   }, [cart]);
 
+  // Open discount modal only if an item in cart is selected
+  const triggerDiscountModal = () => {
+    if (selectedItemId === null || !cart.some(item => item.id === selectedItemId)) {
+      alert("Please select an item from the cart to apply a discount.");
+      return;
+    }
+
+    const item = cart.find(i => i.id === selectedItemId);
+    setDiscountInput(item?.discount ? item.discount.toFixed(2) : "0.00");
+    setShowDiscountModal(true);
+  };
+
+  // Auto focus input when Discount Modal Opens
+  useEffect(() => {
+    if (showDiscountModal) {
+      setTimeout(() => {
+        discountInputRef.current?.focus();
+        discountInputRef.current?.select();
+      }, 100);
+    } else {
+      scanInputRef.current?.focus();
+    }
+  }, [showDiscountModal]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F5') {
         e.preventDefault();
         setShowPaymentModal(true);
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        triggerDiscountModal();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [selectedItemId, cart]);
 
   // Auto-focus on Cash Input kapag inopen ang Payment Modal
   useEffect(() => {
@@ -124,7 +159,8 @@ export default function POS() {
           price: parseFloat(item.price) || 0,
           qty: 1,
           stock: Number(item.stock || 0),
-          category: String(item.category || '')
+          category: String(item.category || ''),
+          discount: 0
         }));
         setSearchResults(mapped);
       }
@@ -170,9 +206,10 @@ export default function POS() {
             : item
         );
       }
-      return [...prev, { ...product, qty: 1 }];
+      return [...prev, { ...product, qty: 1, discount: 0 }];
     });
 
+    setSelectedItemId(product.id);
     setShowSearchModal(false);
     setSearchQuery("");
     setTimeout(() => scanInputRef.current?.focus(), 50);
@@ -200,7 +237,8 @@ export default function POS() {
           description: String(exactMatch.description || ''),
           price: parseFloat(exactMatch.price) || 0,
           qty: 1,
-          stock: Number(exactMatch.stock || 0)
+          stock: Number(exactMatch.stock || 0),
+          discount: 0
         });
         setScanCode("");
       } else {
@@ -211,8 +249,15 @@ export default function POS() {
     }
   };
 
+  // Subtotal calculated before discounts
   const subTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
+    [cart]
+  );
+
+  // Total discounts combined across all cart items
+  const transactionDiscount = useMemo(
+    () => cart.reduce((sum, item) => sum + (item.discount || 0), 0),
     [cart]
   );
 
@@ -238,6 +283,9 @@ export default function POS() {
 
   const removeItem = (id: number) => {
     setCart(prev => prev.filter(item => item.id !== id));
+    if (selectedItemId === id) {
+      setSelectedItemId(null);
+    }
   };
 
   const handleConfirm = (e?: React.FormEvent) => {
@@ -247,6 +295,39 @@ export default function POS() {
     setShowReceiptModal(true);
   };
 
+  // APPLY ITEM DISCOUNT SUBMIT
+  const handleDiscountSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(discountInput) || 0;
+
+    if (selectedItemId === null) return;
+
+    const targetItem = cart.find(i => i.id === selectedItemId);
+    if (!targetItem) return;
+
+    const itemTotal = targetItem.price * targetItem.qty;
+
+    if (val < 0) {
+      alert("Discount cannot be negative.");
+      return;
+    }
+
+    if (val > itemTotal) {
+      alert("Discount cannot exceed the selected item's total price.");
+      return;
+    }
+
+    setCart(prev =>
+      prev.map(item =>
+        item.id === selectedItemId
+          ? { ...item, discount: val }
+          : item
+      )
+    );
+
+    setShowDiscountModal(false);
+  };
+
   // FINALIZE TRANSACTION: SINESAVE SA DATABASE AT CINI-CLEAR ANG POS CART
   const finalizeTransaction = async () => {
     if (cart.length === 0) return;
@@ -254,12 +335,14 @@ export default function POS() {
     const transactionData = {
       paymentMethod,
       totalAmount: total,
+      discount: transactionDiscount,
       items: cart.map((item) => ({
         id: item.id,
         code: item.code,
         name: item.name,
         price: item.price,
         qty: item.qty,
+        discount: item.discount || 0
       })),
     };
 
@@ -276,11 +359,14 @@ export default function POS() {
       alert("Connection Error: " + (err.message || "Failed to reach PHP server."));
     }
 
-    // 2. Local storage sync para sa Recall Screen
+    // 2. Local storage sync para sa Recall Screen (01, 02, 03... sequential ID formatting)
     try {
       const existing = JSON.parse(localStorage.getItem("pos_completed_transactions") || "[]");
+      const nextNum = existing.length + 1;
+      const formattedId = String(nextNum).padStart(2, '0');
+
       const newTx = {
-        id: Date.now(),
+        id: formattedId,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
         paymentMethod,
@@ -297,11 +383,13 @@ export default function POS() {
     // 3. Clear POS State AFTER THE CHECKOUT
     setShowReceiptModal(false);
     setCart([]);
+    setSelectedItemId(null);
     setCashTendered("0.00");
-    setTransactionDiscount(0.00);
     setScanCode("");
     setSearchQuery("");
   };
+
+  const selectedItem = useMemo(() => cart.find(i => i.id === selectedItemId), [cart, selectedItemId]);
 
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-[#183478] via-[#12285e] to-[#0a183b] flex flex-col p-4 relative text-cyan-100 overflow-hidden shadow-[inset_0_0_100px_rgba(0,140,255,0.15)]" style={{ fontFamily: "'Inter', 'ui-sans-serif', 'system-ui', sans-serif" }}>
@@ -309,6 +397,58 @@ export default function POS() {
       {clockInError && (
         <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
           {clockInError}
+        </div>
+      )}
+
+      {/* CASH DISCOUNT MODAL */}
+      {showDiscountModal && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
+          <form 
+            onSubmit={handleDiscountSubmit}
+            className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[460px] rounded-[30px] p-6 flex flex-col justify-between gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)]"
+          >
+            <div className="space-y-4 flex flex-col">
+              <div className="flex justify-between items-center pb-2 border-b border-cyan-500/20">
+                <p className="text-xs text-cyan-400 font-black tracking-widest uppercase">ITEM DISCOUNT</p>
+                <button type="button" onClick={() => setShowDiscountModal(false)} className="text-cyan-400 hover:text-white transition">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Selected Item Summary Display Box */}
+              <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] rounded-xl p-4 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,140,255,0.25)]">
+                <p className="text-xs text-cyan-400 font-bold tracking-widest uppercase">SELECTED ITEM</p>
+                <p className="text-sm font-bold text-white truncate mt-1">{selectedItem.name}</p>
+                <div className="text-right text-2xl text-cyan-300 font-black tracking-wider mt-1 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">
+                  ₱ {(selectedItem.price * selectedItem.qty).toFixed(2)}
+                </div>
+              </div>
+
+              {/* Input Area */}
+              <div className="bg-gradient-to-b from-[#183478]/90 to-[#0e214d]/90 rounded-xl p-5 border border-cyan-400/40 space-y-3 shadow-[0_0_20px_rgba(0,140,255,0.15)]">
+                <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide text-center">ENTER DISCOUNT AMOUNT IN PESO</p>
+                
+                <div className="relative mt-2">
+                  <input 
+                    ref={discountInputRef}
+                    type="text"
+                    value={discountInput} 
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDiscountInput(e.target.value)} 
+                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-xl outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base text-cyan-500 font-bold">₱</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirmation Buttons */}
+            <div className="flex gap-3 pt-1">
+              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
+              <button type="button" onClick={() => setShowDiscountModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+            </div>
+
+          </form>
         </div>
       )}
 
@@ -533,7 +673,7 @@ export default function POS() {
             <div className="flex gap-3.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-thin shrink-0">
               {[
                 { label: "Payment", shortcut: "F5", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) },
-                { label: "Discounts", shortcut: "F6", img: "/pictures/discount.png" },
+                { label: "Discounts", shortcut: "F6", img: "/pictures/discount.png", action: triggerDiscountModal },
                 { label: "Recall", shortcut: "F7", img: "/pictures/recall.jpg", action: () => navigate("/staff/recall") },
                 { label: "Dashboard", shortcut: "F8", img: "/pictures/dashboard.png", action: () => navigate("/admin/dashboard", { state: { fullScreen: true } }) },
                 { label: "Inventory", shortcut: "F9", img: "/pictures/inventory.jpg", action: () => navigate("/staff/inventorycheck") }
@@ -568,7 +708,7 @@ export default function POS() {
             </form>
           </div>
 
-          {/* SCROLLABLE CART TABLE */}
+          {/* SCROLLABLE CART TABLE WITH ITEM SELECTION */}
           <div className="w-full bg-white border-2 border-cyan-400/50 rounded-xl shadow-inner flex flex-col flex-1 min-h-0 overflow-hidden">
             <div 
               ref={cartTableContainerRef}
@@ -598,14 +738,26 @@ export default function POS() {
                 <tbody className="divide-y divide-slate-200">
                   {cart.length > 0 ? (
                     cart.map((item, i) => {
-                      const itemSubtotal = item.price * item.qty;
+                      const itemSubtotal = (item.price * item.qty) - (item.discount || 0);
+                      const isSelected = selectedItemId === item.id;
                       return (
-                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <tr 
+                          key={item.id} 
+                          onClick={() => setSelectedItemId(item.id)}
+                          className={`cursor-pointer transition-colors ${isSelected ? 'bg-cyan-100 border-l-4 border-cyan-600 font-semibold' : 'hover:bg-slate-50'}`}
+                        >
                           <td className="p-3 text-center font-medium text-slate-600">{i + 1}</td>
                           <td className="p-3 truncate font-mono text-slate-700">{item.code}</td>
-                          <td className="p-3 truncate font-bold text-slate-900">{item.name}</td>
+                          <td className="p-3 truncate font-bold text-slate-900">
+                            {item.name}
+                            {item.discount ? (
+                              <span className="ml-2 text-[10px] bg-red-100 text-red-600 font-bold px-1.5 py-0.5 rounded border border-red-300">
+                                -₱{item.discount.toFixed(2)}
+                              </span>
+                            ) : null}
+                          </td>
                           <td className="p-3 truncate text-slate-500">{item.description}</td>
-                          <td className="p-3">
+                          <td className="p-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-center items-center gap-1.5">
                               <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Minus size={12} /></button>
                               <span className="font-bold w-5 text-center text-slate-800 text-xs">{item.qty}</span>
@@ -615,7 +767,7 @@ export default function POS() {
                           <td className="p-3 text-center font-medium text-slate-600">
                             ₱{item.price.toFixed(2)}
                           </td>
-                          <td className="p-3 text-center font-bold text-slate-900">
+                          <td className="p-3 text-center font-bold text-slate-900" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-2">
                               <span>₱{itemSubtotal.toFixed(2)}</span>
                               <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={15} /></button>
