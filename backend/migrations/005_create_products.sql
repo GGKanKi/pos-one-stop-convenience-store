@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS `products` (
 ) ENGINE=InnoDB AUTO_INCREMENT=222 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- Dumping data for table onestop_store.products: ~111 rows (approximately)
-INSERT INTO `products` (`id`, `productName`, `barcode`, `description`, `stockQuantity`, `costPrice`, `sellingPrice`, `category`, `supplier`, `expirationDate`, `threshold`, `created_at`, `updated_at`) VALUES
+-- Ignore seed rows that are already present when recovering a partially applied local migration.
+INSERT IGNORE INTO `products` (`id`, `productName`, `barcode`, `description`, `stockQuantity`, `costPrice`, `sellingPrice`, `category`, `supplier`, `expirationDate`, `threshold`, `created_at`, `updated_at`) VALUES
 	(1, 'Samyang Buldak Carbonara 130g', 'OSCS000001', 'Sample inventory item: Samyang Buldak Carbonara 130g', 14, 72.00, 92.00, 'Instant Noodles', 'Samyang Foods', '2027-01-21', 18, '2026-10-11 10:55:09', '2026-10-11 10:55:09'),
 	(2, 'Lucky Me Pancit Canton Original 60g', 'OSCS000002', 'Sample inventory item: Lucky Me Pancit Canton Original 60g', 35, 10.00, 15.00, 'Instant Noodles', 'Monde Nissin', '2027-05-14', 48, '2026-10-11 10:55:09', '2026-10-11 10:55:09'),
 	(3, 'Lucky Me Pancit Canton Kalamansi 60g', 'OSCS000003', 'Sample inventory item: Lucky Me Pancit Canton Kalamansi 60g', 28, 10.00, 15.00, 'Instant Noodles', 'Monde Nissin', '2027-03-21', 42, '2026-10-11 10:55:09', '2026-10-11 10:55:09'),

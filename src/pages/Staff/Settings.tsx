@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertCircle, TrendingUp, DollarSign, Award, Clock, Users } from 'lucide-react';
+import { type LucideIcon, TrendingUp, Award, Clock, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Sidebar from '../../components/Sidebar';
 

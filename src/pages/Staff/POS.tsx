@@ -335,6 +335,12 @@ export default function POS() {
     const transactionData = {
       paymentMethod,
       totalAmount: total,
+      actor: (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
+        } catch { return { name: "Unknown" }; }
+      })(),
       discount: transactionDiscount,
       items: cart.map((item) => ({
         id: item.id,
@@ -346,17 +352,18 @@ export default function POS() {
       })),
     };
 
-    // 1. Send Request sa PHP backend (savetransaction.php)
+    // Save the sale first; only update local recall data after the database confirms it.
+    let savedResponse: any;
     try {
-      const res = await apiRequest("/savetransaction.php", "POST", transactionData);
-      console.log("DB Response:", res);
-      
-      if (!res || !res.success) {
-        alert("DB Warning: " + (res?.message || "Hindi na-save sa database. Pakitingnan ang F12 Console."));
+      savedResponse = await apiRequest("/savetransaction.php", "POST", transactionData);
+      if (!savedResponse?.success || !savedResponse.transaction_id) {
+        alert(savedResponse?.message || "The sale could not be saved.");
+        return;
       }
     } catch (err: any) {
       console.error("Fetch/Server Error:", err);
       alert("Connection Error: " + (err.message || "Failed to reach PHP server."));
+      return;
     }
 
     // 2. Local storage sync para sa Recall Screen (01, 02, 03... sequential ID formatting)
@@ -367,11 +374,15 @@ export default function POS() {
 
       const newTx = {
         id: formattedId,
+        dbTransactionId: savedResponse.transaction_id,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
         paymentMethod,
         totalAmount: total,
-        items: transactionData.items,
+        items: transactionData.items.map((item, index) => ({
+          ...item,
+          transactionItemId: savedResponse.items?.[index]?.transactionItemId,
+        })),
       };
       
       localStorage.setItem("pos_completed_transactions", JSON.stringify([newTx, ...existing]));

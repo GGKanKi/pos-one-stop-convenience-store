@@ -223,6 +223,12 @@ export default function Inventory() {
           expirationDate: formData.expirationDate || null,
           supplier: formData.supplier || null,
           description: formData.description || null,
+          actor: (() => {
+            try {
+              const user = JSON.parse(localStorage.getItem("user") || "{}");
+              return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
+            } catch { return { name: "Unknown" }; }
+          })(),
         }),
       });
 
@@ -321,49 +327,34 @@ export default function Inventory() {
       expirationDate: primaryExpiry,
       expiryBatches: editExpiryBatches,
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
+      actor: (() => {
+        try {
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
+        } catch { return { name: "Unknown" }; }
+      })(),
     };
 
     setSaving(true);
+    setError("");
     try {
-      // API request call can be plugged here
-      /*
-      await fetch(`${API_BASE}/updateproduct.php`, {
+      const response = await fetch(`${API_BASE}/updateproduct.php`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedProductData),
       });
-      */
-
-      const updatedList = products.map((p) =>
-        p.id === editingProduct.id
-          ? {
-              ...p,
-              productName: formData.productName,
-              barcode: formData.barcode,
-              stockQuantity: newStock,
-              costPrice: Number(formData.costPrice),
-              sellingPrice: Number(formData.sellingPrice),
-              category: formData.category,
-              supplier: formData.supplier || null,
-              description: formData.description || null,
-              threshold: Number(formData.threshold),
-              expirationDate: primaryExpiry,
-              expiryBatches: editExpiryBatches,
-            }
-          : p
-      );
-
-      setProducts(updatedList);
+      const data = await response.json();
+      if (!response.ok || data.success !== true) throw new Error(data.message || "Failed to update product details.");
       setNotice("Product details updated successfully.");
       setEditingProduct(null);
       setStockReasonModalOpen(false);
+      await loadProducts();
     } catch (err) {
-      setError("Failed to update product details.");
+      setError(err instanceof Error ? err.message : "Failed to update product details.");
     } finally {
       setSaving(false);
     }
   };
-
   const isSearching = Boolean(searchTerm.trim());
 
   const modalBatchesToDisplay = useMemo(() => {

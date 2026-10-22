@@ -17,6 +17,11 @@ try {
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
 } catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+    // Keep API responses parseable and log the underlying details only on the server.
+    error_log("Database connection failed: " . $e->getMessage());
+    http_response_code(500);
+    header("Content-Type: application/json; charset=UTF-8");
+    echo json_encode(["success" => false, "message" => "Database connection failed."]);
+    exit;
 }
 ?>
