@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, FileText, CheckCircle2, ListChecks, X, Check } from "lucide-react";
+import { Search, FileText, CheckCircle2, ListChecks, X, Check, ArrowLeft } from "lucide-react";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
 
@@ -148,99 +148,105 @@ export default function InventoryCheck() {
 
   return (
     <div
-      className="flex h-screen bg-[#cfdcfc] font-sans text-gray-800 antialiased overflow-hidden"
+      className="flex h-screen bg-[#b0c7ff] font-sans text-gray-800 antialiased overflow-hidden p-6"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      <main className="p-6 flex flex-col gap-6 max-w-[1400px] mx-auto text-left w-full h-full overflow-hidden">
+      <main className="p-0 flex flex-col gap-4 max-w-[1400px] mx-auto text-left w-full h-full overflow-hidden">
 
-        
         {/* Header */}
-        <header className="bg-[#17347a] text-white p-3.5 rounded-xl shadow-md border-b-4 border-blue-900 shrink-0">
-          <h1 className="text-lg font-extrabold uppercase tracking-wide text-center">
-            Inventory Check
+        <header className="bg-[#122b68] text-white p-3.5 px-6 rounded-2xl shadow-md shrink-0 flex items-center justify-between">
+          <button
+            onClick={() => navigate("/pos")}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs"
+          >
+            <ArrowLeft size={16} />
+            <span>POS Terminal</span>
+          </button>
+
+          <h1 className="text-lg font-black uppercase tracking-wider text-center flex-1 pr-28 text-white">
+            INVENTORY CHECK
           </h1>
         </header>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shrink-0">
+          <div role="alert" className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shrink-0">
             {error}
           </div>
         )}
 
-        {/* Search & Actions Bar */}
-        <div className="bg-white p-3.5 rounded-[1rem] shadow-sm flex items-center gap-6 border-2 border-gray-100 shrink-0">
+        {/* Search & Actions Bar - Matching Periwinkle Control Panel Style */}
+        <div className="bg-[#adbde6] p-2.5 px-4 rounded-2xl shadow-xs flex items-center justify-between gap-4 shrink-0">
           <div className="relative flex-1 max-w-2xl">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search or Scan barcode to find products"
-              className="w-full pl-14 pr-10 py-2.5 bg-gray-50 rounded-full border-2 border-transparent focus:border-blue-400 focus:bg-white outline-none transition-all font-medium text-gray-800 text-sm"
+              className="w-full pl-11 pr-10 py-2 bg-white rounded-xl text-gray-900 font-extrabold text-xs outline-none focus:ring-2 focus:ring-blue-600 transition-all"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title="Clear Search"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
             <button
               type="button"
               onClick={() => setShowSummaryModal(true)}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-full font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition-all"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-95 transition-all"
             >
-              <ListChecks size={18} />
+              <ListChecks size={16} />
               Checked Results ({checkedProducts.length})
             </button>
 
             <button
               onClick={handleComplete}
               type="button"
-              className="flex items-center gap-2 px-8 py-2.5 rounded-full font-extrabold text-xs uppercase bg-[#17347a] text-white shadow-lg hover:bg-blue-800 active:scale-95 transition-all"
+              className="flex items-center gap-2 px-6 py-2 rounded-xl font-extrabold text-xs uppercase bg-[#122b68] hover:bg-[#1a3880] text-white shadow-xs active:scale-95 transition-all"
             >
               <FileText size={16} /> Complete Check
             </button>
           </div>
         </div>
 
-        {/* Table Container (Scrollable inside, page scrollbar hidden) */}
-        <div className="flex-1 bg-white rounded-[1rem] shadow-md border-2 border-gray-100 overflow-hidden min-h-0 flex flex-col">
+        {/* Table Container - Solid Navy Banner with White Card Layout */}
+        <div className="flex-1 bg-white rounded-2xl shadow-md overflow-hidden min-h-0 flex flex-col">
           <div className="w-full h-full overflow-y-auto overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[950px]">
-              <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
+              <thead className="bg-[#122b68] text-white font-extrabold uppercase text-[11px] tracking-wider sticky top-0 z-20 shadow-xs">
                 <tr>
-                  <th className="p-4 pl-8 bg-[#17347a]">Product</th>
-                  <th className="p-4 bg-[#17347a]">Barcode</th>
-                  <th className="p-4 bg-[#17347a]">Description</th>
-                  <th className="p-4 bg-[#17347a]">Category</th>
-                  <th className="p-4 bg-[#17347a]">Price</th>
-                  <th className="p-4 text-center pr-8 bg-[#17347a]">Actual Stock</th>
+                  <th className="py-3.5 px-6">Product</th>
+                  <th className="py-3.5 px-6">Barcode</th>
+                  <th className="py-3.5 px-6">Description</th>
+                  <th className="py-3.5 px-6">Category</th>
+                  <th className="py-3.5 px-6">Price</th>
+                  <th className="py-3.5 px-6 text-center pr-8">Actual Stock</th>
                 </tr>
               </thead>
-              <tbody className="divide-y-2 divide-gray-50 font-semibold text-gray-700 text-sm">
+              <tbody className="divide-y divide-gray-100 font-bold text-gray-800 text-xs">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-500 font-bold">
+                    <td colSpan={6} className="p-8 text-center text-gray-500 font-extrabold">
                       Loading products from database...
                     </td>
                   </tr>
                 ) : displayedItems.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-500 font-bold">
+                    <td colSpan={6} className="p-8 text-center text-gray-500 font-extrabold">
                       {searchTerm
                         ? `No products found matching "${searchTerm}".`
                         : "No products available in inventory."}
                     </td>
                   </tr>
                 ) : (
-                  displayedItems.map((item, index) => {
-                    const isEven = index % 2 === 0;
+                  displayedItems.map((item) => {
                     const isDone = confirmedBarcodes.includes(item.barcode);
 
                     return (
@@ -248,26 +254,24 @@ export default function InventoryCheck() {
                         key={item.id}
                         className={`transition-colors ${
                           isDone
-                            ? "bg-emerald-50/50 hover:bg-emerald-50"
-                            : isEven
-                            ? "bg-[#F8FAFC]"
-                            : "bg-white"
-                        } hover:bg-blue-50/40`}
+                            ? "bg-emerald-50/60 hover:bg-emerald-50"
+                            : "hover:bg-blue-50/80"
+                        }`}
                       >
-                        <td className="p-4 pl-8 font-extrabold text-[#17347a] text-[14px] leading-snug">
+                        <td className="py-3.5 px-6 font-extrabold text-[#122b68]">
                           {item.productName}
                         </td>
-                        <td className="p-4 font-mono text-xs font-bold text-blue-900 tracking-wider">
+                        <td className="py-3.5 px-6 font-mono text-xs font-bold text-gray-600">
                           {item.barcode}
                         </td>
-                        <td className="p-4 text-gray-500 font-medium">
+                        <td className="py-3.5 px-6 text-gray-500 font-medium">
                           {item.description || "—"}
                         </td>
-                        <td className="p-4 font-bold text-gray-800">{item.category}</td>
-                        <td className="p-4 font-extrabold text-gray-900 whitespace-nowrap">
+                        <td className="py-3.5 px-6 font-extrabold text-gray-800">{item.category}</td>
+                        <td className="py-3.5 px-6 font-black text-gray-900 whitespace-nowrap">
                           ₱ {Number(item.sellingPrice).toFixed(2)}
                         </td>
-                        <td className="p-4 pr-8">
+                        <td className="py-3.5 px-6 pr-8">
                           <div className="flex items-center justify-center gap-3">
                             <input
                               type="number"
@@ -277,19 +281,19 @@ export default function InventoryCheck() {
                                 handleStockChange(item.barcode, e.target.value)
                               }
                               placeholder="Enter count"
-                              className={`w-[130px] h-[40px] px-3 py-1.5 rounded-full border-2 text-center text-blue-800 font-bold outline-none transition-all text-xs placeholder:text-gray-300 shadow-inner ${
+                              className={`w-[120px] h-[36px] px-3 rounded-full border-2 text-center text-[#122b68] font-black outline-none transition-all text-xs placeholder:text-gray-300 ${
                                 isDone
                                   ? "border-emerald-500 bg-white ring-2 ring-emerald-100"
-                                  : "border-blue-200 bg-gray-50/50 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                                  : "border-blue-200 bg-gray-50/50 focus:border-blue-600 focus:bg-white"
                               }`}
                             />
                             <button
                               type="button"
                               onClick={() => handleMarkDone(item.barcode)}
-                              className={`flex items-center gap-1 px-4 py-2 rounded-full text-xs font-extrabold uppercase transition-all shadow-sm active:scale-95 ${
+                              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black uppercase transition-all shadow-xs active:scale-95 ${
                                 isDone
-                                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                                  : "bg-[#17347a] text-white hover:bg-blue-800"
+                                  ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                                  : "bg-[#122b68] text-white hover:bg-[#1a3880]"
                               }`}
                             >
                               <Check size={14} />
@@ -306,14 +310,14 @@ export default function InventoryCheck() {
           </div>
         </div>
 
-        {/* MINI MODAL / RESULT LIST FOR CHECKED PRODUCTS */}
+        {/* SUMMARY MODAL - MATCHING THEME */}
         {showSummaryModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d1e47]/70 backdrop-blur-xs p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
               <div className="flex justify-between items-center border-b pb-3">
-                <div className="flex items-center gap-2 text-[#17347a]">
+                <div className="flex items-center gap-2 text-[#122b68]">
                   <CheckCircle2 size={22} className="text-emerald-600" />
-                  <h2 className="font-extrabold text-lg">Checked Products Summary</h2>
+                  <h2 className="font-black text-lg uppercase tracking-wide">Checked Products Summary</h2>
                 </div>
                 <button
                   onClick={() => setShowSummaryModal(false)}
@@ -323,9 +327,9 @@ export default function InventoryCheck() {
                 </button>
               </div>
 
-              <div className="overflow-y-auto flex-1 border rounded-xl">
+              <div className="overflow-y-auto flex-1 border border-gray-200 rounded-xl">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#17347a] text-white font-extrabold uppercase sticky top-0">
+                  <thead className="bg-[#122b68] text-white font-extrabold uppercase text-[11px] sticky top-0">
                     <tr>
                       <th className="p-3 pl-4">Product Name</th>
                       <th className="p-3">Barcode</th>
@@ -334,7 +338,7 @@ export default function InventoryCheck() {
                       <th className="p-3 text-center">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                  <tbody className="divide-y divide-gray-100 font-bold text-gray-700">
                     {checkedProducts.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="p-8 text-center text-gray-400 italic font-medium">
@@ -350,26 +354,26 @@ export default function InventoryCheck() {
 
                         return (
                           <tr key={prod.id} className="hover:bg-gray-50">
-                            <td className="p-3 pl-4 font-bold text-[#17347a]">
+                            <td className="p-3 pl-4 font-extrabold text-[#122b68]">
                               {prod.productName}
                             </td>
                             <td className="p-3 font-mono text-gray-500">
                               {prod.barcode}
                             </td>
-                            <td className="p-3 text-center text-gray-800 font-bold">
+                            <td className="p-3 text-center text-gray-800 font-extrabold">
                               {expected}
                             </td>
-                            <td className="p-3 text-center text-blue-900 font-black">
+                            <td className="p-3 text-center text-[#122b68] font-black">
                               {actual}
                             </td>
                             <td className="p-3 text-center">
                               {isMatch ? (
-                                <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                                <span className="inline-block px-3 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
                                   MATCHED
                                 </span>
                               ) : (
                                 <span
-                                  className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black ${
+                                  className={`inline-block px-3 py-1 rounded-full text-[10px] font-black ${
                                     diff < 0
                                       ? "bg-rose-100 text-rose-800"
                                       : "bg-amber-100 text-amber-800"
@@ -387,7 +391,7 @@ export default function InventoryCheck() {
                 </table>
               </div>
 
-              <div className="flex justify-between items-center pt-2 border-t text-xs font-bold text-gray-600">
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200 text-xs font-extrabold text-gray-600">
                 <span>
                   Total Checked Items:{" "}
                   <strong className="text-gray-900">{checkedProducts.length}</strong>
@@ -395,7 +399,7 @@ export default function InventoryCheck() {
                 <button
                   type="button"
                   onClick={() => setShowSummaryModal(false)}
-                  className="px-6 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-full hover:bg-blue-800 transition"
+                  className="px-6 py-2 bg-[#122b68] text-white text-xs font-black rounded-xl hover:bg-[#1a3880] transition uppercase"
                 >
                   Close
                 </button>

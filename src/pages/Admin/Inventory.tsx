@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
-import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText } from "lucide-react";
+import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText, ArrowLeft } from "lucide-react";
 
-const API_BASE = "http://localhost/One-Convenience/backend/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
 
 interface ExpiryBatch {
   date: string;
@@ -46,7 +47,7 @@ const InputField: React.FC<InputFieldProps> = ({
 
   return (
     <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-      <label htmlFor={inputId} className="text-sm font-semibold text-gray-700 ml-1">
+      <label htmlFor={inputId} className="text-xs font-bold text-gray-700 ml-1 uppercase tracking-wider">
         {label}
       </label>
       <input
@@ -59,7 +60,7 @@ const InputField: React.FC<InputFieldProps> = ({
         required={["productName", "barcode", "stockQuantity", "costPrice", "sellingPrice", "category"].includes(name)}
         min={type === "number" ? "0" : undefined}
         step={name === "costPrice" || name === "sellingPrice" ? "0.01" : undefined}
-        className="w-full h-12 px-5 border border-gray-400 rounded-[1.2rem] outline-none transition duration-150 placeholder:text-gray-400 text-gray-700 focus:border-blue-600 focus:ring-1 focus:ring-blue-200"
+        className="w-full h-11 px-4 bg-white border border-gray-300 rounded-xl outline-none transition duration-150 placeholder:text-gray-400 text-gray-800 text-xs font-medium focus:border-blue-600 focus:ring-2 focus:ring-blue-100 shadow-inner"
       />
     </div>
   );
@@ -79,6 +80,14 @@ const emptyForm = {
 };
 
 export default function Inventory() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Full-screen and staff view parameters from POS navigation
+  const isFullScreen = location.state?.fullScreen === true;
+  const isStaffView = location.state?.staffView === true;
+  const hideSidebar = isFullScreen || isStaffView;
+
   const [showAdd, setShowAdd] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [originalStock, setOriginalStock] = useState<number>(0);
@@ -292,12 +301,10 @@ export default function Inventory() {
     );
   };
 
-  // Called when user clicks "Save Changes" on Edit Form
   const handlePreSaveEditProduct = () => {
     if (!editingProduct) return;
 
     const newStock = Number(formData.stockQuantity);
-    // If stock quantity has changed, open reason prompt modal first
     if (newStock !== originalStock) {
       setStockChangeReason("");
       setStockReasonModalOpen(true);
@@ -355,6 +362,7 @@ export default function Inventory() {
       setSaving(false);
     }
   };
+
   const isSearching = Boolean(searchTerm.trim());
 
   const modalBatchesToDisplay = useMemo(() => {
@@ -381,20 +389,31 @@ export default function Inventory() {
       className="flex min-h-screen bg-[#cfdcfc] text-gray-800 antialiased"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      <Sidebar />
+      {/* Hide Sidebar in Full Screen / Staff View */}
+      {!hideSidebar && <Sidebar />}
 
-      <main className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto text-left">
-        {/* HEADER */}
-        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6">
-          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">
+      <main className="flex-1 p-6 flex flex-col gap-5 overflow-y-auto text-left">
+        {/* HEADER WITH CONDITIONAL BACK TO POS BUTTON */}
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
             {view === "check" ? "Manual Count Log" : "Inventory Management"}
           </h1>
+
+          {hideSidebar && (
+            <button
+              type="button"
+              onClick={() => navigate("/pos")}
+              className="flex items-center gap-2 rounded-full bg-white text-[#17347a] px-4 py-1.5 text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft size={14} /> BACK TO POS
+            </button>
+          )}
         </header>
 
         {error && (
           <div
             role="alert"
-            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 shadow-xs"
           >
             {error}
           </div>
@@ -402,43 +421,43 @@ export default function Inventory() {
         {notice && (
           <div
             role="status"
-            className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700"
+            className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-xs font-bold text-green-700 shadow-xs"
           >
             {notice}
           </div>
         )}
 
         {/* SEARCH & ACTIONS BAR */}
-        <div className="bg-white p-3 rounded-[1rem] shadow-sm flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-[220px]">
+        <div className="bg-[#b0c8fa] p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap items-center justify-between gap-4">
+          <div className="relative flex-1 min-w-[240px]">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={18}
+              size={16}
             />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search product name, barcode, category, or supplier..."
-              className="w-full pl-10 pr-10 py-2 border rounded-xl outline-none focus:border-blue-500 text-sm font-medium"
+              className="w-full pl-9 pr-8 py-2 bg-white text-gray-800 text-xs font-medium rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                 title="Clear Search"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 ml-auto">
+          <div className="flex flex-wrap items-center gap-2.5">
             {view === "list" ? (
               <>
                 <button
                   type="button"
                   onClick={() => setNotice("Excel import feature ready.")}
-                  className="px-6 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-2"
+                  className="px-4 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-1.5 border border-white/10"
                 >
                   <Upload size={14} />
                   Import Product
@@ -452,16 +471,18 @@ export default function Inventory() {
                     setFormData(emptyForm);
                     setShowAdd(true);
                   }}
-                  className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-700 active:scale-95 transition-all"
+                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-1.5"
                 >
+                  <Plus size={14} />
                   Add Product
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setView("check")}
-                  className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-yellow-500 text-white shadow-md hover:bg-yellow-600 active:scale-95 transition-all"
+                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-amber-500 text-white shadow-md hover:bg-amber-600 active:scale-95 transition-all flex items-center gap-1.5"
                 >
+                  <FileText size={14} />
                   Manual Count Log
                 </button>
               </>
@@ -469,7 +490,7 @@ export default function Inventory() {
               <button
                 type="button"
                 onClick={() => setView("list")}
-                className="px-8 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-gray-400 text-white shadow-md hover:bg-gray-500 active:scale-95 transition-all"
+                className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all"
               >
                 Back to List
               </button>
@@ -481,10 +502,17 @@ export default function Inventory() {
         {showAdd && view === "list" && (
           <form
             onSubmit={handleAddProduct}
-            className="bg-[#ECECEC] p-8 rounded-[1.5rem] border border-gray-400 shadow-sm w-full"
+            className="bg-white p-6 rounded-2xl border border-gray-200 shadow-md w-full flex flex-col gap-5"
           >
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-wrap gap-6">
+            <div className="bg-[#17347a] text-white px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider flex items-center justify-between">
+              <span>Create New Inventory Record</span>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-blue-200 hover:text-white">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-4">
                 <InputField
                   label="Product Name"
                   name="productName"
@@ -504,7 +532,7 @@ export default function Inventory() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="flex flex-wrap gap-6">
+              <div className="flex flex-wrap gap-4">
                 <InputField
                   label="Stock Quantity"
                   name="stockQuantity"
@@ -527,7 +555,7 @@ export default function Inventory() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="flex flex-wrap gap-6">
+              <div className="flex flex-wrap gap-4">
                 <InputField
                   label="Category"
                   name="category"
@@ -541,7 +569,7 @@ export default function Inventory() {
                   onChange={handleInputChange}
                 />
               </div>
-              <div className="flex flex-wrap gap-6">
+              <div className="flex flex-wrap gap-4">
                 <InputField
                   label="Expiration Date"
                   name="expirationDate"
@@ -558,20 +586,21 @@ export default function Inventory() {
                 />
               </div>
             </div>
-            <div className="flex gap-4 mt-10">
-              <button
-                type="submit"
-                disabled={saving}
-                className="h-12 px-10 rounded-[1rem] font-extrabold text-white tracking-wider bg-[#2D44E1] shadow-md hover:bg-blue-800 transition active:scale-95 disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Add a Product"}
-              </button>
+
+            <div className="flex gap-3 justify-end pt-3 border-t">
               <button
                 type="button"
                 onClick={() => setShowAdd(false)}
-                className="h-12 px-10 rounded-[1rem] font-extrabold text-gray-900 tracking-wider bg-white border border-gray-400 shadow-md hover:bg-gray-100 transition active:scale-95"
+                className="px-6 py-2 rounded-xl font-bold text-xs text-gray-700 bg-gray-100 hover:bg-gray-200 transition active:scale-95 border border-gray-300"
               >
                 Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2 rounded-xl font-extrabold text-xs text-white uppercase tracking-wider bg-blue-600 hover:bg-blue-500 shadow-md transition active:scale-95 disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Add Product"}
               </button>
             </div>
           </form>
@@ -580,11 +609,11 @@ export default function Inventory() {
         {/* EXPIRY DATES VIEW MODAL */}
         {expiryModalProduct && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-[1.5rem] p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
-              <div className="flex justify-between items-center border-b pb-3">
+            <div className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-2 text-[#17347a]">
                   <Calendar size={18} />
-                  <h2 className="font-extrabold text-base">
+                  <h2 className="font-extrabold text-sm uppercase tracking-wider">
                     Expiration Dates Batch
                   </h2>
                 </div>
@@ -592,35 +621,35 @@ export default function Inventory() {
                   onClick={() => setExpiryModalProduct(null)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
               <div>
-                <p className="font-extrabold text-sm text-[#0284C7]">
+                <p className="font-extrabold text-sm text-[#17347a]">
                   {expiryModalProduct.productName}
                 </p>
-                <p className="text-xs font-mono text-gray-500 mt-0.5">
+                <p className="text-[11px] font-mono text-gray-500 mt-0.5">
                   Barcode: {expiryModalProduct.barcode}
                 </p>
               </div>
 
-              <div className="border rounded-xl overflow-hidden">
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#17347a] text-white font-extrabold uppercase">
+                  <thead className="bg-[#17347a] text-white font-bold uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="p-3">Expiry Date</th>
-                      <th className="p-3 text-right">Batch Quantity</th>
+                      <th className="p-2.5">Expiry Date</th>
+                      <th className="p-2.5 text-right">Batch Quantity</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                  <tbody className="divide-y divide-gray-100 font-medium text-gray-700">
                     {modalBatchesToDisplay.length > 0 ? (
                       modalBatchesToDisplay.map((batch, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="p-3 font-mono">
+                        <tr key={i} className="hover:bg-blue-50/40">
+                          <td className="p-2.5 font-mono text-gray-600">
                             {batch.date || "No Expiry Date"}
                           </td>
-                          <td className="p-3 text-right font-bold text-gray-900">
+                          <td className="p-2.5 text-right font-extrabold text-gray-900">
                             {batch.qty} pcs
                           </td>
                         </tr>
@@ -629,7 +658,7 @@ export default function Inventory() {
                       <tr>
                         <td
                           colSpan={2}
-                          className="p-4 text-center text-gray-400"
+                          className="p-4 text-center text-gray-400 italic"
                         >
                           No expiration dates recorded.
                         </td>
@@ -642,7 +671,7 @@ export default function Inventory() {
               <div className="flex justify-end pt-2">
                 <button
                   onClick={() => setExpiryModalProduct(null)}
-                  className="px-6 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition"
+                  className="px-5 py-1.5 bg-[#17347a] text-white text-xs font-bold rounded-lg hover:bg-blue-900 transition active:scale-95"
                 >
                   Close
                 </button>
@@ -654,20 +683,20 @@ export default function Inventory() {
         {/* EDIT MODAL */}
         {editingProduct && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-[1.5rem] p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center border-b pb-3">
-                <h2 className="font-extrabold text-[#17347a] text-lg">
-                  Edit Product Details
+            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+                <h2 className="font-extrabold text-[#17347a] text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Edit3 size={16} /> Edit Product Details
                 </h2>
                 <button
                   onClick={() => setEditingProduct(null)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <InputField
                   label="Product Name"
                   name="productName"
@@ -716,25 +745,23 @@ export default function Inventory() {
                 />
               </div>
 
-              <div className="border-t pt-4 space-y-3">
+              <div className="border-t border-gray-200 pt-3 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-extrabold text-gray-800 flex items-center gap-1.5">
-                    <Calendar size={16} className="text-[#17347a]" /> Multiple
-                    Expiration Dates & Batches
+                  <span className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Calendar size={15} className="text-[#17347a]" /> Multiple Expiration Dates & Batches
                   </span>
                   <button
                     type="button"
                     onClick={handleAddBatch}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition border border-blue-200"
                   >
-                    <Plus size={14} /> Add Expiry Date
+                    <Plus size={13} /> Add Expiry Date
                   </button>
                 </div>
 
                 {editExpiryBatches.length === 0 ? (
                   <p className="text-xs text-gray-400 italic">
-                    No expiry date batches assigned yet. Click "Add Expiry
-                    Date" to add one.
+                    No expiry date batches assigned yet. Click "Add Expiry Date" to add one.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -744,7 +771,7 @@ export default function Inventory() {
                         className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200"
                       >
                         <div className="flex-1">
-                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">
+                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">
                             Expiry Date
                           </label>
                           <input
@@ -753,11 +780,11 @@ export default function Inventory() {
                             onChange={(e) =>
                               handleBatchChange(index, "date", e.target.value)
                             }
-                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono"
+                            className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono bg-white"
                           />
                         </div>
                         <div className="w-28">
-                          <label className="text-[11px] font-bold text-gray-500 block mb-0.5">
+                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">
                             Quantity
                           </label>
                           <input
@@ -771,13 +798,13 @@ export default function Inventory() {
                                 Number(e.target.value)
                               )
                             }
-                            className="w-full px-3 py-1.5 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold"
+                            className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold bg-white"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveBatch(index)}
-                          className="text-red-500 hover:text-red-700 p-2 mt-4 transition"
+                          className="text-red-500 hover:text-red-700 p-1.5 mt-3 transition"
                           title="Remove batch"
                         >
                           <Trash2 size={16} />
@@ -788,18 +815,18 @@ export default function Inventory() {
                 )}
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t">
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-6 py-2 border rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                  className="px-5 py-1.5 border border-gray-300 rounded-xl font-bold text-xs text-gray-600 hover:bg-gray-50 transition active:scale-95"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handlePreSaveEditProduct}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700"
+                  className="px-5 py-1.5 bg-blue-600 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-blue-500 shadow-md transition active:scale-95"
                 >
                   Save Changes
                 </button>
@@ -811,11 +838,11 @@ export default function Inventory() {
         {/* REASON / DESCRIPTION MODAL FOR STOCK ADJUSTMENT */}
         {stockReasonModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="bg-white rounded-[1.5rem] p-9 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
-              <div className="flex justify-between items-center border-b pb-3">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-2 text-[#17347a]">
-                  <FileText size={28} />
-                  <h2 className="font-extrabold text-base">
+                  <FileText size={20} />
+                  <h2 className="font-extrabold text-xs uppercase tracking-wider">
                     Reason for Stock Change
                   </h2>
                 </div>
@@ -823,34 +850,34 @@ export default function Inventory() {
                   onClick={() => setStockReasonModalOpen(false)}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <p className="text-[17px] font-bold text-gray-600">
-                  Stock quantity for <span className="text-[#0284C7] font-extrabold">{editingProduct?.productName}</span> changed from{" "}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-gray-700">
+                  Stock quantity for <span className="text-blue-700 font-extrabold">{editingProduct?.productName}</span> changed from{" "}
                   <span className="font-extrabold text-red-600">{originalStock}</span> to{" "}
-                  <span className="font-extrabold text-green-600">{formData.stockQuantity}</span>.
+                  <span className="font-extrabold text-emerald-600">{formData.stockQuantity}</span>.
                 </p>
-                <label className="text-[12px] font-semibold text-gray-700 block">
+                <label className="text-[11px] font-semibold text-gray-600 block">
                   Please enter a reason or description for this stock adjustment:
                 </label>
                 <textarea
-                  rows={5}
+                  rows={4}
                   value={stockChangeReason}
                   onChange={(e) => setStockChangeReason(e.target.value)}
                   placeholder="e.g. Received new shipment, Damaged stock removal, Inventory correction..."
-                  className="w-full p-3 border border-gray-300 rounded-xl text-xs outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200"
+                  className="w-full p-3 border border-gray-300 rounded-xl text-xs outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200 font-medium"
                   required
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-2 border-t">
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => setStockReasonModalOpen(false)}
-                  className="px-5 py-2 border rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50"
+                  className="px-4 py-1.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition active:scale-95"
                 >
                   Back
                 </button>
@@ -858,7 +885,7 @@ export default function Inventory() {
                   type="button"
                   disabled={!stockChangeReason.trim() || saving}
                   onClick={handleSaveEditProduct}
-                  className="px-5 py-2 bg-[#17347a] text-white text-xs font-extrabold rounded-xl hover:bg-[#0f2456] transition disabled:opacity-50"
+                  className="px-5 py-1.5 bg-[#17347a] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl hover:bg-blue-900 shadow-md transition active:scale-95 disabled:opacity-50"
                 >
                   {saving ? "Saving..." : "Confirm & Save"}
                 </button>
@@ -869,52 +896,52 @@ export default function Inventory() {
 
         {/* MAIN DATA TABLE */}
         {!showAdd && (
-          <div className="bg-white rounded-[1rem] shadow-sm border-2 border-gray-100 overflow-hidden w-full max-w-full flex flex-col">
+          <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden w-full flex flex-col">
             <div
               className="max-h-[500px] overflow-y-auto overflow-x-auto w-full"
               style={{ scrollbarGutter: "stable" }}
             >
-              <table className="w-full text-left min-w-[950px] border-collapse">
-                <thead className="bg-[#17347a] text-white font-extrabold uppercase text-[12px] tracking-wider sticky top-0 z-20 shadow-xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-[#17347a] text-white font-bold uppercase text-[11px] tracking-wider sticky top-0 z-20 shadow-sm">
                   {view === "list" ? (
                     <tr>
-                      <th className="p-5 w-[24%] bg-[#17347a]">Product</th>
-                      <th className="p-5 w-[14%] bg-[#17347a]">Barcode</th>
-                      <th className="p-5 w-[16%] bg-[#17347a]">Category</th>
-                      <th className="p-5 w-[10%] bg-[#17347a]">Cost Price</th>
-                      <th className="p-5 w-[10%] bg-[#17347a]">Selling Price</th>
-                      <th className="p-5 w-[11%] bg-[#17347a] text-center">
+                      <th className="py-3 px-4 border-b border-blue-900 w-[24%]">Product</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[14%]">Barcode</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[16%]">Category</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Cost Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Selling Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[11%] text-center">
                         Stock / Threshold
                       </th>
-                      <th className="p-5 w-[9%] bg-[#17347a] text-center">
+                      <th className="py-3 px-4 border-b border-blue-900 w-[9%] text-center">
                         Expiry Dates
                       </th>
-                      <th className="p-5 w-[6%] bg-[#17347a] text-center">
+                      <th className="py-3 px-4 border-b border-blue-900 w-[6%] text-center">
                         Action
                       </th>
                     </tr>
                   ) : (
                     <tr>
-                      <th className="p-5 w-[24%] bg-[#17347a]">Product</th>
-                      <th className="p-5 w-[14%] bg-[#17347a]">Barcode</th>
-                      <th className="p-5 w-[16%] bg-[#17347a]">Category</th>
-                      <th className="p-5 w-[10%] bg-[#17347a]">Cost Price</th>
-                      <th className="p-5 w-[10%] bg-[#17347a]">Selling Price</th>
-                      <th className="p-5 w-[12%] bg-[#17347a] text-center">
+                      <th className="py-3 px-4 border-b border-blue-900 w-[24%]">Product</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[14%]">Barcode</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[16%]">Category</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Cost Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Selling Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[12%] text-center">
                         Expected Stock
                       </th>
-                      <th className="p-5 w-[14%] bg-[#17347a] text-center">
+                      <th className="py-3 px-4 border-b border-blue-900 w-[14%] text-center">
                         Actual Count
                       </th>
                     </tr>
                   )}
                 </thead>
-                <tbody className="divide-y divide-gray-200 text-sm font-semibold text-gray-700">
+                <tbody className="divide-y divide-gray-200 font-medium text-gray-700">
                   {loading ? (
                     <tr>
                       <td
                         colSpan={view === "list" ? 8 : 7}
-                        className="p-8 text-center text-gray-500 font-bold"
+                        className="p-12 text-center text-gray-400 italic"
                       >
                         Loading products from database...
                       </td>
@@ -923,7 +950,7 @@ export default function Inventory() {
                     <tr>
                       <td
                         colSpan={view === "list" ? 8 : 7}
-                        className="p-8 text-center text-gray-500 font-bold"
+                        className="p-12 text-center text-gray-400 italic"
                       >
                         {isSearching
                           ? `No products found matching "${searchTerm}".`
@@ -937,70 +964,72 @@ export default function Inventory() {
                         <tr
                           key={item.id}
                           className={`transition-colors ${
-                            isEven ? "bg-[#F8FAFC]" : "bg-white"
-                          } hover:bg-blue-50/60`}
+                            isEven ? "bg-white" : "bg-blue-50/40"
+                          } hover:bg-blue-100/50`}
                         >
-                          <td className="p-5 w-[24%]">
-                            <div className="font-extrabold text-[#0284C7] text-[15px] tracking-tight leading-snug break-words">
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-gray-800 leading-snug break-words">
                               {item.productName}
                             </div>
                             {item.description && (
-                              <div className="mt-0.5 text-xs font-normal text-gray-500 break-words leading-tight">
+                              <div className="mt-0.5 text-[11px] text-gray-500 break-words leading-tight">
                                 {item.description}
                               </div>
                             )}
                           </td>
-                          <td className="p-5 w-[14%] font-mono text-xs font-bold text-gray-700 tracking-wider break-all">
+                          <td className="py-3 px-4 font-mono font-bold text-gray-500 break-all">
                             {item.barcode}
                           </td>
-                          <td className="p-5 w-[16%] font-bold text-gray-800 break-words">
+                          <td className="py-3 px-4 font-semibold text-gray-800 break-words">
                             {item.category}
                           </td>
-                          <td className="p-5 w-[10%] font-extrabold text-gray-600 whitespace-nowrap">
+                          <td className="py-3 px-4 font-bold text-gray-600 whitespace-nowrap">
                             ₱ {Number(item.costPrice).toFixed(2)}
                           </td>
-                          <td className="p-5 w-[10%] font-extrabold text-gray-900 whitespace-nowrap">
+                          <td className="py-3 px-4 font-bold text-gray-800 whitespace-nowrap">
                             ₱ {Number(item.sellingPrice).toFixed(2)}
                           </td>
 
                           {view === "list" ? (
                             <>
-                              <td className="p-5 w-[11%] text-center font-bold whitespace-nowrap">
-                                {Number(item.stockQuantity)} /{" "}
-                                {Number(item.threshold)}
+                              <td className="py-3 px-4 text-center font-bold whitespace-nowrap">
+                                <span className={Number(item.stockQuantity) <= Number(item.threshold) ? "text-red-600 font-black" : "text-gray-800"}>
+                                  {Number(item.stockQuantity)}
+                                </span>{" "}
+                                / <span className="text-gray-400 font-semibold">{Number(item.threshold)}</span>
                               </td>
-                              <td className="p-5 w-[9%] text-center whitespace-nowrap">
+                              <td className="py-3 px-4 text-center whitespace-nowrap">
                                 <button
                                   onClick={() => setExpiryModalProduct(item)}
-                                  className="inline-flex items-center gap-0.3 px-3 py-1 rounded-lg text-xs font-extrabold text-[#17347a] bg-amber-100/80 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors shadow-xs"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition shadow-xs active:scale-95"
                                 >
-                                  <Calendar size={13} /> View Dates
+                                  <Calendar size={12} /> View Dates
                                 </button>
                               </td>
-                              <td className="p-5 w-[6%] text-center whitespace-nowrap">
+                              <td className="py-3 px-4 text-center whitespace-nowrap">
                                 <button
                                   onClick={() => openEditModal(item)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 transition-colors"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 border border-blue-200 transition active:scale-95"
                                 >
-                                  <Edit3 size={13} /> Edit
+                                  <Edit3 size={12} /> Edit
                                 </button>
                               </td>
                             </>
                           ) : (
                             <>
-                              <td className="p-5 w-[12%] text-center font-bold whitespace-nowrap">
+                              <td className="py-3 px-4 text-center font-bold whitespace-nowrap">
                                 {Number(item.stockQuantity)}
                               </td>
-                              <td className="p-5 w-[14%] text-center whitespace-nowrap text-gray-500 font-normal">
+                              <td className="py-3 px-4 text-center whitespace-nowrap text-gray-500 font-normal">
                                 {item.actualCount !== null &&
                                 item.actualCount !== undefined ? (
-                                  <span className="font-extrabold text-[#17347a] bg-blue-50 px-3 py-1.5 rounded-full border border-blue-200 text-sm">
+                                  <span className="font-extrabold text-[#17347a] bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-300 text-xs">
                                     {item.actualCount}
                                   </span>
                                 ) : (
-                                  <div className="leading-tight text-gray-400 font-medium">
-                                    Not counted<br />yet
-                                  </div>
+                                  <span className="text-gray-400 italic text-[11px]">
+                                    Not counted
+                                  </span>
                                 )}
                               </td>
                             </>

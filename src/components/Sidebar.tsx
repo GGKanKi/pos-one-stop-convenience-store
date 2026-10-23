@@ -9,15 +9,18 @@ import {
 export default function Sidebar() {
   const location = useLocation();
 
-  // Navigation items configuration
+  // Check if opened from POS Inventory Monitoring button
+  const isStaffView = location.state?.staffView === true;
+
+  // Navigation items configuration with access permission flag
   const navItems = [
-    { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-    { name: 'Staff', path: '/admin/staff', icon: Users },
-    { name: 'Inventory', path: '/admin/inventory', icon: Package },
-    { name: 'Transaction History', path: '/admin/transactions', icon: History },
-    { name: 'Product Status', path: '/admin/productstatus', icon: BarChart3 },
-    { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale },
-    { name: 'Sales And Profit', path: '/admin/salesprofit', icon: TrendingUp },
+    { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, allowedForStaff: false },
+    { name: 'Staff', path: '/admin/staff', icon: Users, allowedForStaff: false },
+    { name: 'Inventory', path: '/admin/inventory', icon: Package, allowedForStaff: true },
+    { name: 'Transaction History', path: '/admin/transactions', icon: History, allowedForStaff: false },
+    { name: 'Product Status', path: '/admin/productstatus', icon: BarChart3, allowedForStaff: false },
+    { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale, allowedForStaff: false },
+    { name: 'Sales And Profit', path: '/admin/salesprofit', icon: TrendingUp, allowedForStaff: false },
   ];
 
   return (
@@ -31,7 +34,9 @@ export default function Sidebar() {
           className="w-14 h-14 rounded-full object-cover shrink-0 shadow-md border-2 border-white/20"
         />
         <div className="text-left">
-          <p className="text-[12px] uppercase opacity-70 font-black tracking-widest text-blue-200">Workspace</p>
+          <p className="text-[12px] uppercase opacity-70 font-black tracking-widest text-blue-200">
+            {isStaffView ? 'Staff Mode' : 'Workspace'}
+          </p>
           <h2 className="text-[15px] font-black leading-tight text-white drop-shadow-sm">
             One Stop <br/> Convenience Store
           </h2>
@@ -47,11 +52,25 @@ export default function Sidebar() {
         {navItems.map((item) => {
           // Case-insensitive active check matching App.tsx routes
           const active = location.pathname.toLowerCase() === item.path.toLowerCase();
+          const isDisabled = isStaffView && !item.allowedForStaff;
+
+          if (isDisabled) {
+            return (
+              <div
+                key={item.path}
+                className="flex items-center gap-3 w-full p-3 rounded-xl border border-transparent text-gray-400/40 opacity-40 cursor-not-allowed select-none pointer-events-none"
+              >
+                <item.icon size={18} />
+                <span className="text-sm font-medium">{item.name}</span>
+              </div>
+            );
+          }
 
           return (
             <Link 
               key={item.path} 
               to={item.path} 
+              state={location.state}
               className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all duration-300 border border-transparent no-underline
                 ${active 
                   ? 'bg-[#007BFF] text-white shadow-[0_0_20px_rgba(0,123,255,0.4)] scale-[1.03] border-blue-400/30 font-bold' 
