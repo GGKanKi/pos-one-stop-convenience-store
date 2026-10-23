@@ -14,68 +14,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require __DIR__ . '/../config/db.php';
-
-// FIXED: Support both JWT token and staff_id authentication - BLACKBOXAI
-$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-$token = str_replace('Bearer ', '', $authHeader);
-
-// Get JSON body for staff_id method
-$rawInput = file_get_contents("php://input");
-$jsonData = json_decode($rawInput, true);
-$staffIdFromBody = $jsonData['staff_id'] ?? null;
-$userIdFromBody = (int)($jsonData['user_id'] ?? 0);
-
-$userId = 0;
-
-// Prefer the active client user ID; retain token and staff-ID support for older callers.
-if ($userIdFromBody) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'staff'");
-    $stmt->execute([$userIdFromBody]);
-    $row = $stmt->fetch();
-    $userId = $row ? (int)$row['id'] : 0;
-} elseif ($token) {
-    $decoded = base64_decode($token);
-    $parts = explode(':', $decoded);
-    $userId = (int)($parts[0] ?? 0);
-} elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ? AND role = 'staff'");
-    $stmt->execute([$staffIdFromBody]);
-    $row = $stmt->fetch();
-    $userId = $row ? (int)$row['id'] : 0;
-}
-if (!$userId) {
-    http_response_code(401);
-    echo json_encode(["success" => false, "message" => "Unauthorized."]);
-    exit;
-}
+require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../helpers/auth.php';
 
 try {
+    $user = requireAuthUser($pdo);
+    if (!in_array($user['role'], ['cashier', 'staff'], true)) {
+        sendJsonResponse(false, 'Cashier or Staff access required.', null, 403);
+    }
+    $userId = (int)$user['id'];
 
     $pdo->beginTransaction();
 
-    // Find today's open record
-    $stmt = $pdo->prepare("SELECT id FROM attendance WHERE user_id = ? AND date = CURDATE() AND clock_out IS NULL");
-    $stmt->execute([$userId]);
-    $record = $stmt->fetch();
+    // Lock the user row so a concurrent clock-in cannot race this clock-out.
+    $userLock = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role IN ('cashier', 'staff') FOR UPDATE");
+    $userLock->execute([$userId]);
+    if (!$userLock->fetchColumn()) {
+        $pdo->rollBack();
+        http_response_code(401);
+        echo json_encode(["success" => false, "message" => "Unauthorized."]);
+        exit;
+    }
 
-    if (!$record) {
+    // Close every open row for today in case older duplicate sessions exist.
+    $stmt = $pdo->prepare("UPDATE attendance SET clock_out = NOW() WHERE user_id = ? AND date = CURDATE() AND clock_out IS NULL");
+    $stmt->execute([$userId]);
+    if ($stmt->rowCount() === 0) {
         $pdo->rollBack();
         http_response_code(409);
         echo json_encode(["success" => false, "message" => "No open clock-in today. Clock in first."]);
         exit;
     }
 
-    $recordId = $record['id'];
-
-    // UPDATE clock_out
-    $stmt = $pdo->prepare("UPDATE attendance SET clock_out = NOW() WHERE id = ?");
-    $stmt->execute([$recordId]);
-
     $pdo->commit();
 
-    // Return record
-    $stmt = $pdo->prepare("SELECT id, clock_in, clock_out, date FROM attendance WHERE id = ?");
-    $stmt->execute([$recordId]);
+    // Return the latest attendance row after closing the open shift(s).
+    $stmt = $pdo->prepare("SELECT id, clock_in, clock_out, date FROM attendance WHERE user_id = ? AND date = CURDATE() ORDER BY id DESC LIMIT 1");
+    $stmt->execute([$userId]);
     $updatedRecord = $stmt->fetch();
 
     echo json_encode([
@@ -85,11 +60,11 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Server error."]);
 }

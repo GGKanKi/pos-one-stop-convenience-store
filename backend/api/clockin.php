@@ -14,44 +14,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require __DIR__ . '/../config/db.php';
-
-// FIXED: Support both JWT token and staff_id authentication 
-$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-$token = str_replace('Bearer ', '', $authHeader);
-
-// Get JSON body for staff_id method
-$rawInput = file_get_contents("php://input");
-$jsonData = json_decode($rawInput, true);
-$staffIdFromBody = $jsonData['staff_id'] ?? null;
-$userIdFromBody = (int)($jsonData['user_id'] ?? 0);
-
-$userId = 0;
-
-// Prefer the active client user ID; retain token and staff-ID support for older callers.
-if ($userIdFromBody) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role = 'staff'");
-    $stmt->execute([$userIdFromBody]);
-    $row = $stmt->fetch();
-    $userId = $row ? (int)$row['id'] : 0;
-} elseif ($token) {
-    $decoded = base64_decode($token);
-    $parts = explode(':', $decoded);
-    $userId = (int)($parts[0] ?? 0);
-} elseif ($staffIdFromBody) {
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE staff_id = ? AND role = 'staff'");
-    $stmt->execute([$staffIdFromBody]);
-    $row = $stmt->fetch();
-    $userId = $row ? (int)$row['id'] : 0;
-}
-if (!$userId) {
-    http_response_code(401);
-    echo json_encode(["success" => false, "message" => "Unauthorized."]);
-    exit;
-}
+require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../helpers/auth.php';
 
 try {
+    $user = requireAuthUser($pdo);
+    if (!in_array($user['role'], ['cashier', 'staff'], true)) {
+        sendJsonResponse(false, 'Cashier or Staff access required.', null, 403);
+    }
+    $userId = (int)$user['id'];
 
     $pdo->beginTransaction();
+
+    // Serialize clock-ins per employee so two POS tabs cannot create parallel shifts.
+    $userLock = $pdo->prepare("SELECT id FROM users WHERE id = ? AND role IN ('cashier', 'staff') FOR UPDATE");
+    $userLock->execute([$userId]);
+    if (!$userLock->fetchColumn()) {
+        $pdo->rollBack();
+        http_response_code(401);
+        echo json_encode(["success" => false, "message" => "Unauthorized."]);
+        exit;
+    }
 
     // Reuse an existing open shift if POS is revisited during the same day.
     $stmt = $pdo->prepare("SELECT id, clock_in, clock_out, date FROM attendance WHERE user_id = ? AND date = CURDATE() AND clock_out IS NULL ORDER BY clock_in DESC LIMIT 1");
@@ -92,11 +75,11 @@ try {
     ]);
 
 } catch (PDOException $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Database error: " . $e->getMessage()]);
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Server error."]);
 }

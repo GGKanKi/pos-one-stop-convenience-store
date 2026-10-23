@@ -23,6 +23,8 @@ export default function DiscountModal({
 
   useEffect(() => {
     if (isOpen) {
+      // Reset the draft when opening the modal or changing the selected item's discount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDiscountInput(currentDiscount > 0 ? String(currentDiscount) : "");
       setTimeout(() => {
         discountInputRef.current?.focus();

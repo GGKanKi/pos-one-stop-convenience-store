@@ -32,6 +32,8 @@ export default function Transactions() {
     } finally { setLoading(false); }
   }, [startDate, endDate, action, search]);
 
+  // Load the initial date range once; filter changes are applied by the form's Load button.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadHistory(); }, []);
   const resetFilters = () => { setStartDate(monthStart()); setEndDate(localDate()); setAction(''); setSearch(''); };
   const dateLabel = (value: string) => new Date(value.replace(' ', 'T')).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });

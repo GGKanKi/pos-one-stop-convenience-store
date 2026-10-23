@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     user_profile VARCHAR(255) DEFAULT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'staff'
+    role VARCHAR(20) NOT NULL DEFAULT 'cashier'
 );

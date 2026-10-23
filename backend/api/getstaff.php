@@ -15,7 +15,7 @@ try {
     $stmt = $pdo->prepare(
         "SELECT id, first_name, last_name, email, role, staff_id, avatar
          FROM users
-         WHERE role = 'staff'
+         WHERE role IN ('cashier', 'staff')
          ORDER BY first_name, last_name"
     );
     $stmt->execute();

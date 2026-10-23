@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../helpers/auth.php';
 $data = json_decode(file_get_contents('php://input'), true);
 $productId = filter_var($data['id'] ?? null, FILTER_VALIDATE_INT);
 if (!is_array($data) || !$productId || $productId < 1) {
@@ -84,11 +86,10 @@ if ($productName === '' || $barcode === '' || $category === '') {
     exit;
 }
 $stockReason = trim((string)($data['stockChangeReason'] ?? ''));
-$actor = is_array($data['actor'] ?? null) ? $data['actor'] : [];
-$actorId = filter_var($actor['id'] ?? null, FILTER_VALIDATE_INT);
-$actorId = $actorId && $actorId > 0 ? $actorId : null;
-$actorName = trim((string)($actor['name'] ?? ''));
-$actorName = $actorName !== '' ? substr($actorName, 0, 120) : null;
+$authenticatedUser = requireAuthUser($pdo);
+if ($authenticatedUser['role'] !== 'admin') sendJsonResponse(false, 'Admin access required.', null, 403);
+$actorId = (int)$authenticatedUser['id'];
+$actorName = trim($authenticatedUser['first_name'] . ' ' . $authenticatedUser['last_name']);
 
 try {
     $pdo->beginTransaction();

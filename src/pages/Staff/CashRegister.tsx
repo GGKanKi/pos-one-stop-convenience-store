@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
+import { clearAuthSession, getAuthUserId } from "../../services/authSession";
 
 interface Denomination {
   label: string;
@@ -31,13 +32,7 @@ export default function CashRegister() {
       return;
     }
 
-    let userId: string | number | null = localStorage.getItem("userId");
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      userId = user.id || userId;
-    } catch {
-      userId = localStorage.getItem("userId");
-    }
+    const userId = getAuthUserId();
 
     if (!userId) {
       setError("Could not end the shift because the signed-in user was not found. Please sign in again.");
@@ -52,9 +47,7 @@ export default function CashRegister() {
         throw new Error(response.message || "Could not clock out.");
       }
 
-      ["user", "userId", "authToken", "staff_id", "pending_clock_in"].forEach((key) => {
-        localStorage.removeItem(key);
-      });
+      clearAuthSession();
       navigate("/login", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not end the shift. Please try again.");

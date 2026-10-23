@@ -98,6 +98,7 @@ export default function SignupPage() {
             className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 outline-none focus:border-blue-400"
           />
 
+
           {/* Password */}
           <div className="relative">
             <input

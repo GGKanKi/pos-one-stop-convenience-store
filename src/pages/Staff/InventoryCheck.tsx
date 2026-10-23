@@ -55,7 +55,7 @@ export default function InventoryCheck() {
         ? data.products
         : [];
 
-      const mappedProducts: Product[] = rawList.map((item: any) => ({
+      const mappedProducts: Product[] = rawList.map((item: Record<string, unknown>) => ({
         id: Number(item.id),
         productName: String(item.productName || item.name || "").trim(),
         barcode: String(item.barcode || item.code || "").trim(),

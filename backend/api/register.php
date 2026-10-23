@@ -21,7 +21,7 @@ try {
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
     $hireDate = date('Y-m-d');
     $period = date('my', strtotime($hireDate));
-    $insert = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash, role, staff_id, hire_date) VALUES (?, ?, ?, ?, 'staff', ?, ?)");
+    $insert = $pdo->prepare("INSERT INTO users (first_name, last_name, email, password_hash, role, staff_id, hire_date) VALUES (?, ?, ?, ?, 'cashier', ?, ?)");
 
     for ($attempt = 0; $attempt < 20; $attempt++) {
         $staffId = 'OS-' . $period . '-' . str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
