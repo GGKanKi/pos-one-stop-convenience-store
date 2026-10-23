@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag
+  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag, Lock
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
@@ -67,6 +67,10 @@ export default function POS() {
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountInput, setDiscountInput] = useState<string>("0.00");
 
+  // Inventory Password Protection State
+  const [showInventoryPasswordModal, setShowInventoryPasswordModal] = useState(false);
+  const [staffPasswordInput, setStaffPasswordInput] = useState("");
+
   // Scan & Search Window State
   const [scanCode, setScanCode] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,6 +82,7 @@ export default function POS() {
   const modalSearchInputRef = useRef<HTMLInputElement>(null);
   const cashInputRef = useRef<HTMLInputElement>(null);
   const discountInputRef = useRef<HTMLInputElement>(null);
+  const inventoryPasswordInputRef = useRef<HTMLInputElement>(null);
   const cartTableContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,6 +119,17 @@ export default function POS() {
     }
   }, [showDiscountModal]);
 
+  // Auto focus input when Staff Inventory Password Modal Opens
+  useEffect(() => {
+    if (showInventoryPasswordModal) {
+      setTimeout(() => {
+        inventoryPasswordInputRef.current?.focus();
+      }, 100);
+    } else {
+      scanInputRef.current?.focus();
+    }
+  }, [showInventoryPasswordModal]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F5') {
@@ -129,7 +145,7 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItemId, cart]);
 
-  // Auto-focus on Cash Input kapag inopen ang Payment Modal
+  // Auto-focus on Cash Input when Payment Modal opens
   useEffect(() => {
     if (showPaymentModal) {
       setTimeout(() => {
@@ -328,9 +344,20 @@ export default function POS() {
     setShowDiscountModal(false);
   };
 
-  // FINALIZE TRANSACTION: SINESAVE SA DATABASE AT CINI-CLEAR ANG POS CART
+  // INVENTORY ACCESS SUBMIT
+  const handleInventoryAccessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowInventoryPasswordModal(false);
+    setStaffPasswordInput("");
+    navigate("/admin/dashboard", { state: { fullScreen: true, staffView: true } });
+  };
+
+  // FINALIZE TRANSACTION
   const finalizeTransaction = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      setShowReceiptModal(false);
+      return;
+    }
 
     const transactionData = {
       paymentMethod,
@@ -352,7 +379,6 @@ export default function POS() {
       })),
     };
 
-    // Save the sale first; only update local recall data after the database confirms it.
     let savedResponse: any;
     try {
       savedResponse = await apiRequest("/savetransaction.php", "POST", transactionData);
@@ -366,16 +392,14 @@ export default function POS() {
       return;
     }
 
-    // 2. Local storage sync para sa Recall Screen (01, 02, 03... sequential ID formatting)
+    // Local storage sync for Recall Screen
     try {
       const existing = JSON.parse(localStorage.getItem("pos_completed_transactions") || "[]");
-      const nextNum = existing.length + 1;
-      const formattedId = String(nextNum).padStart(2, '0');
 
       const newTx = {
-        id: formattedId,
-        dbTransactionId: savedResponse.transaction_id,
+        id: String(savedResponse.transaction_id),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now(),
         itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
         paymentMethod,
         totalAmount: total,
@@ -391,7 +415,6 @@ export default function POS() {
       console.error("Local Sync Error:", e);
     }
 
-    // 3. Clear POS State AFTER THE CHECKOUT
     setShowReceiptModal(false);
     setCart([]);
     setSelectedItemId(null);
@@ -408,6 +431,48 @@ export default function POS() {
       {clockInError && (
         <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
           {clockInError}
+        </div>
+      )}
+
+      {/* STAFF INVENTORY PASSWORD MODAL */}
+      {showInventoryPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
+          <form 
+            onSubmit={handleInventoryAccessSubmit}
+            className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[420px] rounded-[30px] p-6 flex flex-col justify-between gap-5 shadow-[0_0_60px_rgba(0,180,255,0.35)]"
+          >
+            <div className="space-y-4 flex flex-col">
+              <div className="flex justify-between items-center pb-2 border-b border-cyan-500/20">
+                <div className="flex items-center gap-2 text-cyan-400">
+                  <Lock size={18} />
+                  <p className="text-xs font-black tracking-widest uppercase">STAFF VERIFICATION</p>
+                </div>
+                <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="text-cyan-400 hover:text-white transition">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-gradient-to-b from-[#183478]/90 to-[#0e214d]/90 rounded-xl p-5 border border-cyan-400/40 space-y-3 shadow-[0_0_20px_rgba(0,140,255,0.15)]">
+                <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide text-center">ENTER STAFF PASSWORD</p>
+                
+                <div className="relative mt-2">
+                  <input 
+                    ref={inventoryPasswordInputRef}
+                    type="password"
+                    value={staffPasswordInput} 
+                    onChange={(e) => setStaffPasswordInput(e.target.value)} 
+                    placeholder="Password"
+                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-lg outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition placeholder-cyan-500/50" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">ENTER</button>
+              <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -558,7 +623,7 @@ export default function POS() {
                 onClick={finalizeTransaction}
                 className="w-full bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]"
               >
-                CANCEL
+                CLOSE
               </button>
             </div>
           </div>
@@ -658,6 +723,12 @@ export default function POS() {
               Cashier Out
             </button>
             <button 
+              onClick={() => setShowInventoryPasswordModal(true)} 
+              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
+            >
+              Inventory Monitoring (For Staff Only)
+            </button>
+            <button 
               className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
             >
               Settings
@@ -685,10 +756,7 @@ export default function POS() {
               {[
                 { label: "Payment", shortcut: "F5", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) },
                 { label: "Discounts", shortcut: "F6", img: "/pictures/discount.png", action: triggerDiscountModal },
-                { label: "Recall", shortcut: "F7", img: "/pictures/recall.jpg", action: () => navigate("/staff/recall") },
-                { label: "Dashboard", shortcut: "F8", img: "/pictures/dashboard.png", action: () => navigate("/admin/dashboard", { state: { fullScreen: true } }) },
-                { label: "Inventory", shortcut: "F9", img: "/pictures/inventory.jpg", action: () => navigate("/staff/inventorycheck") }
-               
+                { label: "Recall", shortcut: "F7", img: "/pictures/recall.jpg", action: () => navigate("/staff/recall") }
               ].map((btn, idx) => (
                 <button 
                   key={idx}
