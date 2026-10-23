@@ -1,16 +1,31 @@
 import { type LucideIcon, TrendingUp, Award, Clock, Users } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../../components/Sidebar';
+
+interface StaffMember {
+  id: string | number;
+  avatar?: string;
+  first_name?: string;
+  last_name?: string;
+  staff_id?: string;
+}
+
+interface AttendanceRecord {
+  id: string | number;
+  date?: string;
+  clock_in: string;
+  clock_out?: string | null;
+}
 
 export default function StaffDashboard() { // MODIFIED: Renamed from AdminDashboard for staff use
   // NEW: Dynamic data states and fetches 
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<any[]>([]);
-  const [todayStatus, setTodayStatus] = useState<any | null>(null);
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [todayStatus, setTodayStatus] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('token') || '';
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       // Fetch staff list (public)
@@ -38,11 +53,11 @@ export default function StaffDashboard() { // MODIFIED: Renamed from AdminDashbo
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchData();
-  }, [token]);
+  }, [fetchData]);
 
   const handleClockIn = async () => {
     if (!token) {
@@ -117,7 +132,7 @@ export default function StaffDashboard() { // MODIFIED: Renamed from AdminDashbo
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-64 overflow-y-auto bg-white rounded-2xl shadow-lg p-4 border">
-              {staffList.map((staff: any) => (
+              {staffList.map((staff) => (
                 <div key={staff.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:bg-gray-50">
                   <img src={staff.avatar || '/pictures/avatar1.jpg'} alt={staff.first_name} className="w-12 h-12 rounded-full object-cover" />
                   <div>
@@ -135,7 +150,7 @@ export default function StaffDashboard() { // MODIFIED: Renamed from AdminDashbo
           <h2 className="font-bold text-gray-800 mb-4 ml-1 text-left">Time Tracking</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             <StatCard label="Total Shifts" value={attendance.length.toString()} Icon={TrendingUp} />
-            <StatCard label="Present Days" value={attendance.filter((a: any) => a.clock_out).length.toString()} Icon={Clock} />
+            <StatCard label="Present Days" value={attendance.filter((a) => a.clock_out).length.toString()} Icon={Clock} />
             <StatCard label="Today Status" value={todayStatus ? (todayStatus.clock_out ? 'OUT' : 'IN') : 'OFF'} Icon={Award} />
           </div>
           {/* Clock Buttons */}
@@ -162,7 +177,7 @@ export default function StaffDashboard() { // MODIFIED: Renamed from AdminDashbo
           <div className="flex flex-col">
             <h3 className="font-bold text-gray-700 mb-2 ml-1">Recent Attendance</h3>
             <div className="bg-white border border-gray-300 rounded-2xl shadow-lg p-4 max-h-48 overflow-y-auto">
-              {attendance.slice(0,5).map((record: any) => (
+              {attendance.slice(0,5).map((record) => (
                 <div key={record.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0 text-sm">
                   <span>{record.date}</span>
                   <span className="font-mono text-xs">

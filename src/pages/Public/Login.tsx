@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Store, ShoppingCart, Package, BarChart3 } from "lucide-react";
 import { apiRequest } from "../../services/api";
+import { setAuthSession } from "../../services/authSession";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,22 +25,22 @@ export default function LoginPage() {
         const userData = response.data?.user || response.user;
         const tokenData = response.data?.token || response.token;
 
+        sessionStorage.removeItem("staffToolsUnlockUntil");
+        sessionStorage.removeItem("staffToolsUser");
+        sessionStorage.removeItem("staffToolsToken");
         if (userData) {
-          localStorage.setItem("user", JSON.stringify(userData));
-          if (userData.id) {
-            localStorage.setItem("userId", userData.id);
-          }
-        }
-
-        if (tokenData) {
-          localStorage.setItem("authToken", tokenData);
+          setAuthSession(userData, tokenData);
         }
 
         // Route navigation based on user role & staff status
         if (userData?.role === "admin") {
           navigate("/admin/dashboard");
         } else if (userData?.role === "staff") {
+          navigate("/admin/dashboard");
+        } else if (userData?.role === "cashier") {
           navigate("/cashregister");
+        } else {
+          setErrorMsg("This account has no valid role. Contact an administrator.");
         }
       } else {
         setErrorMsg(response.message || "Invalid email or password.");

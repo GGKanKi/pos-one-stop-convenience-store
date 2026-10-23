@@ -16,7 +16,7 @@ try {
         }
         $start = $month . '-01';
         $end = date('Y-m-d', strtotime($start . ' +1 month'));
-        $stmt = $pdo->prepare("SELECT u.id AS user_id, u.staff_id, u.first_name, u.last_name, a.clock_in, a.clock_out, a.date FROM users u LEFT JOIN attendance a ON u.id = a.user_id AND a.date >= ? AND a.date < ? WHERE u.role = 'staff' ORDER BY u.first_name, u.last_name, a.date DESC, a.clock_in DESC");
+        $stmt = $pdo->prepare("SELECT u.id AS user_id, u.staff_id, u.first_name, u.last_name, a.id AS attendance_id, a.clock_in, a.clock_out, a.date FROM users u LEFT JOIN attendance a ON u.id = a.user_id AND a.date >= ? AND a.date < ? WHERE u.role IN ('cashier', 'staff') ORDER BY u.first_name, u.last_name, a.date DESC, (a.clock_out IS NULL) DESC, a.clock_in DESC, a.id DESC");
         $stmt->execute([$start, $end]);
         echo json_encode(["success" => true, "attendance" => $stmt->fetchAll(), "month" => $month]);
         exit;
@@ -28,7 +28,7 @@ try {
         echo json_encode(["success" => false, "message" => "Invalid date. Use YYYY-MM-DD."]);
         exit;
     }
-    $stmt = $pdo->prepare("SELECT u.id AS user_id, u.staff_id, u.first_name, u.last_name, a.clock_in, a.clock_out, a.date FROM users u LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ? WHERE u.role = 'staff' ORDER BY u.first_name, u.last_name, a.clock_in DESC");
+    $stmt = $pdo->prepare("SELECT u.id AS user_id, u.staff_id, u.first_name, u.last_name, a.id AS attendance_id, a.clock_in, a.clock_out, a.date FROM users u LEFT JOIN attendance a ON a.id = (SELECT a2.id FROM attendance a2 WHERE a2.user_id = u.id AND a2.date = ? ORDER BY (a2.clock_out IS NULL) DESC, a2.clock_in DESC, a2.id DESC LIMIT 1) WHERE u.role IN ('cashier', 'staff') ORDER BY u.first_name, u.last_name");
     $stmt->execute([$date]);
     echo json_encode(["success" => true, "attendance" => $stmt->fetchAll(), "date" => $date]);
 } catch (PDOException $e) {

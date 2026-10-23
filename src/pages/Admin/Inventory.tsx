@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
+import { getAuthToken, getAuthUser } from "../../services/authSession";
 import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText, ArrowLeft } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
@@ -79,9 +80,36 @@ const emptyForm = {
   threshold: "5",
 };
 
+function getSessionUser(): { id?: number | string; role?: string; first_name?: string; last_name?: string; email?: string } {
+  return getAuthUser();
+}
+
+function getInventoryActor(): { id?: number | string; role?: string; first_name?: string; last_name?: string; email?: string } {
+  const user = getSessionUser();
+  if (Number(sessionStorage.getItem("staffToolsUnlockUntil") || 0) > Date.now()) {
+    try {
+      const verifiedStaff = JSON.parse(sessionStorage.getItem("staffToolsUser") || "{}");
+      if (verifiedStaff.id && verifiedStaff.role === "staff") return verifiedStaff;
+    } catch { /* Fall back to the signed-in user. */ }
+  }
+  return user;
+}
+
+function getInventoryAuthToken(): string | undefined {
+  if (Number(sessionStorage.getItem("staffToolsUnlockUntil") || 0) > Date.now()) {
+    try {
+      const verifiedStaff = JSON.parse(sessionStorage.getItem("staffToolsUser") || "{}");
+      if (verifiedStaff.role === "staff" && verifiedStaff.id) return sessionStorage.getItem("staffToolsToken") || getAuthToken();
+    } catch { /* Use the signed-in account token. */ }
+  }
+  return getAuthToken();
+}
+
 export default function Inventory() {
   const location = useLocation();
   const navigate = useNavigate();
+  const currentUserRole = getInventoryActor().role;
+  const canEditInventory = currentUserRole === "staff" || currentUserRole === "admin";
 
   // Full-screen and staff view parameters from POS navigation
   const isFullScreen = location.state?.fullScreen === true;
@@ -137,14 +165,17 @@ export default function Inventory() {
       const savedCounts: Record<string, string> = savedCountsRaw ? JSON.parse(savedCountsRaw) : {};
       const savedConfirmed: string[] = savedConfirmedRaw ? JSON.parse(savedConfirmedRaw) : [];
 
-      const mappedProducts: Product[] = rawList.map((item: any) => {
+      const mappedProducts: Product[] = rawList.map((item: Record<string, unknown>) => {
         const rawExpiry = item.expirationDate || item.expiration_date || null;
         const currentStock = Number(item.stockQuantity ?? item.stock ?? 0);
         const barcode = String(item.barcode || item.code || "").trim();
 
         let defaultBatches: ExpiryBatch[] = [];
-        if (Array.isArray(item.expiryBatches) && item.expiryBatches.length > 0) {
-          defaultBatches = item.expiryBatches;
+        const batches = item.expiryBatches;
+        if (Array.isArray(batches) && batches.every((batch): batch is ExpiryBatch =>
+          typeof batch === "object" && batch !== null && "date" in batch && "qty" in batch
+        ) && batches.length > 0) {
+          defaultBatches = batches;
         } else if (rawExpiry) {
           defaultBatches = [{ date: String(rawExpiry), qty: currentStock }];
         }
@@ -220,25 +251,25 @@ export default function Inventory() {
     setNotice("");
 
     try {
-      const response = await fetch(`${API_BASE}/addproduct.php`, {
+      const user = getInventoryActor();
+      const productData = {
+        ...formData,
+        stockQuantity: Number(formData.stockQuantity),
+        costPrice: Number(formData.costPrice),
+        sellingPrice: Number(formData.sellingPrice),
+        threshold: Number(formData.threshold || 5),
+        expirationDate: formData.expirationDate || null,
+        supplier: formData.supplier || null,
+        description: formData.description || null,
+        actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" },
+      };
+      const isStaffRequest = user.role === "staff";
+      const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "addproduct.php"}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          stockQuantity: Number(formData.stockQuantity),
-          costPrice: Number(formData.costPrice),
-          sellingPrice: Number(formData.sellingPrice),
-          threshold: Number(formData.threshold || 5),
-          expirationDate: formData.expirationDate || null,
-          supplier: formData.supplier || null,
-          description: formData.description || null,
-          actor: (() => {
-            try {
-              const user = JSON.parse(localStorage.getItem("user") || "{}");
-              return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
-            } catch { return { name: "Unknown" }; }
-          })(),
-        }),
+        body: JSON.stringify(isStaffRequest
+          ? { action: "add", product: productData }
+          : productData),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getInventoryAuthToken() || ""}` },
       });
 
       const data = await response.json();
@@ -246,7 +277,7 @@ export default function Inventory() {
         throw new Error(data.message || "Could not save the product.");
       }
 
-      setNotice("Product added successfully.");
+      setNotice(isStaffRequest ? "Product request sent to Admin for approval. Inventory will update after approval." : "Product added successfully.");
       setFormData(emptyForm);
       setShowAdd(false);
       await loadProducts();
@@ -336,7 +367,7 @@ export default function Inventory() {
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
       actor: (() => {
         try {
-          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          const user = getAuthUser();
           return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
         } catch { return { name: "Unknown" }; }
       })(),
@@ -345,14 +376,18 @@ export default function Inventory() {
     setSaving(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE}/updateproduct.php`, {
+      const user = getInventoryActor();
+      const isStaffRequest = user.role === "staff";
+      const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "updateproduct.php"}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedProductData),
+        body: JSON.stringify(isStaffRequest
+          ? { action: "update", product: updatedProductData }
+          : updatedProductData),
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getInventoryAuthToken() || ""}` },
       });
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.message || "Failed to update product details.");
-      setNotice("Product details updated successfully.");
+      setNotice(isStaffRequest ? "Change request sent to Admin for approval. Inventory will update after approval." : "Product details updated successfully.");
       setEditingProduct(null);
       setStockReasonModalOpen(false);
       await loadProducts();
@@ -426,6 +461,11 @@ export default function Inventory() {
             {notice}
           </div>
         )}
+        {currentUserRole === "staff" && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xs">
+            Product additions and edits are submitted to Admin for approval. They will not affect inventory until approved.
+          </div>
+        )}
 
         {/* SEARCH & ACTIONS BAR */}
         <div className="bg-[#b0c8fa] p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap items-center justify-between gap-4">
@@ -463,19 +503,21 @@ export default function Inventory() {
                   Import Product
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError("");
-                    setNotice("");
-                    setFormData(emptyForm);
-                    setShowAdd(true);
-                  }}
-                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-1.5"
-                >
-                  <Plus size={14} />
-                  Add Product
-                </button>
+                {canEditInventory && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError("");
+                      setNotice("");
+                      setFormData(emptyForm);
+                      setShowAdd(true);
+                    }}
+                    className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-1.5"
+                  >
+                    <Plus size={14} />
+                    Add Product
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -600,7 +642,7 @@ export default function Inventory() {
                 disabled={saving}
                 className="px-6 py-2 rounded-xl font-extrabold text-xs text-white uppercase tracking-wider bg-blue-600 hover:bg-blue-500 shadow-md transition active:scale-95 disabled:opacity-60"
               >
-                {saving ? "Saving..." : "Add Product"}
+                {saving ? "Submitting..." : currentUserRole === "staff" ? "Submit for Approval" : "Add Product"}
               </button>
             </div>
           </form>
@@ -828,7 +870,7 @@ export default function Inventory() {
                   onClick={handlePreSaveEditProduct}
                   className="px-5 py-1.5 bg-blue-600 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-blue-500 shadow-md transition active:scale-95"
                 >
-                  Save Changes
+                  {currentUserRole === "staff" ? "Submit for Approval" : "Save Changes"}
                 </button>
               </div>
             </div>
@@ -871,6 +913,7 @@ export default function Inventory() {
                   className="w-full p-3 border border-gray-300 rounded-xl text-xs outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200 font-medium"
                   required
                 />
+                {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
               </div>
 
               <div className="flex justify-end gap-2.5 pt-2 border-t border-gray-200">
@@ -916,9 +959,7 @@ export default function Inventory() {
                       <th className="py-3 px-4 border-b border-blue-900 w-[9%] text-center">
                         Expiry Dates
                       </th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[6%] text-center">
-                        Action
-                      </th>
+                      {canEditInventory && <th className="py-3 px-4 border-b border-blue-900 w-[6%] text-center">Action</th>}
                     </tr>
                   ) : (
                     <tr>
@@ -1006,14 +1047,14 @@ export default function Inventory() {
                                   <Calendar size={12} /> View Dates
                                 </button>
                               </td>
-                              <td className="py-3 px-4 text-center whitespace-nowrap">
+                              {canEditInventory && <td className="py-3 px-4 text-center whitespace-nowrap">
                                 <button
                                   onClick={() => openEditModal(item)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 border border-blue-200 transition active:scale-95"
                                 >
                                   <Edit3 size={12} /> Edit
                                 </button>
-                              </td>
+                              </td>}
                             </>
                           ) : (
                             <>

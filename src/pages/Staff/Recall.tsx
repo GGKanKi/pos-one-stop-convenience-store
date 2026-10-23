@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Search, ArrowLeft, ShoppingBag, X, AlertTriangle, Lock, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { getAuthUser } from "../../services/authSession";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
 const MANAGER_PIN = "123456"; // Admin PIN requirement
@@ -120,7 +121,7 @@ export default function RecallTransactions() {
       if (response.ok) {
         const data = await response.json();
         const rawList = Array.isArray(data) ? data : Array.isArray(data?.transactions) ? data.transactions : [];
-        const mapped: Transaction[] = rawList.map((tx: any, idx: number) => ({
+        const mapped: Transaction[] = rawList.map((tx: Record<string, unknown>, idx: number) => ({
           id: tx.id ? String(tx.id) : String(idx + 1).padStart(2, '0'),
           dbTransactionId: Number(tx.dbTransactionId || tx.id) || undefined,
           time: String(tx.time || tx.created_at || "09:15 AM"),
@@ -286,7 +287,7 @@ export default function RecallTransactions() {
           manager_pin: managerPin,
           actor: (() => {
             try {
-              const user = JSON.parse(localStorage.getItem("user") || "{}");
+              const user = getAuthUser();
               return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
             } catch { return { name: "Unknown" }; }
           })(),

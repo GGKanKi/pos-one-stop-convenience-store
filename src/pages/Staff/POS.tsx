@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag, Lock
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
+import { getAuthUser, getAuthUserId } from "../../services/authSession";
 
 interface Product {
   id: number;
@@ -24,14 +25,7 @@ export default function POS() {
   // Clock-in Session Check
   useEffect(() => {
     let cancelled = false;
-    let userId: string | number | null = localStorage.getItem("userId");
-
-    try {
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
-      userId = user.id || userId;
-    } catch {
-      userId = localStorage.getItem("userId");
-    }
+    const userId = getAuthUserId();
 
     if (!userId) {
       setClockInError("Could not clock in: user session was not found. Please sign in again.");
@@ -70,6 +64,8 @@ export default function POS() {
   // Inventory Password Protection State
   const [showInventoryPasswordModal, setShowInventoryPasswordModal] = useState(false);
   const [staffPasswordInput, setStaffPasswordInput] = useState("");
+  const [staffPasswordError, setStaffPasswordError] = useState("");
+  const [isVerifyingStaff, setIsVerifyingStaff] = useState(false);
 
   // Scan & Search Window State
   const [scanCode, setScanCode] = useState("");
@@ -96,7 +92,7 @@ export default function POS() {
   }, [cart]);
 
   // Open discount modal only if an item in cart is selected
-  const triggerDiscountModal = () => {
+  const triggerDiscountModal = useCallback(() => {
     if (selectedItemId === null || !cart.some(item => item.id === selectedItemId)) {
       alert("Please select an item from the cart to apply a discount.");
       return;
@@ -105,7 +101,7 @@ export default function POS() {
     const item = cart.find(i => i.id === selectedItemId);
     setDiscountInput(item?.discount ? item.discount.toFixed(2) : "0.00");
     setShowDiscountModal(true);
-  };
+  }, [selectedItemId, cart]);
 
   // Auto focus input when Discount Modal Opens
   useEffect(() => {
@@ -143,7 +139,7 @@ export default function POS() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItemId, cart]);
+  }, [selectedItemId, cart, triggerDiscountModal]);
 
   // Auto-focus on Cash Input when Payment Modal opens
   useEffect(() => {
@@ -167,12 +163,12 @@ export default function POS() {
     try {
       const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(query)}`, "GET");
       if (response.success && Array.isArray(response.products)) {
-        const mapped: Product[] = response.products.map((item: any) => ({
+        const mapped: Product[] = response.products.map((item: Record<string, unknown>) => ({
           id: Number(item.id),
           code: String(item.code || ''),
           name: String(item.name || ''),
           description: String(item.description || ''),
-          price: parseFloat(item.price) || 0,
+          price: parseFloat(String(item.price ?? "0")) || 0,
           qty: 1,
           stock: Number(item.stock || 0),
           category: String(item.category || ''),
@@ -245,7 +241,7 @@ export default function POS() {
     try {
       const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(scanCode.trim())}`, "GET");
       if (response.success && response.products.length > 0) {
-        const exactMatch = response.products.find((p: any) => p.code === scanCode.trim()) || response.products[0];
+        const exactMatch = response.products.find((p: Record<string, unknown>) => p.code === scanCode.trim()) || response.products[0];
         addToCart({
           id: Number(exactMatch.id),
           code: String(exactMatch.code || ''),
@@ -345,11 +341,30 @@ export default function POS() {
   };
 
   // INVENTORY ACCESS SUBMIT
-  const handleInventoryAccessSubmit = (e: React.FormEvent) => {
+  const handleInventoryAccessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShowInventoryPasswordModal(false);
-    setStaffPasswordInput("");
-    navigate("/admin/dashboard", { state: { fullScreen: true, staffView: true } });
+    setStaffPasswordError("");
+    setIsVerifyingStaff(true);
+    try {
+      const result = await apiRequest("/verifystaffpassword.php", "POST", { password: staffPasswordInput });
+      if (!result.success) throw new Error(result.message || "The staff password is incorrect.");
+      const verifiedStaff = result.data?.staff;
+      if (!verifiedStaff?.id) throw new Error("Staff account details could not be loaded.");
+      const staffToken = result.data?.token;
+      if (!staffToken) throw new Error("Staff verification did not create a secure session. Please try again.");
+      const clockIn = await apiRequest("/clockin.php", "POST", { user_id: verifiedStaff.id }, staffToken);
+      if (!clockIn.success) throw new Error(clockIn.message || "Unable to clock Staff in.");
+      sessionStorage.setItem("staffToolsUnlockUntil", String(Date.now() + 30 * 60 * 1000));
+      sessionStorage.setItem("staffToolsUser", JSON.stringify(verifiedStaff));
+      sessionStorage.setItem("staffToolsToken", staffToken);
+      setShowInventoryPasswordModal(false);
+      setStaffPasswordInput("");
+      navigate("/admin/dashboard", { state: { fullScreen: true, staffView: true } });
+    } catch (error) {
+      setStaffPasswordError(error instanceof Error ? error.message : "Unable to verify the staff password.");
+    } finally {
+      setIsVerifyingStaff(false);
+    }
   };
 
   // FINALIZE TRANSACTION
@@ -364,7 +379,7 @@ export default function POS() {
       totalAmount: total,
       actor: (() => {
         try {
-          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          const user = getAuthUser();
           return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
         } catch { return { name: "Unknown" }; }
       })(),
@@ -379,16 +394,21 @@ export default function POS() {
       })),
     };
 
-    let savedResponse: any;
+    let savedResponse: {
+      success?: boolean;
+      transaction_id?: string | number;
+      message?: string;
+      items?: Array<{ transactionItemId?: number }>;
+    };
     try {
       savedResponse = await apiRequest("/savetransaction.php", "POST", transactionData);
       if (!savedResponse?.success || !savedResponse.transaction_id) {
         alert(savedResponse?.message || "The sale could not be saved.");
         return;
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Fetch/Server Error:", err);
-      alert("Connection Error: " + (err.message || "Failed to reach PHP server."));
+      alert("Connection Error: " + (err instanceof Error ? err.message : "Failed to reach PHP server."));
       return;
     }
 
@@ -447,7 +467,7 @@ export default function POS() {
                   <Lock size={18} />
                   <p className="text-xs font-black tracking-widest uppercase">STAFF VERIFICATION</p>
                 </div>
-                <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="text-cyan-400 hover:text-white transition">
+                <button type="button" onClick={() => { setShowInventoryPasswordModal(false); setStaffPasswordError(""); }} className="text-cyan-400 hover:text-white transition">
                   <X size={20} />
                 </button>
               </div>
@@ -465,11 +485,12 @@ export default function POS() {
                     className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-lg outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition placeholder-cyan-500/50" 
                   />
                 </div>
+                {staffPasswordError && <p role="alert" className="text-sm text-red-300 text-center">{staffPasswordError}</p>}
               </div>
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">ENTER</button>
+              <button type="submit" disabled={isVerifyingStaff || !staffPasswordInput} className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)] disabled:opacity-50">{isVerifyingStaff ? "VERIFYING..." : "ENTER"}</button>
               <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
             </div>
           </form>

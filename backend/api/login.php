@@ -37,6 +37,7 @@ if (!$responseHelperPath || !file_exists($responseHelperPath)) {
 
 require_once $dbPath;
 require_once $responseHelperPath;
+require_once __DIR__ . '/../helpers/auth.php';
 
 // Get request body
 $input = getJsonInput();
@@ -81,11 +82,12 @@ try {
 
     // 3. Return user information without the password hash
     unset($user['password_hash']);
+    $token = createAuthSession($pdo, (int)$user['id']);
 
     sendJsonResponse(
         true,
         "Login successful.",
-        ["user" => $user],
+        ["user" => $user, "token" => $token],
         200
     );
 

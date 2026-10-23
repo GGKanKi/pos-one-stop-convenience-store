@@ -3,20 +3,26 @@
 
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp 
+  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp, BadgeCheck
 } from 'lucide-react';
+import { clearAuthSession, getAuthUser } from '../services/authSession';
 
 export default function Sidebar() {
   const location = useLocation();
 
   // Check if opened from POS Inventory Monitoring button
   const isStaffView = location.state?.staffView === true;
+  const role = String(getAuthUser().role || '').toLowerCase();
+  const unlockUntil = Number(sessionStorage.getItem('staffToolsUnlockUntil') || 0);
+  // eslint-disable-next-line react-hooks/purity
+  const canUseStaffTools = role === 'staff' || role === 'admin' || (role === 'cashier' && unlockUntil > Date.now());
 
   // Navigation items configuration with access permission flag
   const navItems = [
-    { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, allowedForStaff: false },
+    { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, allowedForStaff: true },
     { name: 'Staff', path: '/admin/staff', icon: Users, allowedForStaff: false },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, allowedForStaff: true },
+    { name: 'Inventory Approvals', path: '/admin/inventory-approvals', icon: BadgeCheck, allowedForStaff: false },
     { name: 'Transaction History', path: '/admin/transactions', icon: History, allowedForStaff: false },
     { name: 'Product Status', path: '/admin/productstatus', icon: BarChart3, allowedForStaff: false },
     { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale, allowedForStaff: false },
@@ -52,7 +58,7 @@ export default function Sidebar() {
         {navItems.map((item) => {
           // Case-insensitive active check matching App.tsx routes
           const active = location.pathname.toLowerCase() === item.path.toLowerCase();
-          const isDisabled = isStaffView && !item.allowedForStaff;
+          const isDisabled = item.allowedForStaff ? !canUseStaffTools : role !== 'admin';
 
           if (isDisabled) {
             return (
@@ -87,6 +93,9 @@ export default function Sidebar() {
       <div className="mt-auto pt-4 border-t border-white/10">
         <Link 
           to="/login" 
+          onClick={() => {
+            clearAuthSession();
+          }}
           className="flex items-center gap-3 w-full p-3 rounded-xl text-red-300 hover:bg-red-500/10 transition-all font-medium group no-underline"
         >
           <LogOut size={18} className="group-hover:translate-x-1 transition-transform" />

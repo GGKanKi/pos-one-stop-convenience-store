@@ -2,6 +2,8 @@
 import { type LucideIcon, AlertCircle, TrendingUp, DollarSign, Award, ArrowLeft, Clock, RefreshCw, ChevronRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
+import StaffAttendanceControl from '../../components/StaffAttendanceControl';
+import { getActiveStaffUser } from '../../services/authSession';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Convenience/backend/api';
 type DashboardData = {
@@ -28,6 +30,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const isFullScreen = location.state?.fullScreen;
   const isStaffView = location.state?.staffView === true;
+  const hasStaffAttendance = Boolean(getActiveStaffUser().id);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -102,6 +105,8 @@ export default function AdminDashboard() {
             )}
           </div>
         </header>
+
+        {hasStaffAttendance && <StaffAttendanceControl />}
 
         {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold">{error}</div>}
 

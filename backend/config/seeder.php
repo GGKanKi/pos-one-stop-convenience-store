@@ -5,8 +5,8 @@ try {
 
     // insert test user
     $stmt = $pdo->prepare("
-        INSERT INTO users (email, password_hash, first_name, last_name) 
-        VALUES (:email, :password, :first_name, :last_name)
+        INSERT INTO users (email, password_hash, first_name, last_name, role)
+        VALUES (:email, :password, :first_name, :last_name, 'admin')
     ");
 
     $stmt->execute([

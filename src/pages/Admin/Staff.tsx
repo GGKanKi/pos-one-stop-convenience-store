@@ -4,6 +4,7 @@ import { Calendar, User, Edit3, Users } from 'lucide-react';
 
 type AttendanceRow = {
   user_id: number;
+  attendance_id: number | null;
   staff_id: string | null;
   first_name: string;
   last_name: string;
@@ -183,7 +184,7 @@ export default function StaffPage() {
                     const timeIn = row.clock_in;
                     const timeOut = row.clock_out;
                     return (
-                      <tr key={`${row.user_id}-${row.date}-${row.clock_in || index}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-blue-50/40'} hover:bg-blue-100/50 transition-colors`}>
+                      <tr key={row.attendance_id ?? `${row.user_id}-${row.date}-${index}`} className={`${index % 2 === 0 ? 'bg-white' : 'bg-blue-50/40'} hover:bg-blue-100/50 transition-colors`}>
                         <td className="py-3 px-4 font-mono font-bold text-gray-500">{row.staff_id || 'ID NOT ASSIGNED'}</td>
                         <td className="py-3 px-4 font-bold text-gray-800">{row.first_name} {row.last_name}</td>
                         

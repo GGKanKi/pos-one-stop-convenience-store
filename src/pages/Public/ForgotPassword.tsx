@@ -1,67 +1,70 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { BarChart3, Package, ShoppingCart, Store } from "lucide-react";
+import { apiRequest } from "../../services/api";
 
 export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage("");
+    setError("");
+    try {
+      const response = await apiRequest("/requestpasswordreset.php", "POST", { email });
+      if (!response.success) throw new Error(response.message || "Could not send the reset link.");
+      setMessage(response.message || "If an account exists for that email, a reset link has been sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send the reset link. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen relative flex items-center justify-center">
-
-      {/* Background image */}
-      <img
-        src="/pictures/store.jpg" // 
-        className="absolute inset-0 w-full h-full object-cover"
-      />
-
-      {/* DARK OVERLAY */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/90 via-blue-900/80 to-black/90" />
-
-      {/* CENTER CARD */}
-      <div className="relative z-10 w-full max-w-md px-6">
-        <form
-          className="flex flex-col gap-6 p-8 rounded-2xl 
-                     bg-white/10 backdrop-blur-lg 
-                     border border-white/20 shadow-2xl text-white"
-        >
-          {/* TITLE */}
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold">Forgot Password</h2>
-            <p className="text-sm text-blue-200 mt-1">
-              Enter your email to reset your password
-            </p>
+    <div className="min-h-screen flex flex-col md:flex-row">
+      <div className="hidden md:flex flex-1 relative overflow-hidden">
+        <img src="/pictures/store.jpg" alt="Store Environment" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 via-blue-800/70 to-blue-950/90" />
+        <div className="relative z-10 flex flex-col justify-between w-full text-white p-6 md:p-10 lg:p-16">
+          <div>
+            <div className="flex items-center gap-3 mb-6 md:mb-8">
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-2xl flex items-center justify-center"><Store className="w-7 h-7 text-white" /></div>
+              <div><h1 className="text-xl md:text-2xl lg:text-3xl font-bold">One Stop</h1><p className="text-blue-200 text-sm">Convenience Store</p></div>
+            </div>
+            <div className="max-w-md">
+              <h2 className="text-2xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-4 md:mb-6">InBentalytix</h2>
+              <p className="text-blue-100 text-sm md:text-base lg:text-lg opacity-90">Streamline your retail operations with our powerful point-of-sale and inventory management platform.</p>
+            </div>
           </div>
-
-          {/* EMAIL */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm text-blue-100">Email Address</label>
-            <input
-              type="email"
-              placeholder="your@email.com"
-              className="w-full px-4 py-3 rounded-lg 
-                         bg-white/10 text-white placeholder-gray-300 
-                         border border-white/20 
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-md">
+            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><ShoppingCart className="w-6 h-6 text-white" /><span className="text-sm text-center">Fast Checkout</span></div>
+            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><Package className="w-6 h-6 text-white" /><span className="text-sm text-center">Inventory Tracking</span></div>
+            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><BarChart3 className="w-6 h-6 text-white" /><span className="text-sm text-center">Analytics</span></div>
           </div>
+        </div>
+      </div>
 
-          {/* BUTTON */}
-          <button
-            type="button"
-            className="w-full py-3 rounded-lg 
-                       bg-blue-600 hover:bg-blue-700 
-                       text-white transition shadow-lg shadow-blue-500/30"
-          >
-            Send Reset Link
-          </button>
-
-          {/* BACK LINK */}
-          <p className="text-sm text-center text-blue-200">
-            Remember your password?{" "}
-            <Link
-              to="/login"
-              className="underline text-blue-300 hover:text-blue-400"
-            >
-              Back to Login
-            </Link>
-          </p>
-        </form>
+      <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 px-6 py-12">
+        <div className="w-full max-w-md">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-xl text-white">
+            <div>
+              <h2 className="text-2xl font-bold">Forgot Password?</h2>
+              <p className="mt-1 text-sm text-blue-200">Enter your account email and we’ll send you a reset link.</p>
+            </div>
+            {message && <div role="status" className="bg-green-500/20 border border-green-400 text-green-100 px-4 py-2 rounded-lg text-sm">{message}</div>}
+            {error && <div role="alert" className="bg-red-500/20 border border-red-400 text-red-100 px-4 py-2 rounded-lg text-sm">{error}</div>}
+            <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/30 active:scale-95 disabled:opacity-50">
+              {loading ? "Sending..." : "Send Reset Link"}
+            </button>
+            <Link to="/login" className="text-blue-300 hover:text-blue-400 text-sm underline">Back to Sign In</Link>
+          </form>
+        </div>
       </div>
     </div>
   );
