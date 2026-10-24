@@ -125,7 +125,6 @@ export default function Transactions() {
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <div className="ml-2">
             <h1 className="text-lg font-extrabold uppercase tracking-wider flex items-center gap-2">
-              <History size={20} className="text-blue-300" />
               Transaction History
             </h1>
           </div>

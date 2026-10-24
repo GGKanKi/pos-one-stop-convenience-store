@@ -9,6 +9,7 @@ import CashRegister from './pages/Staff/CashRegister';
 import LogoutId from './pages/Staff/LogoutId';
 import POS from './pages/Staff/POS';
 import InventoryCheck from './pages/Staff/InventoryCheck';
+import Recall from './pages/Staff/Recall';
 
 import AdminDashboard from './pages/Admin/Dashboard';
 import StaffPage from './pages/Admin/Staff';
@@ -16,9 +17,9 @@ import Inventory from './pages/Admin/Inventory';
 import Discrepancies from './pages/Admin/Discrepancies';
 import Transactions from './pages/Admin/Transaction';
 import SalesProfit from './pages/Admin/SalesProfit';
-import Recall from './pages/Staff/Recall';
 import ProductStatus from './pages/Admin/ProductStatus';
 import InventoryApprovals from './pages/Admin/InventoryApprovals';
+import DailyReports from './pages/Admin/DailyReports';
 
 function App() {
   return (
@@ -55,6 +56,8 @@ function App() {
         <Route path="/admin/transactions" element={<Transactions />} />
         <Route path="/admin/salesprofit" element={<SalesProfit />} />
         <Route path="/admin/productstatus" element={<ProductStatus />} />
+        <Route path="/admin/daily-reports" element={<DailyReports />} />
+        <Route path="/admin/dailyreports" element={<DailyReports />} />
 
         {/* FALLBACK */}
         <Route
