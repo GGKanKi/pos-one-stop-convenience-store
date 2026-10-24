@@ -59,39 +59,9 @@ try {
         // 1. RESTOCK ACTION TYPE
         // -------------------------------------------------------------
         if ($request['action_type'] === 'restock') {
-            $productId = (int)$request['product_id'];
-            $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
-            $find->execute([$productId]);
-            $before = $find->fetch();
-
-            if (!$before) {
-                throw new InvalidArgumentException("The product was removed before this restock request could be approved.");
-            }
-
-            $qtyToAdd = ($approvedQty !== false && $approvedQty !== null && $approvedQty > 0) 
-                ? $approvedQty 
-                : (int)($data['restockQty'] ?? 0);
-
-            if ($qtyToAdd <= 0) {
-                throw new InvalidArgumentException("Invalid restock quantity specified.");
-            }
-
-            $newStock = (int)$before['stockQuantity'] + $qtyToAdd;
-
-            $update = $pdo->prepare("UPDATE products SET stockQuantity = ? WHERE id = ?");
-            $update->execute([$newStock, $productId]);
-
-            $audit->execute([
-                'Stock Addition',
-                $productId,
-                $before['productName'],
-                json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
-                json_encode(['stockQuantity' => $newStock], JSON_THROW_ON_ERROR),
-                $qtyToAdd,
-                $note !== '' ? $note : 'Approved restock request #' . $requestId,
-                $adminId,
-                $adminName
-            ]);
+            // RESTOCK APPROVAL: Do NOT touch product inventory here. 
+            // It moves to 'approved' so staff can view it under "Approved Restocked Orders (To Be Bought)",
+            // edit the received quantity upon arrival, and finalize it using the Receive button.
         } 
         // -------------------------------------------------------------
         // 2. ADD OR UPDATE ACTION TYPES
@@ -154,8 +124,8 @@ try {
 
                 $submittedBefore = json_decode((string)$request['before_data'], true) ?: [];
                 
-                // Corrected stock delta calculation
-                $requestedStockDelta = $stock - (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
+                $submittedStockBefore = (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
+                $requestedStockDelta = $stock - $submittedStockBefore;
                 $stock = (int)$before['stockQuantity'] + $requestedStockDelta;
 
                 if ($stock < 0) {
@@ -249,7 +219,6 @@ try {
                     $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
                 }
 
-                // Logs to inventory_audit upon approval
                 if ($stockDelta !== 0) {
                     $audit->execute([
                         $stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction',
@@ -272,7 +241,7 @@ try {
     $review->execute([$status, $adminId, $note !== '' ? substr($note, 0, 500) : null, $requestId]);
 
     $pdo->commit();
-    sendJsonResponse(true, $decision === 'approve' ? "Change approved and applied to inventory." : "Change rejected.");
+    sendJsonResponse(true, $decision === 'approve' ? "Restock order approved. Moved to staff dashboard for receiving." : "Change rejected.");
 } catch (InvalidArgumentException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     sendJsonResponse(false, $e->getMessage(), null, 400);
