@@ -15,10 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 require __DIR__ . '/../config/db.php';
+
 $date = is_string($_GET['date'] ?? null) ? $_GET['date'] : '';
 $trendDays = filter_var($_GET['trendDays'] ?? 7, FILTER_VALIDATE_INT);
 $trendDays = in_array($trendDays, [7, 30], true) ? $trendDays : 7;
 $parsedDate = DateTime::createFromFormat('!Y-m-d', $date);
+
 if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid date. Use YYYY-MM-DD.']);
@@ -26,11 +28,12 @@ if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date) {
 }
 
 try {
+    // 1. Gross Sales
     $salesStmt = $pdo->prepare("SELECT COALESCE(SUM(total_amount), 0) FROM transactions WHERE DATE(created_at) = ? AND status = 'completed'");
     $salesStmt->execute([$date]);
     $grossSales = (float)$salesStmt->fetchColumn();
 
-    // Aggregate sold totals by day, then fill missing dates so the graph always has a continuous range.
+    // 2. Sales Trend (Fixed syntax)
     $trendStart = (new DateTime($date))->modify('-' . ($trendDays - 1) . ' days')->format('Y-m-d');
     $trendStmt = $pdo->prepare(
         "SELECT DATE(created_at) AS sale_date, SUM(total_amount) AS total
@@ -50,7 +53,7 @@ try {
         $trendDate->modify('+1 day');
     }
 
-    // New sales retain their unit cost; old rows fall back to the product's current cost and are flagged as estimates.
+    // 3. Net Profit Calculation
     $profitStmt = $pdo->prepare(
         "SELECT COALESCE(SUM(t.total_amount - COALESCE(c.cost_total, 0)), 0) AS net_profit,
                 COALESCE(SUM(c.estimated_items), 0) AS estimated_items
@@ -69,6 +72,7 @@ try {
     $profitStmt->execute([$date]);
     $profit = $profitStmt->fetch();
 
+    // 4. Top Selling Products
     $topStmt = $pdo->prepare(
         "SELECT ti.product_id AS id, ti.product_name AS name, SUM(ti.quantity) AS quantity
          FROM transaction_items ti
@@ -81,6 +85,7 @@ try {
     $topStmt->execute([$date]);
     $topProducts = $topStmt->fetchAll();
 
+    // 5. Low Stock Products
     $lowStock = $pdo->query(
         'SELECT id, productName AS name, barcode, stockQuantity, threshold
          FROM products
@@ -88,6 +93,25 @@ try {
          ORDER BY (threshold - stockQuantity) DESC, productName ASC'
     )->fetchAll();
 
+    // 6. Approved Restock Requests (Purchases to be bought)
+    $approvedRestocksStmt = $pdo->query("
+        SELECT 
+            icr.id,
+            icr.product_id,
+            p.productName,
+            p.barcode,
+            CAST(JSON_UNQUOTE(JSON_EXTRACT(icr.requested_data, '$.restockQty')) AS UNSIGNED) AS approvedQty,
+            icr.reviewed_at AS approvedAt
+        FROM inventory_change_requests icr
+        LEFT JOIN products p ON icr.product_id = p.id
+        WHERE icr.action_type = 'restock' 
+          AND icr.status = 'approved'
+        ORDER BY icr.reviewed_at DESC
+        LIMIT 20
+    ");
+    $approvedRestocks = $approvedRestocksStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 7. Latest Inventory Activity Log
     $latestStmt = $pdo->query(
         'SELECT id, action_type AS action, product_name, quantity_change, reason, user_name, created_at
          FROM inventory_audit ORDER BY created_at DESC, id DESC LIMIT 6'
@@ -111,6 +135,7 @@ try {
         ];
     }
 
+    // Response array
     echo json_encode([
         'success' => true,
         'date' => $date,
@@ -122,8 +147,10 @@ try {
         'bestSeller' => $topProducts[0] ?? null,
         'topProducts' => $topProducts,
         'lowStock' => $lowStock,
+        'approvedRestocks' => $approvedRestocks,
         'latestInventoryTransactions' => $latest,
     ], JSON_INVALID_UTF8_SUBSTITUTE);
+
 } catch (Throwable $e) {
     error_log('Dashboard error: ' . $e->getMessage());
     http_response_code(500);

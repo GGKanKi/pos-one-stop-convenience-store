@@ -3,29 +3,45 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Content-Type: application/json; charset=UTF-8");
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { 
+    http_response_code(200); 
+    exit; 
+}
+
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/auth.php';
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') sendJsonResponse(false, "Method not allowed.", null, 405);
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sendJsonResponse(false, "Method not allowed.", null, 405);
+}
+
 $input = getJsonInput();
 $requestId = filter_var($input['request_id'] ?? null, FILTER_VALIDATE_INT);
 $decision = $input['decision'] ?? '';
 $note = trim((string)($input['note'] ?? ''));
+$approvedQty = filter_var($input['approved_qty'] ?? null, FILTER_VALIDATE_INT);
+
 if (!$requestId || !in_array($decision, ['approve', 'reject'], true)) {
     sendJsonResponse(false, "Provide a valid decision.", null, 400);
 }
 
 try {
     $admin = requireAuthUser($pdo);
-    if ($admin['role'] !== 'admin') sendJsonResponse(false, "Admin access required.", null, 403);
+    $allowedRoles = ['admin', 'manager'];
+    if (!in_array(strtolower($admin['role'] ?? ''), $allowedRoles, true)) {
+        sendJsonResponse(false, "Admin access required.", null, 403);
+    }
+    
     $adminId = (int)$admin['id'];
-    $adminName = trim($admin['first_name'] . ' ' . $admin['last_name']);
+    $adminName = trim(($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? '')) ?: 'Admin';
 
     $pdo->beginTransaction();
     $requestStmt = $pdo->prepare("SELECT * FROM inventory_change_requests WHERE id = ? AND status = 'pending' LIMIT 1 FOR UPDATE");
     $requestStmt->execute([$requestId]);
     $request = $requestStmt->fetch();
+
     if (!$request) {
         $pdo->rollBack();
         sendJsonResponse(false, "This request is no longer pending.", null, 409);
@@ -33,118 +49,214 @@ try {
 
     if ($decision === 'approve') {
         $data = json_decode($request['requested_data'], true);
-        if (!is_array($data)) throw new InvalidArgumentException("The submitted change data is invalid.");
-        $name = trim((string)($data['productName'] ?? ''));
-        $barcode = trim((string)($data['barcode'] ?? ''));
-        $category = trim((string)($data['category'] ?? ''));
-        $stock = filter_var($data['stockQuantity'] ?? null, FILTER_VALIDATE_INT);
-        $cost = filter_var($data['costPrice'] ?? null, FILTER_VALIDATE_FLOAT);
-        $price = filter_var($data['sellingPrice'] ?? null, FILTER_VALIDATE_FLOAT);
-        $threshold = filter_var($data['threshold'] ?? 5, FILTER_VALIDATE_INT);
-        if ($name === '' || $barcode === '' || $category === '' || $stock === false || $stock < 0 || $cost === false || $cost < 0 || $price === false || $price < 0 || $threshold === false || $threshold < 0) {
-            throw new InvalidArgumentException("The requested product fields are invalid.");
+        if (!is_array($data)) {
+            throw new InvalidArgumentException("The submitted change data is invalid.");
         }
-        $expirationDate = !empty($data['expirationDate']) ? (string)$data['expirationDate'] : null;
-        if ($expirationDate !== null) {
-            $date = DateTime::createFromFormat('!Y-m-d', $expirationDate);
-            if (!$date || $date->format('Y-m-d') !== $expirationDate) throw new InvalidArgumentException("Expiration date is invalid.");
-        }
-        $batches = $data['expiryBatches'] ?? [];
-        if ($request['action_type'] === 'add') {
-            $batches = $expirationDate && $stock > 0 ? [['date' => $expirationDate, 'qty' => $stock]] : [];
-        } elseif (!is_array($batches) || count($batches) > 100) {
-            throw new InvalidArgumentException("Expiry batches are invalid.");
-        }
-        foreach ($batches as $batch) {
-            $batchDate = is_array($batch) ? (string)($batch['date'] ?? '') : '';
-            $batchQty = is_array($batch) ? filter_var($batch['qty'] ?? null, FILTER_VALIDATE_INT) : false;
-            $date = $batchDate !== '' ? DateTime::createFromFormat('!Y-m-d', $batchDate) : false;
-            if (!$date || $date->format('Y-m-d') !== $batchDate || $batchQty === false || $batchQty < 0) throw new InvalidArgumentException("An expiry batch is invalid.");
-        }
-        $description = trim((string)($data['description'] ?? '')) ?: null;
-        $supplier = trim((string)($data['supplier'] ?? '')) ?: null;
-        $encodedBatches = json_encode($batches, JSON_THROW_ON_ERROR);
+
         $audit = $pdo->prepare("INSERT INTO inventory_audit (action_type, product_id, product_name, before_data, after_data, quantity_change, reason, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-        if ($request['action_type'] === 'add') {
-            $insert = $pdo->prepare("INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $insert->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold]);
-            $productId = (int)$pdo->lastInsertId();
-            $audit->execute(['Added New Product', $productId, $name, null, json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), $stock, 'Approved staff request #' . $requestId, $adminId, $adminName]);
-        } else {
+        // -------------------------------------------------------------
+        // 1. RESTOCK ACTION TYPE
+        // -------------------------------------------------------------
+        if ($request['action_type'] === 'restock') {
             $productId = (int)$request['product_id'];
             $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
             $find->execute([$productId]);
             $before = $find->fetch();
-            if (!$before) throw new InvalidArgumentException("The product was removed before this request could be approved.");
-            $submittedBefore = json_decode((string)$request['before_data'], true) ?: [];
-            $requestedStockDelta = $stock - (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
-            $stock = (int)$before['stockQuantity'] + $requestedStockDelta;
-            if ($stock < 0) throw new InvalidArgumentException("Current stock changed while this request was pending; the approved adjustment would make stock negative. Reject and ask Staff to resubmit.");
-            $stockDelta = $stock - (int)$before['stockQuantity'];
-            $reason = trim((string)($data['stockChangeReason'] ?? ''));
-            if ($stockDelta !== 0 && $reason === '') throw new InvalidArgumentException("A reason is required for the requested stock change.");
-            $baseFields = [
-                'productName' => $submittedBefore['productName'] ?? null,
-                'barcode' => $submittedBefore['barcode'] ?? null,
-                'description' => $submittedBefore['description'] ?? null,
-                'costPrice' => $submittedBefore['costPrice'] ?? null,
-                'sellingPrice' => $submittedBefore['sellingPrice'] ?? null,
-                'category' => $submittedBefore['category'] ?? null,
-                'supplier' => $submittedBefore['supplier'] ?? null,
-                'expirationDate' => $submittedBefore['expirationDate'] ?? null,
-                'threshold' => $submittedBefore['threshold'] ?? null,
-            ];
-            $requestedFields = ['productName' => $name, 'barcode' => $barcode, 'description' => $description, 'costPrice' => $cost, 'sellingPrice' => $price, 'category' => $category, 'supplier' => $supplier, 'expirationDate' => $expirationDate, 'threshold' => $threshold];
-            $sameValue = static function (string $field, $left, $right): bool {
-                if (in_array($field, ['costPrice', 'sellingPrice'], true)) return (float)$left === (float)$right;
-                if ($field === 'threshold') return (int)$left === (int)$right;
-                return (string)($left ?? '') === (string)($right ?? '');
-            };
-            foreach ($requestedFields as $field => $value) {
-                $requestChangedField = !$sameValue($field, $value, $baseFields[$field] ?? null);
-                $currentChangedField = !$sameValue($field, $before[$field] ?? null, $baseFields[$field] ?? null);
-                if ($requestChangedField && $currentChangedField) {
-                    throw new InvalidArgumentException("This product changed after the request was submitted. Reject it and ask Staff to submit an updated request.");
+
+            if (!$before) {
+                throw new InvalidArgumentException("The product was removed before this restock request could be approved.");
+            }
+
+            $qtyToAdd = ($approvedQty !== false && $approvedQty !== null && $approvedQty > 0) 
+                ? $approvedQty 
+                : (int)($data['restockQty'] ?? 0);
+
+            if ($qtyToAdd <= 0) {
+                throw new InvalidArgumentException("Invalid restock quantity specified.");
+            }
+
+            $newStock = (int)$before['stockQuantity'] + $qtyToAdd;
+
+            $update = $pdo->prepare("UPDATE products SET stockQuantity = ? WHERE id = ?");
+            $update->execute([$newStock, $productId]);
+
+            $audit->execute([
+                'Stock Addition',
+                $productId,
+                $before['productName'],
+                json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
+                json_encode(['stockQuantity' => $newStock], JSON_THROW_ON_ERROR),
+                $qtyToAdd,
+                $note !== '' ? $note : 'Approved restock request #' . $requestId,
+                $adminId,
+                $adminName
+            ]);
+        } 
+        // -------------------------------------------------------------
+        // 2. ADD OR UPDATE ACTION TYPES
+        // -------------------------------------------------------------
+        else {
+            $name = trim((string)($data['productName'] ?? ''));
+            $barcode = trim((string)($data['barcode'] ?? ''));
+            $category = trim((string)($data['category'] ?? ''));
+            $stock = filter_var($data['stockQuantity'] ?? null, FILTER_VALIDATE_INT);
+            $cost = filter_var($data['costPrice'] ?? null, FILTER_VALIDATE_FLOAT);
+            $price = filter_var($data['sellingPrice'] ?? null, FILTER_VALIDATE_FLOAT);
+            $threshold = filter_var($data['threshold'] ?? 5, FILTER_VALIDATE_INT);
+
+            if ($name === '' || $barcode === '' || $category === '' || $stock === false || $stock < 0 || $cost === false || $cost < 0 || $price === false || $price < 0 || $threshold === false || $threshold < 0) {
+                throw new InvalidArgumentException("The requested product fields are invalid.");
+            }
+
+            $expirationDate = !empty($data['expirationDate']) ? (string)$data['expirationDate'] : null;
+            if ($expirationDate !== null) {
+                $date = DateTime::createFromFormat('!Y-m-d', $expirationDate);
+                if (!$date || $date->format('Y-m-d') !== $expirationDate) {
+                    throw new InvalidArgumentException("Expiration date is invalid.");
                 }
-                if (!$requestChangedField) $requestedFields[$field] = $before[$field] ?? null;
             }
-            $baseBatches = $submittedBefore['expiryBatches'] ?? [];
-            $currentBatches = json_decode((string)($before['expiry_batches'] ?? '[]'), true) ?: [];
-            if ($batches !== $baseBatches && $currentBatches !== $baseBatches) {
-                throw new InvalidArgumentException("Expiry batches changed after this request was submitted. Reject it and ask Staff to submit an updated request.");
+
+            $batches = $data['expiryBatches'] ?? [];
+            if ($request['action_type'] === 'add') {
+                $batches = ($expirationDate && $stock > 0) ? [['date' => $expirationDate, 'qty' => $stock]] : [];
+            } elseif (!is_array($batches) || count($batches) > 100) {
+                throw new InvalidArgumentException("Expiry batches are invalid.");
             }
-            if ($batches === $baseBatches) $batches = $currentBatches;
-            // Encode after reconciliation so approval preserves batches
-            // added to the product while this request was pending.
+
+            foreach ($batches as $batch) {
+                $batchDate = is_array($batch) ? (string)($batch['date'] ?? '') : '';
+                $batchQty = is_array($batch) ? filter_var($batch['qty'] ?? null, FILTER_VALIDATE_INT) : false;
+                $date = $batchDate !== '' ? DateTime::createFromFormat('!Y-m-d', $batchDate) : false;
+                if (!$date || $date->format('Y-m-d') !== $batchDate || $batchQty === false || $batchQty < 0) {
+                    throw new InvalidArgumentException("An expiry batch is invalid.");
+                }
+            }
+
+            $description = trim((string)($data['description'] ?? '')) ?: null;
+            $supplier = trim((string)($data['supplier'] ?? '')) ?: null;
             $encodedBatches = json_encode($batches, JSON_THROW_ON_ERROR);
-            $name = $requestedFields['productName'];
-            $barcode = $requestedFields['barcode'];
-            $description = $requestedFields['description'];
-            $cost = $requestedFields['costPrice'];
-            $price = $requestedFields['sellingPrice'];
-            $category = $requestedFields['category'];
-            $supplier = $requestedFields['supplier'];
-            $expirationDate = $requestedFields['expirationDate'];
-            $threshold = $requestedFields['threshold'];
-            $update = $pdo->prepare("UPDATE products SET productName=?, barcode=?, description=?, stockQuantity=?, costPrice=?, sellingPrice=?, category=?, supplier=?, expirationDate=?, expiry_batches=?, threshold=? WHERE id=?");
-            $update->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold, $productId]);
-            $changedBefore = [];
-            $changedAfter = [];
-            $fields = ['productName' => $name, 'barcode' => $barcode, 'description' => $description, 'costPrice' => $cost, 'sellingPrice' => $price, 'category' => $category, 'supplier' => $supplier, 'expirationDate' => $expirationDate, 'threshold' => $threshold];
-            foreach ($fields as $field => $value) {
-                if ((string)($before[$field] ?? '') !== (string)($value ?? '')) { $changedBefore[$field] = $before[$field] ?? null; $changedAfter[$field] = $value; }
+
+            if ($request['action_type'] === 'add') {
+                $insert = $pdo->prepare("INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $insert->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold]);
+                $productId = (int)$pdo->lastInsertId();
+                $audit->execute(['Added New Product', $productId, $name, null, json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), $stock, 'Approved staff request #' . $requestId, $adminId, $adminName]);
+            } else {
+                $productId = (int)$request['product_id'];
+                $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
+                $find->execute([$productId]);
+                $before = $find->fetch();
+
+                if (!$before) {
+                    throw new InvalidArgumentException("The product was removed before this request could be approved.");
+                }
+
+                $submittedBefore = json_decode((string)$request['before_data'], true) ?: [];
+                $requestedStockDelta = $stock - (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
+                $stock = (int)$before['stockQuantity'] + $requestedStockDelta;
+
+                if ($stock < 0) {
+                    throw new InvalidArgumentException("Current stock changed while this request was pending; the approved adjustment would make stock negative. Reject and ask Staff to resubmit.");
+                }
+
+                $stockDelta = $stock - (int)$before['stockQuantity'];
+                $reason = trim((string)($data['stockChangeReason'] ?? ''));
+                if ($stockDelta !== 0 && $reason === '') {
+                    throw new InvalidArgumentException("A reason is required for the requested stock change.");
+                }
+
+                $baseFields = [
+                    'productName' => $submittedBefore['productName'] ?? null,
+                    'barcode' => $submittedBefore['barcode'] ?? null,
+                    'description' => $submittedBefore['description'] ?? null,
+                    'costPrice' => $submittedBefore['costPrice'] ?? null,
+                    'sellingPrice' => $submittedBefore['sellingPrice'] ?? null,
+                    'category' => $submittedBefore['category'] ?? null,
+                    'supplier' => $submittedBefore['supplier'] ?? null,
+                    'expirationDate' => $submittedBefore['expirationDate'] ?? null,
+                    'threshold' => $submittedBefore['threshold'] ?? null,
+                ];
+
+                $requestedFields = [
+                    'productName' => $name,
+                    'barcode' => $barcode,
+                    'description' => $description,
+                    'costPrice' => $cost,
+                    'sellingPrice' => $price,
+                    'category' => $category,
+                    'supplier' => $supplier,
+                    'expirationDate' => $expirationDate,
+                    'threshold' => $threshold
+                ];
+
+                $sameValue = static function (string $field, $left, $right): bool {
+                    if (in_array($field, ['costPrice', 'sellingPrice'], true)) return (float)$left === (float)$right;
+                    if ($field === 'threshold') return (int)$left === (int)$right;
+                    return (string)($left ?? '') === (string)($right ?? '');
+                };
+
+                foreach ($requestedFields as $field => $value) {
+                    $requestChangedField = !$sameValue($field, $value, $baseFields[$field] ?? null);
+                    $currentChangedField = !$sameValue($field, $before[$field] ?? null, $baseFields[$field] ?? null);
+                    if ($requestChangedField && $currentChangedField) {
+                        throw new InvalidArgumentException("This product changed after the request was submitted. Reject it and ask Staff to submit an updated request.");
+                    }
+                    if (!$requestChangedField) $requestedFields[$field] = $before[$field] ?? null;
+                }
+
+                $baseBatches = $submittedBefore['expiryBatches'] ?? [];
+                $currentBatches = json_decode((string)($before['expiry_batches'] ?? '[]'), true) ?: [];
+                if ($batches !== $baseBatches && $currentBatches !== $baseBatches) {
+                    throw new InvalidArgumentException("Expiry batches changed after this request was submitted. Reject it and ask Staff to submit an updated request.");
+                }
+
+                if ($batches === $baseBatches) $batches = $currentBatches;
+                $encodedBatches = json_encode($batches, JSON_THROW_ON_ERROR);
+
+                $name = $requestedFields['productName'];
+                $barcode = $requestedFields['barcode'];
+                $description = $requestedFields['description'];
+                $cost = $requestedFields['costPrice'];
+                $price = $requestedFields['sellingPrice'];
+                $category = $requestedFields['category'];
+                $supplier = $requestedFields['supplier'];
+                $expirationDate = $requestedFields['expirationDate'];
+                $threshold = $requestedFields['threshold'];
+
+                $update = $pdo->prepare("UPDATE products SET productName=?, barcode=?, description=?, stockQuantity=?, costPrice=?, sellingPrice=?, category=?, supplier=?, expirationDate=?, expiry_batches=?, threshold=? WHERE id=?");
+                $update->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold, $productId]);
+
+                $changedBefore = [];
+                $changedAfter = [];
+                $fields = ['productName' => $name, 'barcode' => $barcode, 'description' => $description, 'costPrice' => $cost, 'sellingPrice' => $price, 'category' => $category, 'supplier' => $supplier, 'expirationDate' => $expirationDate, 'threshold' => $threshold];
+                foreach ($fields as $field => $value) {
+                    if ((string)($before[$field] ?? '') !== (string)($value ?? '')) { 
+                        $changedBefore[$field] = $before[$field] ?? null; 
+                        $changedAfter[$field] = $value; 
+                    }
+                }
+
+                $oldBatches = json_decode((string)($before['expiry_batches'] ?? '[]'), true) ?: [];
+                if ($oldBatches !== $batches) { 
+                    $changedBefore['expiryBatches'] = $oldBatches; 
+                    $changedAfter['expiryBatches'] = $batches; 
+                }
+
+                if ($changedAfter !== []) {
+                    $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
+                }
+                if ($stockDelta !== 0) {
+                    $audit->execute([$stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction', $productId, $name, json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR), json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR), $stockDelta, $reason, $adminId, $adminName]);
+                }
             }
-            $oldBatches = json_decode((string)($before['expiry_batches'] ?? '[]'), true) ?: [];
-            if ($oldBatches !== $batches) { $changedBefore['expiryBatches'] = $oldBatches; $changedAfter['expiryBatches'] = $batches; }
-            if ($changedAfter !== []) $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
-            if ($stockDelta !== 0) $audit->execute([$stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction', $productId, $name, json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR), json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR), $stockDelta, $reason, $adminId, $adminName]);
         }
     }
 
     $status = $decision === 'approve' ? 'approved' : 'rejected';
     $review = $pdo->prepare("UPDATE inventory_change_requests SET status = ?, reviewed_by = ?, review_note = ?, reviewed_at = NOW() WHERE id = ? AND status = 'pending'");
     $review->execute([$status, $adminId, $note !== '' ? substr($note, 0, 500) : null, $requestId]);
+
     $pdo->commit();
     sendJsonResponse(true, $decision === 'approve' ? "Change approved and applied to inventory." : "Change rejected.");
 } catch (InvalidArgumentException $e) {
