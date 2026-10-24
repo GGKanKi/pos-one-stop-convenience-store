@@ -153,6 +153,8 @@ try {
                 }
 
                 $submittedBefore = json_decode((string)$request['before_data'], true) ?: [];
+                
+                // Corrected stock delta calculation
                 $requestedStockDelta = $stock - (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
                 $stock = (int)$before['stockQuantity'] + $requestedStockDelta;
 
@@ -246,8 +248,20 @@ try {
                 if ($changedAfter !== []) {
                     $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
                 }
+
+                // Logs to inventory_audit upon approval
                 if ($stockDelta !== 0) {
-                    $audit->execute([$stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction', $productId, $name, json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR), json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR), $stockDelta, $reason, $adminId, $adminName]);
+                    $audit->execute([
+                        $stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction',
+                        $productId,
+                        $name,
+                        json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
+                        json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR),
+                        $stockDelta,
+                        $reason,
+                        $adminId,
+                        $adminName
+                    ]);
                 }
             }
         }

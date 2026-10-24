@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/auth.php';
+
 $data = json_decode(file_get_contents('php://input'), true);
 $productId = filter_var($data['id'] ?? null, FILTER_VALIDATE_INT);
 if (!is_array($data) || !$productId || $productId < 1) {
@@ -87,14 +88,16 @@ if ($productName === '' || $barcode === '' || $category === '') {
 }
 $stockReason = trim((string)($data['stockChangeReason'] ?? ''));
 $authenticatedUser = requireAuthUser($pdo);
-if ($authenticatedUser['role'] !== 'admin') sendJsonResponse(false, 'Admin access required.', null, 403);
+if (!in_array(strtolower($authenticatedUser['role'] ?? ''), ['admin', 'manager'], true)) {
+    sendJsonResponse(false, 'Admin access required.', null, 403);
+}
 $actorId = (int)$authenticatedUser['id'];
-$actorName = trim($authenticatedUser['first_name'] . ' ' . $authenticatedUser['last_name']);
+$actorName = trim(($authenticatedUser['first_name'] ?? '') . ' ' . ($authenticatedUser['last_name'] ?? '')) ?: 'Admin';
 
 try {
     $pdo->beginTransaction();
 
-    // Lock the product while comparing the before/after values and writing its audit rows.
+    // Lock the product while comparing before/after values and writing audit rows
     $findProduct = $pdo->prepare('SELECT * FROM products WHERE id = ? FOR UPDATE');
     $findProduct->execute([$productId]);
     $before = $findProduct->fetch();
@@ -161,7 +164,6 @@ try {
         }
     }
 
-    // Batch details live in JSON; save a readable before/after snapshot in the audit too.
     $oldBatches = json_decode((string)($before['expiry_batches'] ?? '[]'), true) ?: [];
     if ($oldBatches !== $batches) {
         $changedBefore['expiryBatches'] = json_encode($oldBatches, JSON_THROW_ON_ERROR);

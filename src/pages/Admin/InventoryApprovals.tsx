@@ -22,10 +22,11 @@ type ChangeRequest = {
   action_type: "add" | "update" | "restock";
   product_id: number | null;
   requested_by: number;
-  staff_id: string | null;
-  first_name: string;
-  last_name: string;
-  email: string;
+  requested_by_name?: string;
+  staff_id?: string | null;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
   created_at: string;
   before_data: ProductSnapshot | string | null;
   requested_data: ProductSnapshot | string;
@@ -35,6 +36,7 @@ type ProductValue = string | number | null;
 type ExpiryBatch = { date: string; qty: number };
 type ProductSnapshot = {
   productName?: string;
+  name?: string;
   barcode?: string;
   category?: string;
   stockQuantity?: ProductValue;
@@ -57,6 +59,16 @@ function parseSnapshot(data: ProductSnapshot | string | null | undefined): Produ
     }
   }
   return data;
+}
+
+function getRequesterDisplayName(request: ChangeRequest): string {
+  if (request.first_name || request.last_name) {
+    return [request.first_name, request.last_name].filter(Boolean).join(" ");
+  }
+  if (request.requested_by_name) {
+    return request.requested_by_name;
+  }
+  return `Staff #${request.requested_by || "Unknown"}`;
 }
 
 export default function InventoryApprovals() {
@@ -86,7 +98,8 @@ export default function InventoryApprovals() {
     try {
       const response = await apiRequest("/getinventorychanges.php");
       if (!response.success) throw new Error(response.message || "Unable to load approval requests.");
-      const loadedRequests: ChangeRequest[] = response.data?.requests || [];
+      
+      const loadedRequests: ChangeRequest[] = response.data?.requests || response.requests || [];
       setRequests(loadedRequests);
 
       const initialQtyMap: Record<number, number> = {};
@@ -226,6 +239,8 @@ export default function InventoryApprovals() {
                 inventoryChanges.map((request) => {
                   const proposed = parseSnapshot(request.requested_data);
                   const before = parseSnapshot(request.before_data);
+                  const productName = proposed.productName || proposed.name || "Unnamed Product";
+                  const requesterName = getRequesterDisplayName(request);
 
                   return (
                     <article key={request.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition space-y-3">
@@ -241,12 +256,12 @@ export default function InventoryApprovals() {
                             >
                               {request.action_type === "add" ? "New Product" : "Edit Details"}
                             </span>
-                            <h3 className="font-extrabold text-sm text-[#17347a]">{proposed.productName || "Unnamed Product"}</h3>
+                            <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
                           </div>
                           <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
                             <User size={12} className="text-gray-400" />
-                            Submitted by <span className="font-bold text-gray-700">{request.first_name} {request.last_name}</span> ({request.staff_id || "Staff"}) ·{" "}
-                            {new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                            Submitted by <span className="font-bold text-gray-700">{requesterName}</span> ({request.staff_id || "Staff"}) ·{" "}
+                            {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
                           </p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-800 border border-amber-200">Pending</span>
@@ -309,6 +324,8 @@ export default function InventoryApprovals() {
                 restockRequests.map((request) => {
                   const proposed = parseSnapshot(request.requested_data);
                   const currentQty = editedRestockQty[request.id] ?? proposed.restockQty ?? 1;
+                  const productName = proposed.productName || proposed.name || "Unnamed Product";
+                  const requesterName = getRequesterDisplayName(request);
 
                   return (
                     <article key={request.id} className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm hover:shadow-md transition space-y-3">
@@ -316,12 +333,12 @@ export default function InventoryApprovals() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">Restock Request</span>
-                            <h3 className="font-extrabold text-sm text-[#17347a]">{proposed.productName || "Unnamed Product"}</h3>
+                            <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
                           </div>
                           <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
                             <User size={12} className="text-gray-400" />
-                            Requested by <span className="font-bold text-gray-700">{request.first_name} {request.last_name}</span> ·{" "}
-                            {new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                            Requested by <span className="font-bold text-gray-700">{requesterName}</span> ·{" "}
+                            {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
                           </p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-800 border border-amber-200">Awaiting Manager Approval</span>
@@ -331,7 +348,6 @@ export default function InventoryApprovals() {
                         <div>Barcode: <strong className="font-mono text-gray-900">{proposed.barcode || "N/A"}</strong></div>
                         <div>Current Stock: <strong className="text-red-600 font-extrabold">{proposed.stockQuantity ?? 0} pcs</strong></div>
 
-                        {/* EDITABLE BUY QUANTITY FOR MANAGER */}
                         <div className="bg-white p-2 rounded-xl border border-emerald-300 flex items-center gap-2 shadow-xs">
                           <Edit3 size={14} className="text-emerald-700 shrink-0" />
                           <label className="text-[10px] font-extrabold uppercase text-gray-600">Quantity to Buy:</label>

@@ -108,12 +108,16 @@ function getInventoryAuthToken(): string | undefined {
 export default function Inventory() {
   const location = useLocation();
   const navigate = useNavigate();
-  const currentUserRole = getInventoryActor().role;
-  const canEditInventory = currentUserRole === "staff" || currentUserRole === "admin";
+  const currentUser = getInventoryActor();
+  const currentUserRole = currentUser.role;
+  const canEditInventory = currentUserRole === "staff" || currentUserRole === "admin" || currentUserRole === "manager";
 
   const isFullScreen = location.state?.fullScreen === true;
   const isStaffView = location.state?.staffView === true;
   const hideSidebar = isFullScreen || isStaffView;
+
+  // Enforce staff mode if user is staff or operating under staff views
+  const isStaffMode = currentUserRole === "staff" || hideSidebar || isStaffView;
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -259,24 +263,32 @@ export default function Inventory() {
         expirationDate: formData.expirationDate || null,
         supplier: formData.supplier || null,
         description: formData.description || null,
-        actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" },
+        actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", role: user.role || "staff" },
       };
       
-      const isStaffRequest = user.role === "staff" || hideSidebar || isStaffView || isFullScreen;
-      const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "addproduct.php"}`, {
+      const token = getInventoryAuthToken();
+      const endpoint = isStaffMode ? "submitinventorychange.php" : "addproduct.php";
+      const payload = isStaffMode ? { action: "add", product: productData } : productData;
+
+      const response = await fetch(`${API_BASE}/${endpoint}`, {
         method: "POST",
-        body: JSON.stringify(isStaffRequest
-          ? { action: "add", product: productData }
-          : productData),
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getInventoryAuthToken() || ""}` },
+        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
       });
 
       const data = await response.json();
       if (!response.ok || data.success !== true) {
-        throw new Error(data.message || "Could not save the product.");
+        throw new Error(data.message || "Could not save the product request.");
       }
 
-      setNotice(isStaffRequest ? "Product request sent to Admin for approval. Inventory will update after approval." : "Product added successfully.");
+      setNotice(
+        isStaffMode 
+          ? "Product request submitted for Admin approval. It will appear on the Inventory Approvals screen." 
+          : "Product added successfully."
+      );
       setFormData(emptyForm);
       setShowAdd(false);
       await loadProducts();
@@ -346,8 +358,7 @@ export default function Inventory() {
   const handleSaveEditProduct = async () => {
     if (!editingProduct) return;
 
-    const primaryExpiry =
-      editExpiryBatches[0]?.date || formData.expirationDate || null;
+    const primaryExpiry = editExpiryBatches[0]?.date || formData.expirationDate || null;
     const newStock = Number(formData.stockQuantity);
     const user = getInventoryActor();
 
@@ -365,23 +376,38 @@ export default function Inventory() {
       expirationDate: primaryExpiry,
       expiryBatches: editExpiryBatches,
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
-      actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" },
+      actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", role: user.role || "staff" },
     };
 
     setSaving(true);
     setError("");
     try {
-      const isStaffRequest = user.role === "staff" || hideSidebar || isStaffView || isFullScreen;
-      const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "updateproduct.php"}`, {
+      const token = getInventoryAuthToken();
+
+      // IF STAFF: Route through submitinventorychange.php for Admin approval
+      // IF ADMIN: Directly update products via updateproduct.php
+      const endpoint = isStaffMode ? "submitinventorychange.php" : "updateproduct.php";
+      const payload = isStaffMode
+        ? { action: "update", product: updatedProductData }
+        : updatedProductData;
+
+      const response = await fetch(`${API_BASE}/${endpoint}`, {
         method: "POST",
-        body: JSON.stringify(isStaffRequest
-          ? { action: "update", product: updatedProductData }
-          : updatedProductData),
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getInventoryAuthToken() || ""}` },
+        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
       });
+
       const data = await response.json();
       if (!response.ok || data.success !== true) throw new Error(data.message || "Failed to update product details.");
-      setNotice(isStaffRequest ? "Change request sent to Admin for approval. Inventory will update after approval." : "Product details updated successfully.");
+
+      setNotice(
+        isStaffMode
+          ? "Stock change request sent to Admin for approval. It will appear on the Inventory Approvals screen."
+          : "Product details updated successfully."
+      );
       setEditingProduct(null);
       setStockReasonModalOpen(false);
       await loadProducts();
@@ -461,9 +487,9 @@ export default function Inventory() {
             {notice}
           </div>
         )}
-        {(currentUserRole === "staff" || hideSidebar) && (
+        {isStaffMode && (
           <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xs">
-            Product additions and edits are submitted to Admin for approval. They will not affect inventory until approved.
+            Notice: You are operating in Staff mode. All stock changes and product additions will be submitted to Admin for approval.
           </div>
         )}
 
@@ -596,7 +622,7 @@ export default function Inventory() {
                 disabled={saving}
                 className="px-6 py-2 rounded-xl font-extrabold text-xs text-white uppercase tracking-wider bg-blue-600 hover:bg-blue-500 shadow-md transition active:scale-95 disabled:opacity-60"
               >
-                {saving ? "Submitting..." : (currentUserRole === "staff" || hideSidebar) ? "Submit for Approval" : "Add Product"}
+                {saving ? "Submitting..." : isStaffMode ? "Submit for Approval" : "Add Product"}
               </button>
             </div>
           </form>
@@ -749,7 +775,7 @@ export default function Inventory() {
                   onClick={handlePreSaveEditProduct}
                   className="px-5 py-1.5 bg-blue-600 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-blue-500 shadow-md transition active:scale-95"
                 >
-                  {(currentUserRole === "staff" || hideSidebar) ? "Submit for Approval" : "Save Changes"}
+                  {isStaffMode ? "Submit for Approval" : "Save Changes"}
                 </button>
               </div>
             </div>
@@ -804,7 +830,7 @@ export default function Inventory() {
                   onClick={handleSaveEditProduct}
                   className="px-5 py-1.5 bg-[#17347a] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl hover:bg-blue-900 shadow-md transition active:scale-95 disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : "Confirm & Save"}
+                  {saving ? "Saving..." : isStaffMode ? "Confirm & Submit Request" : "Confirm & Save"}
                 </button>
               </div>
             </div>
