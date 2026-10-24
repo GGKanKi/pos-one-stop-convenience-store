@@ -16,7 +16,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 require __DIR__ . '/../config/db.php';
 
-/** Normalize historical text before returning it to the browser. */
 function cleanHistoryText($value): string
 {
     $value = (string)$value;
@@ -44,8 +43,15 @@ $end = is_string($endValue) ? $endValue : '';
 $action = is_string($actionValue) ? trim($actionValue) : '';
 $search = is_string($searchValue) ? trim($searchValue) : '';
 
-// Allow both 'Sale' and 'Sale (Discount)' in valid actions
-$validActions = ['', 'Stock Deduction', 'Stock Addition', 'Sale', 'Sale (Discount)', 'Voided Items/Invoice', 'Added New Product', 'Product Details Update'];
+$validActions = [
+    '', 
+    'Stock Deduction', 
+    'Stock Addition', 
+    'Discount', 
+    'Voided Items/Invoice', 
+    'Added New Product', 
+    'Product Details Update'
+];
 
 if (!isValidDate($start) || !isValidDate($end) || $start > $end) {
     http_response_code(400);
@@ -58,16 +64,18 @@ if (!in_array($action, $validActions, true)) {
     exit;
 }
 
-// Normalize 'Sale (Discount)' to 'Sale' for array matching
-$targetAction = ($action === 'Sale (Discount)') ? 'Sale' : $action;
-
 try {
     $rows = [];
+
+    // 1. INVENTORY AUDIT LOGS
     $auditStmt = $pdo->prepare(
-        'SELECT id, action_type, product_name, before_data, after_data, quantity_change, reason, user_name, created_at
-         FROM inventory_audit WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+        "SELECT id, action_type, product_name, before_data, after_data, quantity_change, reason, user_name, created_at
+         FROM inventory_audit 
+         WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+           AND (reason NOT LIKE 'Sale #%' OR reason IS NULL)"
     );
     $auditStmt->execute([$start, $end]);
+    
     $fieldLabels = [
         'productName' => 'Name',
         'barcode' => 'Barcode',
@@ -85,19 +93,20 @@ try {
         $name = cleanHistoryText($entry['product_name']);
         $reason = cleanHistoryText($entry['reason'] ?? '');
         $description = $name;
+        $actionType = $entry['action_type'];
 
-        if (in_array($entry['action_type'], ['Stock Addition', 'Stock Deduction'], true)) {
+        if (in_array($actionType, ['Stock Addition', 'Stock Deduction'], true)) {
             $quantity = abs((int)$entry['quantity_change']);
-            $verb = $entry['action_type'] === 'Stock Addition' ? 'added' : 'deducted';
+            $verb = $actionType === 'Stock Addition' ? 'added' : 'deducted';
             $description .= ' | ' . $quantity . ' ' . ($quantity === 1 ? 'unit' : 'units') . ' ' . $verb;
             if ($reason !== '') {
                 $description .= ' | Reason: ' . $reason;
             }
-        } elseif ($entry['action_type'] === 'Added New Product') {
+        } elseif ($actionType === 'Added New Product') {
             $after = json_decode($entry['after_data'] ?: '{}', true) ?: [];
             $quantity = (int)($after['stockQuantity'] ?? 0);
             $description .= ' | Opening stock: ' . $quantity . ' ' . ($quantity === 1 ? 'unit' : 'units');
-        } elseif ($entry['action_type'] === 'Product Details Update') {
+        } elseif ($actionType === 'Product Details Update') {
             $before = json_decode($entry['before_data'] ?: '{}', true) ?: [];
             $after = json_decode($entry['after_data'] ?: '{}', true) ?: [];
             $changes = [];
@@ -108,66 +117,89 @@ try {
                 $changes[] = $label . ': ' . ($old !== '' ? $old : '—') . ' to ' . ($new !== '' ? $new : '—');
             }
             $description .= $changes ? ' | Updated ' . implode('; ', $changes) : ' | Product details updated';
-        } elseif ($entry['action_type'] === 'Voided Items/Invoice' && $reason !== '') {
+        } elseif ($actionType === 'Voided Items/Invoice' && $reason !== '') {
+            $description .= ' | ' . $reason;
+        } elseif ($actionType === 'Discount' && $reason !== '') {
             $description .= ' | ' . $reason;
         }
 
         $rows[] = [
             'id' => 'inventory-' . $entry['id'],
             'date' => $entry['created_at'],
-            'action' => $entry['action_type'],
-            'entities' => 'Inventory',
+            'action' => $actionType,
             'description' => $description,
             'user' => cleanHistoryText($entry['user_name'] ?: 'Unknown'),
         ];
     }
 
-    // Sales rows assembled separately from audit rows
+    // 2. COMPLETED POS TRANSACTIONS (ONLY INCLUDE DISCOUNTS, OMIT NORMAL SALES)
     $salesStmt = $pdo->prepare(
-        "SELECT t.id, t.created_at, t.total_amount,
+        "SELECT t.id, t.created_at, t.total_amount, 
+                COALESCE(t.discount, 0) AS transaction_discount,
                 SUM(ti.quantity) AS item_count,
-                GROUP_CONCAT(CONCAT(ti.quantity, ' x ', ti.product_name) ORDER BY ti.id SEPARATOR '; ') AS items,
+                GROUP_CONCAT(
+                    CONCAT(
+                        ti.quantity, ' x ', ti.product_name, 
+                        IF(COALESCE(ti.discount, 0) > 0, CONCAT(' (Discounted by PHP ', FORMAT(ti.discount, 2), ')'), '')
+                    ) 
+                    ORDER BY ti.id SEPARATOR '; '
+                ) AS items,
+                SUM(COALESCE(ti.discount, 0)) AS total_item_discounts,
                 (SELECT a.user_name FROM inventory_audit a
                  WHERE a.reason = CONCAT('Sale #', t.id) AND a.action_type = 'Stock Deduction'
                  ORDER BY a.id LIMIT 1) AS cashier
          FROM transactions t
          LEFT JOIN transaction_items ti ON ti.transaction_id = t.id AND ti.voided_at IS NULL
          WHERE t.status = 'completed' AND t.created_at >= ? AND t.created_at < DATE_ADD(?, INTERVAL 1 DAY)
-         GROUP BY t.id, t.created_at, t.total_amount
+         GROUP BY t.id, t.created_at, t.total_amount, t.discount
          ORDER BY t.created_at DESC"
     );
     $salesStmt->execute([$start, $end]);
+
     foreach ($salesStmt->fetchAll() as $sale) {
         $itemCount = (int)($sale['item_count'] ?? 0);
-        $description = $itemCount . ' ' . ($itemCount === 1 ? 'item' : 'items') . ' | Total: PHP ' . number_format((float)$sale['total_amount'], 2);
+        $totalAmt = (float)$sale['total_amount'];
+        $transDisc = (float)($sale['transaction_discount'] ?? 0);
+        $itemDisc = (float)($sale['total_item_discounts'] ?? 0);
+        $totalDiscount = max($transDisc, $itemDisc);
+
+        // Skip normal sales that do not have any discounts
+        if ($totalDiscount <= 0) {
+            continue;
+        }
+
+        $description = $itemCount . ' ' . ($itemCount === 1 ? 'item' : 'items') . ' | Total: PHP ' . number_format($totalAmt, 2);
+        $description .= ' | Discount Applied: PHP ' . number_format($totalDiscount, 2);
+
         if (!empty($sale['items'])) {
             $description .= ' | ' . cleanHistoryText($sale['items']);
         }
+
         $rows[] = [
             'id' => 'sale-' . $sale['id'],
             'date' => $sale['created_at'],
-            'action' => 'Sale',
-            'entities' => 'Product',
+            'action' => 'Discount',
             'description' => $description,
             'user' => cleanHistoryText($sale['cashier'] ?: '—'),
         ];
     }
 
-    // Apply action filtering using normalized targetAction
-    if ($targetAction !== '') {
-        $rows = array_values(array_filter($rows, fn($row) => $row['action'] === $targetAction));
+    // 3. APPLY ACTION FILTER
+    if ($action !== '') {
+        $rows = array_values(array_filter($rows, fn($row) => $row['action'] === $action));
     }
 
-    // Apply keyword search filter
+    // 4. APPLY KEYWORD SEARCH
     if ($search !== '') {
         $rows = array_values(array_filter($rows, fn($row) => stripos(
-            implode(' ', [$row['description'], $row['action'], $row['entities'], $row['user']]),
+            implode(' ', [$row['description'], $row['action'], $row['user']]),
             $search
         ) !== false));
     }
 
     usort($rows, fn($left, $right) => strcmp($right['date'], $left['date']));
     echo json_encode(['success' => true, 'transactions' => $rows], JSON_INVALID_UTF8_SUBSTITUTE);
+
 } catch (Throwable $e) {
     error_log('Transaction history error: ' . $e->getMessage());
     http_response_code(500);

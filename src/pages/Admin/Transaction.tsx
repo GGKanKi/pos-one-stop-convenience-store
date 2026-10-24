@@ -8,7 +8,6 @@ const ACTION_OPTIONS = [
   { label: 'All Actions', value: '' },
   { label: 'Stock Deduction', value: 'Stock Deduction' },
   { label: 'Stock Addition', value: 'Stock Addition' },
-  { label: 'Sale', value: 'Sale' },
   { label: 'Discount', value: 'Discount' },
   { label: 'Voided Items/Invoice', value: 'Voided Items/Invoice' },
   { label: 'Added New Product', value: 'Added New Product' },
@@ -98,15 +97,13 @@ export default function Transactions() {
 
   const getActionBadgeColor = (actionType: string) => {
     switch (actionType) {
-      case 'Sale':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Discount':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       case 'Stock Addition':
       case 'Added New Product':
         return 'bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]';
       case 'Stock Deduction':
         return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'Discount':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
       case 'Voided Items/Invoice':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'Product Details Update':
