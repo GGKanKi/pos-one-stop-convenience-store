@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ShoppingCart,
   CheckCircle2,
+  Package,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
@@ -68,6 +69,9 @@ export default function AdminDashboard() {
   // ROLE CHECK: Identify if the current user is an Admin/Manager
   const role = currentUser.role?.toLowerCase() || "";
   const isAdmin = role === "admin" || role === "manager" || (!isStaffView && !isFullScreen && role !== "staff");
+
+  // FULL SCREEN FOR STAFF ONLY
+  const hideSidebar = !isAdmin || isFullScreen || isStaffView;
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,16 +157,27 @@ export default function AdminDashboard() {
 
   return (
     <div className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
-      {!isFullScreen && !isStaffView && <Sidebar />}
+      {!hideSidebar && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 text-left overflow-x-hidden">
         {/* HEADER */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
-            {(isFullScreen || isStaffView) ? "Store Analytics" : "Dashboard"}
+            {!isAdmin ? "Store Analytics" : "Dashboard"}
           </h1>
 
           <div className="flex items-center gap-2 mr-1">
+            {/* INVENTORY BUTTON BESIDE REFRESH (STAFF ONLY / ALL) */}
+            <button
+              type="button"
+              onClick={() => navigate("/admin/inventory")}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md cursor-pointer"
+              aria-label="Go to Inventory"
+            >
+              <Package size={14} />
+              <span className="hidden sm:inline">Inventory</span>
+            </button>
+
             <button 
               type="button" 
               onClick={() => setRefreshKey((key) => key + 1)} 

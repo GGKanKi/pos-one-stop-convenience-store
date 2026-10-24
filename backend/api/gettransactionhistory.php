@@ -47,7 +47,6 @@ $validActions = [
     '', 
     'Stock Deduction', 
     'Stock Addition', 
-    'Sale', 
     'Discount', 
     'Voided Items/Invoice', 
     'Added New Product', 
@@ -68,8 +67,7 @@ if (!in_array($action, $validActions, true)) {
 try {
     $rows = [];
 
-    // 1. INVENTORY AUDIT LOGS (Only approved or finalized adjustments)
-    // Exclude automatic sales deduction entries from audit logs to avoid duplications with POS sales
+    // 1. INVENTORY AUDIT LOGS
     $auditStmt = $pdo->prepare(
         "SELECT id, action_type, product_name, before_data, after_data, quantity_change, reason, user_name, created_at
          FROM inventory_audit 
@@ -121,6 +119,8 @@ try {
             $description .= $changes ? ' | Updated ' . implode('; ', $changes) : ' | Product details updated';
         } elseif ($actionType === 'Voided Items/Invoice' && $reason !== '') {
             $description .= ' | ' . $reason;
+        } elseif ($actionType === 'Discount' && $reason !== '') {
+            $description .= ' | ' . $reason;
         }
 
         $rows[] = [
@@ -132,25 +132,45 @@ try {
         ];
     }
 
-    // 2. COMPLETED POS TRANSACTIONS
+    // 2. COMPLETED POS TRANSACTIONS (ONLY INCLUDE DISCOUNTS, OMIT NORMAL SALES)
     $salesStmt = $pdo->prepare(
-        "SELECT t.id, t.created_at, t.total_amount,
+        "SELECT t.id, t.created_at, t.total_amount, 
+                COALESCE(t.discount, 0) AS transaction_discount,
                 SUM(ti.quantity) AS item_count,
-                GROUP_CONCAT(CONCAT(ti.quantity, ' x ', ti.product_name) ORDER BY ti.id SEPARATOR '; ') AS items,
+                GROUP_CONCAT(
+                    CONCAT(
+                        ti.quantity, ' x ', ti.product_name, 
+                        IF(COALESCE(ti.discount, 0) > 0, CONCAT(' (Discounted by PHP ', FORMAT(ti.discount, 2), ')'), '')
+                    ) 
+                    ORDER BY ti.id SEPARATOR '; '
+                ) AS items,
+                SUM(COALESCE(ti.discount, 0)) AS total_item_discounts,
                 (SELECT a.user_name FROM inventory_audit a
                  WHERE a.reason = CONCAT('Sale #', t.id) AND a.action_type = 'Stock Deduction'
                  ORDER BY a.id LIMIT 1) AS cashier
          FROM transactions t
          LEFT JOIN transaction_items ti ON ti.transaction_id = t.id AND ti.voided_at IS NULL
          WHERE t.status = 'completed' AND t.created_at >= ? AND t.created_at < DATE_ADD(?, INTERVAL 1 DAY)
-         GROUP BY t.id, t.created_at, t.total_amount
+         GROUP BY t.id, t.created_at, t.total_amount, t.discount
          ORDER BY t.created_at DESC"
     );
     $salesStmt->execute([$start, $end]);
 
     foreach ($salesStmt->fetchAll() as $sale) {
         $itemCount = (int)($sale['item_count'] ?? 0);
-        $description = $itemCount . ' ' . ($itemCount === 1 ? 'item' : 'items') . ' | Total: PHP ' . number_format((float)$sale['total_amount'], 2);
+        $totalAmt = (float)$sale['total_amount'];
+        $transDisc = (float)($sale['transaction_discount'] ?? 0);
+        $itemDisc = (float)($sale['total_item_discounts'] ?? 0);
+        $totalDiscount = max($transDisc, $itemDisc);
+
+        // Skip normal sales that do not have any discounts
+        if ($totalDiscount <= 0) {
+            continue;
+        }
+
+        $description = $itemCount . ' ' . ($itemCount === 1 ? 'item' : 'items') . ' | Total: PHP ' . number_format($totalAmt, 2);
+        $description .= ' | Discount Applied: PHP ' . number_format($totalDiscount, 2);
+
         if (!empty($sale['items'])) {
             $description .= ' | ' . cleanHistoryText($sale['items']);
         }
@@ -158,7 +178,7 @@ try {
         $rows[] = [
             'id' => 'sale-' . $sale['id'],
             'date' => $sale['created_at'],
-            'action' => 'Sale',
+            'action' => 'Discount',
             'description' => $description,
             'user' => cleanHistoryText($sale['cashier'] ?: '—'),
         ];
@@ -166,12 +186,7 @@ try {
 
     // 3. APPLY ACTION FILTER
     if ($action !== '') {
-        $rows = array_values(array_filter($rows, function($row) use ($action) {
-            if ($action === 'Discount') {
-                return $row['action'] === 'Discount' || stripos($row['description'], 'discount') !== false;
-            }
-            return $row['action'] === $action;
-        }));
+        $rows = array_values(array_filter($rows, fn($row) => $row['action'] === $action));
     }
 
     // 4. APPLY KEYWORD SEARCH

@@ -163,9 +163,6 @@ export default function InventoryApprovals() {
             <h1 className="text-lg font-extrabold uppercase tracking-wider flex items-center gap-2">
               Inventory & Restocking Approvals
             </h1>
-            <p className="text-[11px] text-blue-200 font-medium">
-              Review staff product modifications and manage restocking purchase orders.
-            </p>
           </div>
 
           <button
