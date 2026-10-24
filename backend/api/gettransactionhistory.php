@@ -38,11 +38,14 @@ $startValue = $_GET['start'] ?? date('Y-m-01');
 $endValue = $_GET['end'] ?? date('Y-m-d');
 $actionValue = $_GET['action'] ?? '';
 $searchValue = $_GET['search'] ?? '';
+
 $start = is_string($startValue) ? $startValue : '';
 $end = is_string($endValue) ? $endValue : '';
 $action = is_string($actionValue) ? trim($actionValue) : '';
 $search = is_string($searchValue) ? trim($searchValue) : '';
-$validActions = ['', 'Stock Deduction', 'Stock Addition', 'Sale', 'Voided Items/Invoice', 'Added New Product', 'Product Details Update'];
+
+// Allow both 'Sale' and 'Sale (Discount)' in valid actions
+$validActions = ['', 'Stock Deduction', 'Stock Addition', 'Sale', 'Sale (Discount)', 'Voided Items/Invoice', 'Added New Product', 'Product Details Update'];
 
 if (!isValidDate($start) || !isValidDate($end) || $start > $end) {
     http_response_code(400);
@@ -54,6 +57,9 @@ if (!in_array($action, $validActions, true)) {
     echo json_encode(['success' => false, 'message' => 'Invalid action type.']);
     exit;
 }
+
+// Normalize 'Sale (Discount)' to 'Sale' for array matching
+$targetAction = ($action === 'Sale (Discount)') ? 'Sale' : $action;
 
 try {
     $rows = [];
@@ -116,7 +122,7 @@ try {
         ];
     }
 
-    // Sales rows are assembled separately from audit rows so the history can filter each action type cleanly.
+    // Sales rows assembled separately from audit rows
     $salesStmt = $pdo->prepare(
         "SELECT t.id, t.created_at, t.total_amount,
                 SUM(ti.quantity) AS item_count,
@@ -147,9 +153,12 @@ try {
         ];
     }
 
-    if ($action !== '') {
-        $rows = array_values(array_filter($rows, fn($row) => $row['action'] === $action));
+    // Apply action filtering using normalized targetAction
+    if ($targetAction !== '') {
+        $rows = array_values(array_filter($rows, fn($row) => $row['action'] === $targetAction));
     }
+
+    // Apply keyword search filter
     if ($search !== '') {
         $rows = array_values(array_filter($rows, fn($row) => stripos(
             implode(' ', [$row['description'], $row['action'], $row['entities'], $row['user']]),

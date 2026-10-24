@@ -18,7 +18,6 @@ import Transactions from './pages/Admin/Transaction';
 import SalesProfit from './pages/Admin/SalesProfit';
 import Recall from './pages/Staff/Recall';
 import ProductStatus from './pages/Admin/ProductStatus';
-import RoleGate from './components/RoleGate';
 import InventoryApprovals from './pages/Admin/InventoryApprovals';
 
 function App() {
@@ -33,22 +32,29 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* STAFF ROUTES */}
-        <Route path="/cashregister" element={<RoleGate permission="pos"><CashRegister /></RoleGate>} />
-        <Route path="/logoutid" element={<RoleGate permission="pos"><LogoutId /></RoleGate>} />
-        <Route path="/pos" element={<RoleGate permission="pos"><POS /></RoleGate>} />
-        <Route path="/staff/pos" element={<RoleGate permission="pos"><POS /></RoleGate>} />
-        <Route path="/staff/inventorycheck" element={<RoleGate permission="staff-tools"><InventoryCheck /></RoleGate>} />
-        <Route path="/staff/recall" element={<RoleGate permission="pos"><Recall /></RoleGate>} />
+        <Route path="/cashregister" element={<CashRegister />} />
+        <Route path="/logoutid" element={<LogoutId />} />
+        <Route path="/pos" element={<POS />} />
+        <Route path="/staff/pos" element={<POS />} />
+        <Route path="/inventorycheck" element={<InventoryCheck />} />
+        <Route path="/inventory-check" element={<InventoryCheck />} />
+        <Route path="/staff/inventorycheck" element={<InventoryCheck />} />
+        <Route path="/staff/inventory-check" element={<InventoryCheck />} />
+        <Route path="/staff/recall" element={<Recall />} />
+        
+        {/* ADDED /inventory ROUTE FOR STAFF FULLSCREEN VIEW */}
+        <Route path="/inventory" element={<Inventory />} />
 
         {/* ADMIN ROUTES */}
-        <Route path="/admin/dashboard" element={<RoleGate permission="staff-tools"><AdminDashboard /></RoleGate>} />
-        <Route path="/admin/staff" element={<RoleGate permission="admin"><StaffPage /></RoleGate>} />
-        <Route path="/admin/inventory" element={<RoleGate permission="staff-tools"><Inventory /></RoleGate>} />
-        <Route path="/admin/inventory-approvals" element={<RoleGate permission="admin"><InventoryApprovals /></RoleGate>} />
-        <Route path="/admin/discrepancies" element={<RoleGate permission="admin"><Discrepancies /></RoleGate>} />
-        <Route path="/admin/transactions" element={<RoleGate permission="admin"><Transactions /></RoleGate>} />
-        <Route path="/admin/salesprofit" element={<RoleGate permission="admin"><SalesProfit /></RoleGate>} />
-        <Route path="/admin/productstatus" element={<RoleGate permission="admin"><ProductStatus /></RoleGate>} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/staff" element={<StaffPage />} />
+        <Route path="/admin/inventory" element={<Inventory />} />
+        <Route path="/admin/inventory-approvals" element={<InventoryApprovals />} />
+        <Route path="/admin/approvals" element={<InventoryApprovals />} />
+        <Route path="/admin/discrepancies" element={<Discrepancies />} />
+        <Route path="/admin/transactions" element={<Transactions />} />
+        <Route path="/admin/salesprofit" element={<SalesProfit />} />
+        <Route path="/admin/productstatus" element={<ProductStatus />} />
 
         {/* FALLBACK */}
         <Route

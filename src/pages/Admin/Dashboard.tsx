@@ -1,11 +1,43 @@
-﻿import { useEffect, useState } from 'react';
-import { type LucideIcon, AlertCircle, TrendingUp, DollarSign, Award, ArrowLeft, Clock, RefreshCw, ChevronRight } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import Sidebar from '../../components/Sidebar';
-import StaffAttendanceControl from '../../components/StaffAttendanceControl';
-import { getActiveStaffUser } from '../../services/authSession';
+﻿import { useEffect, useState, useCallback } from "react";
+import {
+  type LucideIcon,
+  AlertCircle,
+  TrendingUp,
+  DollarSign,
+  Award,
+  ArrowLeft,
+  Clock,
+  RefreshCw,
+  ChevronRight,
+  ShoppingCart,
+  CheckCircle2,
+  ClipboardCheck,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import Sidebar from "../../components/Sidebar";
+import StaffAttendanceControl from "../../components/StaffAttendanceControl";
+import { getActiveStaffUser } from "../../services/authSession";
+import { apiRequest } from "../../services/api";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Convenience/backend/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
+
+type LowStockItem = {
+  id: number;
+  name: string;
+  barcode: string;
+  stockQuantity: number;
+  threshold: number;
+};
+
+type ApprovedRestockItem = {
+  id: number;
+  product_id: number;
+  productName: string;
+  barcode: string;
+  approvedQty: number;
+  approvedAt: string;
+};
+
 type DashboardData = {
   grossSales: number;
   netProfit: number;
@@ -13,91 +45,173 @@ type DashboardData = {
   salesTrend: { date: string; sales: number }[];
   bestSeller: { id: number; name: string; quantity: number } | null;
   topProducts: { id: number; name: string; quantity: number }[];
-  lowStock: { id: number; name: string; barcode: string; stockQuantity: number; threshold: number }[];
+  lowStock: LowStockItem[];
+  approvedRestocks?: ApprovedRestockItem[];
   latestInventoryTransactions: { id: number; action: string; product: string; description: string; user: string; date: string }[];
 };
 
 function localDateValue(): string {
   const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 const money = (amount: number) => `₱${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const timeLabel = (value: string) => new Date(value.replace(' ', 'T')).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+const timeLabel = (value: string) => new Date(value.replace(" ", "T")).toLocaleString([], { dateStyle: "short", timeStyle: "short" });
 
 export default function AdminDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
   const isFullScreen = location.state?.fullScreen;
   const isStaffView = location.state?.staffView === true;
-  const hasStaffAttendance = Boolean(getActiveStaffUser().id);
+  const currentUser = getActiveStaffUser();
+  const hasStaffAttendance = Boolean(currentUser.id);
+
+  // ROLE CHECK: Identify if the current user is an Admin/Manager or Staff
+  const isAdmin = currentUser.role?.toLowerCase() === "admin" || currentUser.role?.toLowerCase() === "manager" || (!isStaffView && !isFullScreen);
+
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // EDITABLE BUY QUANTITIES & SUBMITTED STATE FOR LOW STOCK ITEMS
+  const [restockQuantities, setRestockQuantities] = useState<Record<number, number>>({});
+  const [requestedProductIds, setRequestedProductIds] = useState<number[]>([]);
+  const [submittingId, setSubmittingId] = useState<number | null>(null);
+
   useEffect(() => {
-    const fontId = 'google-font-inter';
+    const fontId = "google-font-inter";
     if (!document.getElementById(fontId)) {
-      const link = document.createElement('link');
+      const link = document.createElement("link");
       link.id = fontId;
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap';
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
       document.head.appendChild(link);
     }
   }, []);
 
+  const loadDashboard = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/getdashboard.php?date=${localDateValue()}&trendDays=${trendDays}`, { signal });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Unable to load dashboard data.");
+      
+      const dashboardResult = result as DashboardData;
+      setData(dashboardResult);
+
+      // INITIALIZE REORDER QUANTITIES (THRESHOLD - STOCK)
+      const initialQtyMap: Record<number, number> = {};
+      (dashboardResult.lowStock || []).forEach((item) => {
+        const defaultReorder = Math.max(1, item.threshold - item.stockQuantity);
+        initialQtyMap[item.id] = defaultReorder;
+      });
+      setRestockQuantities(initialQtyMap);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError(err instanceof Error ? err.message : "Unable to load dashboard data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [trendDays]);
+
   useEffect(() => {
     const controller = new AbortController();
-    async function loadDashboard() {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await fetch(`${API_BASE}/getdashboard.php?date=${localDateValue()}&trendDays=${trendDays}`, { signal: controller.signal });
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.message || 'Unable to load dashboard data.');
-        setData(result as DashboardData);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Unable to load dashboard data.');
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
+    void loadDashboard(controller.signal);
+
+    const onFocus = () => void loadDashboard();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [loadDashboard, refreshKey]);
+
+  // SUBMIT RESTOCK REQUEST TO INVENTORY APPROVALS
+  const handleRequestRestock = async (product: LowStockItem) => {
+    const qtyToBuy = restockQuantities[product.id] || Math.max(1, product.threshold - product.stockQuantity);
+    setSubmittingId(product.id);
+    setError("");
+    setNotice("");
+    try {
+      const user = getActiveStaffUser();
+      const response = await apiRequest("/submitinventorychange.php", "POST", {
+        action: "restock",
+        product: {
+          id: product.id,
+          productName: product.name,
+          barcode: product.barcode,
+          stockQuantity: product.stockQuantity,
+          restockQty: qtyToBuy,
+          actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || "Staff" },
+        },
+      });
+
+      if (!response.success) throw new Error(response.message || "Failed to submit restock request.");
+      
+      // MARK PRODUCT AS REQUESTED TO TURN CARD GREEN
+      setRequestedProductIds((prev) => [...prev, product.id]);
+      setNotice(`Restock request for ${product.name} (${qtyToBuy} pcs) sent to Inventory Approvals!`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit restock request.");
+    } finally {
+      setSubmittingId(null);
     }
-    void loadDashboard();
-    return () => controller.abort();
-  }, [trendDays, refreshKey]);
+  };
+
+  // HANDLER FOR REVIEW INVENTORY BUTTON
+  const handleReviewInventory = () => {
+    if (isStaffView || isFullScreen) {
+      // Staff view goes to /inventory in full screen
+      navigate("/inventory", { state: { fullScreen: true } });
+    } else {
+      // Admin view goes to /admin/inventory-approvals
+      navigate("/admin/inventory-approvals");
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
-      {/* Sidebar hidden when coming from POS */}
       {!isFullScreen && !isStaffView && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 text-left overflow-x-hidden">
-        
-        {/* HEADER WITH REFRESH BUTTON */}
+        {/* HEADER */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
-            {(isFullScreen || isStaffView) ? 'Store Analytics' : 'Dashboard'}
+            {(isFullScreen || isStaffView) ? "Store Analytics" : "Dashboard"}
           </h1>
 
           <div className="flex items-center gap-2 mr-1">
+            {/* REVIEW INVENTORY BUTTON */}
+            <button
+              type="button"
+              onClick={handleReviewInventory}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md cursor-pointer"
+            >
+              <ClipboardCheck size={14} />
+              <span>Review Inventory</span>
+            </button>
+
+            {/* REFRESH BUTTON */}
             <button 
               type="button" 
               onClick={() => setRefreshKey((key) => key + 1)} 
               disabled={loading} 
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md disabled:opacity-60" 
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md disabled:opacity-60 cursor-pointer" 
               aria-label="Refresh dashboard"
             >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> 
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> 
               <span className="hidden sm:inline">Refresh</span>
             </button>
 
             {(isFullScreen || isStaffView) && (
               <button 
                 onClick={() => navigate("/pos")} 
-                className="flex items-center gap-2 rounded-full bg-white text-[#17347a] px-4 py-1.5 text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95" 
+                className="flex items-center gap-2 rounded-full bg-white text-[#17347a] px-4 py-1.5 text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95 cursor-pointer" 
                 type="button"
               >
                 <ArrowLeft size={14} /> BACK TO POS
@@ -108,7 +222,8 @@ export default function AdminDashboard() {
 
         {hasStaffAttendance && <StaffAttendanceControl />}
 
-        {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold">{error}</div>}
+        {notice && <div role="status" className="bg-green-50 text-green-800 border border-green-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{notice}</div>}
+        {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{error}</div>}
 
         {/* RESTOCK ATTENTION SECTION */}
         <section className="bg-white rounded-2xl shadow-md border border-gray-200 p-4 sm:p-5">
@@ -119,7 +234,11 @@ export default function AdminDashboard() {
               </span>
               <div>
                 <h2 className="font-extrabold tracking-tight text-[#17347a] text-sm">Restock Attention</h2>
-                <p className="text-[11px] text-gray-500 font-medium">Products at or below their restock threshold</p>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  {isAdmin
+                    ? "Products at or below their restock threshold (Read Only for Admin)"
+                    : "Edit quantity to buy and submit directly to Inventory Approvals"}
+                </p>
               </div>
               {!loading && (
                 <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-[10px] font-black text-red-800 border border-red-300">
@@ -127,13 +246,16 @@ export default function AdminDashboard() {
                 </span>
               )}
             </div>
-            <button 
-              type="button" 
-              onClick={() => navigate('/admin/inventory', { state: { fullScreen: true, staffView: true } })} 
-              className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition"
-            >
-              Review inventory <ChevronRight size={14} />
-            </button>
+
+            {isAdmin && (
+              <button 
+                type="button" 
+                onClick={() => navigate("/admin/inventory-approvals")} 
+                className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer"
+              >
+                Go to Approvals <ChevronRight size={14} />
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -143,49 +265,147 @@ export default function AdminDashboard() {
               All products are currently above their restock thresholds.
             </div>
           ) : (
+            <div className="max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {data.lowStock.map((product) => {
+                  const currentBuyQty = restockQuantities[product.id] ?? Math.max(1, product.threshold - product.stockQuantity);
+                  const isRequested = requestedProductIds.includes(product.id);
+
+                  // ADMIN VIEW: CLEAN READ-ONLY CARD
+                  if (isAdmin) {
+                    return (
+                      <div key={product.id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/50 px-3.5 py-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-gray-800" title={product.name}>{product.name}</p>
+                          <p className="text-[10px] text-gray-500 font-mono">{product.barcode}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-xs font-black text-red-600">{product.stockQuantity} left</p>
+                          <p className="text-[10px] font-semibold text-gray-400">min {product.threshold}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // STAFF VIEW: EDITABLE RESTOCK FORM CARD WITH DYNAMIC GREEN HIGHLIGHT
+                  return (
+                    <div
+                      key={product.id}
+                      className={`flex flex-col gap-2 rounded-xl border p-3 shadow-xs transition-colors duration-200 ${
+                        isRequested
+                          ? "border-emerald-400 bg-emerald-50/60"
+                          : "border-red-200 bg-red-50/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold text-gray-800" title={product.name}>{product.name}</p>
+                          <p className="text-[10px] text-gray-500 font-mono">{product.barcode}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className={`text-xs font-black ${isRequested ? "text-emerald-700" : "text-red-600"}`}>
+                            {product.stockQuantity} left
+                          </p>
+                          <p className="text-[10px] font-semibold text-gray-400">min {product.threshold}</p>
+                        </div>
+                      </div>
+
+                      <div className={`flex items-center gap-2 pt-1 border-t ${isRequested ? "border-emerald-200" : "border-red-100"}`}>
+                        <label className="text-[10px] font-bold text-gray-600 uppercase">Qty to buy:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          disabled={isRequested}
+                          value={currentBuyQty}
+                          onChange={(e) =>
+                            setRestockQuantities((prev) => ({
+                              ...prev,
+                              [product.id]: Math.max(1, Number(e.target.value)),
+                            }))
+                          }
+                          className="w-16 px-2 py-0.5 border border-gray-300 rounded-lg text-xs font-bold text-center bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-emerald-100/50 disabled:text-emerald-900"
+                        />
+                        <button
+                          type="button"
+                          disabled={submittingId === product.id || isRequested}
+                          onClick={() => void handleRequestRestock(product)}
+                          className={`flex-1 inline-flex items-center justify-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-extrabold uppercase transition active:scale-95 disabled:opacity-90 cursor-pointer shadow-xs text-white ${
+                            isRequested
+                              ? "bg-emerald-600 hover:bg-emerald-700"
+                              : "bg-[#17347a] hover:bg-blue-900"
+                          }`}
+                        >
+                          {isRequested ? (
+                            <>
+                              <CheckCircle2 size={12} /> Requested
+                            </>
+                          ) : (
+                            <>
+                              <ShoppingCart size={12} />
+                              {submittingId === product.id ? "Sending..." : "Request Restock"}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* APPROVED RESTOCK ORDERS (TO BE BOUGHT) PANEL */}
+        {data?.approvedRestocks && data.approvedRestocks.length > 0 && (
+          <section className="bg-emerald-50/70 rounded-2xl shadow-md border border-emerald-300 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+                  <CheckCircle2 size={18} />
+                </span>
+                <div>
+                  <h2 className="font-extrabold tracking-tight text-emerald-900 text-sm">
+                    Approved Products to be Bought
+                  </h2>
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    Restock orders approved by manager ready for supplier purchase
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-800 border border-emerald-300">
+                {data.approvedRestocks.length} Orders Approved
+              </span>
+            </div>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {data.lowStock.slice(0, 3).map((product) => (
-                <div key={product.id} className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/50 px-3.5 py-2.5">
+              {data.approvedRestocks.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs hover:border-emerald-400 transition"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-gray-800" title={product.name}>{product.name}</p>
-                    <p className="text-[10px] text-gray-500 font-mono">{product.barcode}</p>
+                    <p className="truncate text-xs font-extrabold text-gray-800" title={item.productName}>
+                      {item.productName}
+                    </p>
+                    <p className="text-[10px] text-gray-500 font-mono mt-0.5">{item.barcode}</p>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs font-black text-red-600">{product.stockQuantity} left</p>
-                    <p className="text-[10px] font-semibold text-gray-400">min {product.threshold}</p>
+                  <div className="text-right shrink-0">
+                    <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 font-black text-xs border border-emerald-300">
+                      Buy {item.approvedQty} pcs
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-          {!loading && (data?.lowStock.length ?? 0) > 3 && (
-            <p className="mt-2 text-[11px] font-semibold text-gray-500">+ {(data?.lowStock.length ?? 0) - 3} more products need attention</p>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* STAT CARDS */}
         <section>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-            <StatCard 
-              label="Gross Sales" 
-              value={loading ? '—' : money(data?.grossSales || 0)} 
-              Icon={TrendingUp} 
-              tone="red" 
-            />
-            <StatCard 
-              label="Net Profit" 
-              value={loading ? '—' : money(data?.netProfit || 0)} 
-              detail={data?.profitEstimated ? 'Older sales use current product cost' : 'After product costs'} 
-              Icon={DollarSign} 
-              tone="sky" 
-            />
-            <StatCard 
-              label="Best Seller" 
-              value={loading ? '—' : data?.bestSeller?.name || 'No sales yet'} 
-              detail={data?.bestSeller ? `${data.bestSeller.quantity} units sold today` : 'No completed sales yet'} 
-              Icon={Award} 
-              tone="amber" 
-            />
+            <StatCard label="Gross Sales" value={loading ? "—" : money(data?.grossSales || 0)} Icon={TrendingUp} tone="red" />
+            <StatCard label="Net Profit" value={loading ? "—" : money(data?.netProfit || 0)} detail={data?.profitEstimated ? "Older sales use current product cost" : "After product costs"} Icon={DollarSign} tone="sky" />
+            <StatCard label="Best Seller" value={loading ? "—" : data?.bestSeller?.name || "No sales yet"} detail={data?.bestSeller ? `${data.bestSeller.quantity} units sold today` : "No completed sales yet"} Icon={Award} tone="amber" />
           </div>
         </section>
 
@@ -203,9 +423,7 @@ export default function AdminDashboard() {
                   type="button" 
                   onClick={() => setTrendDays(days)} 
                   aria-pressed={trendDays === days} 
-                  className={`rounded-lg px-3 py-1 text-xs font-bold transition-all ${
-                    trendDays === days ? 'bg-white text-[#17347a] shadow-md' : 'text-blue-200 hover:text-white'
-                  }`}
+                  className={`rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer ${trendDays === days ? "bg-white text-[#17347a] shadow-md" : "text-blue-200 hover:text-white"}`}
                 >
                   {days} days
                 </button>
@@ -271,21 +489,20 @@ export default function AdminDashboard() {
             </div>
           </section>
         </div>
-
       </main>
     </div>
   );
 }
 
-function StatCard({ label, value, detail, Icon, tone }: { label: string; value: string; detail?: string; Icon: LucideIcon; tone: 'red' | 'sky' | 'amber' }) {
-  const textColor = tone === 'red' ? 'text-red-400' : tone === 'sky' ? 'text-sky-400' : 'text-amber-400';
+function StatCard({ label, value, detail, Icon, tone }: { label: string; value: string; detail?: string; Icon: LucideIcon; tone: "red" | "sky" | "amber" }) {
+  const textColor = tone === "red" ? "text-red-400" : tone === "sky" ? "text-sky-400" : "text-amber-400";
   
   return (
     <div className="bg-[#17347a] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg border border-white/10 hover:scale-[1.01] transition duration-200">
       <div className="min-w-0 text-left">
         <p className="text-[11px] uppercase font-extrabold text-blue-200 tracking-wider">{label}</p>
         <h3 className={`text-2xl font-black mt-1 ${textColor}`} title={value}>{value}</h3>
-        <p className="mt-1 text-[10px] text-blue-300 font-medium truncate">{detail || ' '}</p>
+        <p className="mt-1 text-[10px] text-blue-300 font-medium truncate">{detail || " "}</p>
       </div>
       <div className="bg-[#1a3e7a] p-3 rounded-xl border border-white/10 shrink-0">
         <Icon size={24} className={textColor} />
@@ -294,7 +511,7 @@ function StatCard({ label, value, detail, Icon, tone }: { label: string; value: 
   );
 }
 
-function SalesTrendChart({ points }: { points: DashboardData['salesTrend'] }) {
+function SalesTrendChart({ points }: { points: DashboardData["salesTrend"] }) {
   const width = 760;
   const height = 230;
   const left = 54;
@@ -308,8 +525,9 @@ function SalesTrendChart({ points }: { points: DashboardData['salesTrend'] }) {
     x: left + (points.length <= 1 ? 0 : index * (width - left - right) / (points.length - 1)),
     y: top + chartHeight - Number(point.sales) / maxSales * chartHeight,
   }));
-  const line = coordinates.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
-  const area = `${line} L ${coordinates.at(-1)?.x ?? width - right} ${top + chartHeight} L ${left} ${top + chartHeight} Z`;
+  const line = coordinates.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const lastX = coordinates[coordinates.length - 1]?.x ?? (width - right);
+  const area = `${line} L ${lastX} ${top + chartHeight} L ${left} ${top + chartHeight} Z`;
   const formatAxis = (amount: number) => amount >= 1000 ? `₱${(amount / 1000).toFixed(1)}k` : `₱${Math.round(amount)}`;
 
   return (
@@ -330,7 +548,7 @@ function SalesTrendChart({ points }: { points: DashboardData['salesTrend'] }) {
         {coordinates.map((point, index) => {
           const showLabel = points.length <= 7 || index % 5 === 0 || index === points.length - 1;
           const date = new Date(`${point.date}T00:00:00`);
-          const label = points.length <= 7 ? date.toLocaleDateString(undefined, { weekday: 'short' }) : date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+          const label = points.length <= 7 ? date.toLocaleDateString(undefined, { weekday: "short" }) : date.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
           return (
             <g key={point.date}>
               <circle cx={point.x} cy={point.y} r={points.length > 7 ? 3 : 5} fill="#fff" stroke="#17347a" strokeWidth="3" tabIndex={0} className="outline-none focus:stroke-blue-500">
@@ -345,7 +563,7 @@ function SalesTrendChart({ points }: { points: DashboardData['salesTrend'] }) {
   );
 }
 
-function TopProductsChart({ products }: { products: DashboardData['topProducts'] }) {
+function TopProductsChart({ products }: { products: DashboardData["topProducts"] }) {
   const highestQuantity = Math.max(...products.map((product) => Number(product.quantity)), 1);
   return (
     <div className="space-y-3.5 p-2" role="img" aria-label="Top selling products ranked by units sold today">
@@ -364,7 +582,7 @@ function TopProductsChart({ products }: { products: DashboardData['topProducts']
             <div className="h-2.5 overflow-hidden rounded-full bg-blue-50 border border-blue-100">
               <div 
                 title={`${quantity} units sold`} 
-                className={`h-full rounded-full transition-all duration-500 ${index === 0 ? 'bg-[#17347a]' : 'bg-blue-500'}`} 
+                className={`h-full rounded-full transition-all duration-500 ${index === 0 ? "bg-[#17347a]" : "bg-blue-500"}`} 
                 style={{ width: `${width}%` }} 
               />
             </div>

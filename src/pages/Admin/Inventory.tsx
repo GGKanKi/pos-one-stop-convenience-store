@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { getAuthToken, getAuthUser } from "../../services/authSession";
-import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText, ArrowLeft } from "lucide-react";
+import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText, ArrowLeft, ClipboardCheck, BarChart2 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
 
@@ -111,7 +111,6 @@ export default function Inventory() {
   const currentUserRole = getInventoryActor().role;
   const canEditInventory = currentUserRole === "staff" || currentUserRole === "admin";
 
-  // Full-screen and staff view parameters from POS navigation
   const isFullScreen = location.state?.fullScreen === true;
   const isStaffView = location.state?.staffView === true;
   const hideSidebar = isFullScreen || isStaffView;
@@ -131,7 +130,6 @@ export default function Inventory() {
   const [notice, setNotice] = useState("");
   const [formData, setFormData] = useState(emptyForm);
 
-  // States for Stock Adjustment Reason Modal
   const [stockReasonModalOpen, setStockReasonModalOpen] = useState(false);
   const [stockChangeReason, setStockChangeReason] = useState("");
 
@@ -263,7 +261,8 @@ export default function Inventory() {
         description: formData.description || null,
         actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" },
       };
-      const isStaffRequest = user.role === "staff";
+      
+      const isStaffRequest = user.role === "staff" || hideSidebar || isStaffView || isFullScreen;
       const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "addproduct.php"}`, {
         method: "POST",
         body: JSON.stringify(isStaffRequest
@@ -350,6 +349,7 @@ export default function Inventory() {
     const primaryExpiry =
       editExpiryBatches[0]?.date || formData.expirationDate || null;
     const newStock = Number(formData.stockQuantity);
+    const user = getInventoryActor();
 
     const updatedProductData = {
       id: editingProduct.id,
@@ -365,19 +365,13 @@ export default function Inventory() {
       expirationDate: primaryExpiry,
       expiryBatches: editExpiryBatches,
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
-      actor: (() => {
-        try {
-          const user = getAuthUser();
-          return { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" };
-        } catch { return { name: "Unknown" }; }
-      })(),
+      actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Unknown" },
     };
 
     setSaving(true);
     setError("");
     try {
-      const user = getInventoryActor();
-      const isStaffRequest = user.role === "staff";
+      const isStaffRequest = user.role === "staff" || hideSidebar || isStaffView || isFullScreen;
       const response = await fetch(`${API_BASE}/${isStaffRequest ? "submitinventorychange.php" : "updateproduct.php"}`, {
         method: "POST",
         body: JSON.stringify(isStaffRequest
@@ -424,56 +418,58 @@ export default function Inventory() {
       className="flex min-h-screen bg-[#cfdcfc] text-gray-800 antialiased"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      {/* Hide Sidebar in Full Screen / Staff View */}
       {!hideSidebar && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 overflow-y-auto text-left">
-        {/* HEADER WITH CONDITIONAL BACK TO POS BUTTON */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
             {view === "check" ? "Manual Count Log" : "Inventory Management"}
           </h1>
 
-          {hideSidebar && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate("/pos")}
-              className="flex items-center gap-2 rounded-full bg-white text-[#17347a] px-4 py-1.5 text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95 cursor-pointer"
+              onClick={() =>
+                navigate("/admin/dashboard", {
+                  state: { fullScreen: isFullScreen, staffView: isStaffView },
+                })
+              }
+              className="flex items-center gap-2 rounded-full bg-emerald-600 text-white px-4 py-1.5 text-xs font-bold hover:bg-emerald-500 transition shadow-sm active:scale-95 cursor-pointer"
             >
-              <ArrowLeft size={14} /> BACK TO POS
+              <BarChart2 size={14} /> STORE ANALYTICS
             </button>
-          )}
+
+            {hideSidebar && (
+              <button
+                type="button"
+                onClick={() => navigate("/pos")}
+                className="flex items-center gap-2 rounded-full bg-white text-[#17347a] px-4 py-1.5 text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95 cursor-pointer"
+              >
+                <ArrowLeft size={14} /> BACK TO POS
+              </button>
+            )}
+          </div>
         </header>
 
         {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 shadow-xs"
-          >
+          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 shadow-xs">
             {error}
           </div>
         )}
         {notice && (
-          <div
-            role="status"
-            className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-xs font-bold text-green-700 shadow-xs"
-          >
+          <div role="status" className="rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-xs font-bold text-green-700 shadow-xs">
             {notice}
           </div>
         )}
-        {currentUserRole === "staff" && (
+        {(currentUserRole === "staff" || hideSidebar) && (
           <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xs">
             Product additions and edits are submitted to Admin for approval. They will not affect inventory until approved.
           </div>
         )}
 
-        {/* SEARCH & ACTIONS BAR */}
         <div className="bg-[#b0c8fa] p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap items-center justify-between gap-4">
           <div className="relative flex-1 min-w-[240px]">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-              size={16}
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -497,7 +493,7 @@ export default function Inventory() {
                 <button
                   type="button"
                   onClick={() => setNotice("Excel import feature ready.")}
-                  className="px-4 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-1.5 border border-white/10"
+                  className="px-4 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
                 >
                   <Upload size={14} />
                   Import Product
@@ -512,7 +508,7 @@ export default function Inventory() {
                       setFormData(emptyForm);
                       setShowAdd(true);
                     }}
-                    className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-1.5"
+                    className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-blue-600 text-white shadow-md hover:bg-blue-500 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus size={14} />
                     Add Product
@@ -521,8 +517,21 @@ export default function Inventory() {
 
                 <button
                   type="button"
+                  onClick={() =>
+                    navigate("/staff/inventorycheck", {
+                      state: { fullScreen: isFullScreen, staffView: isStaffView },
+                    })
+                  }
+                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-emerald-600 text-white shadow-md hover:bg-emerald-500 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ClipboardCheck size={14} />
+                  Inventory Check
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setView("check")}
-                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-amber-500 text-white shadow-md hover:bg-amber-600 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-amber-500 text-white shadow-md hover:bg-amber-600 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <FileText size={14} />
                   Manual Count Log
@@ -532,7 +541,7 @@ export default function Inventory() {
               <button
                 type="button"
                 onClick={() => setView("list")}
-                className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all"
+                className="px-5 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all cursor-pointer"
               >
                 Back to List
               </button>
@@ -555,77 +564,22 @@ export default function Inventory() {
 
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap gap-4">
-                <InputField
-                  label="Product Name"
-                  name="productName"
-                  value={formData.productName}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Barcode"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                />
+                <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleInputChange} />
+                <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleInputChange} />
+                <InputField label="Description" name="description" value={formData.description} onChange={handleInputChange} />
               </div>
               <div className="flex flex-wrap gap-4">
-                <InputField
-                  label="Stock Quantity"
-                  name="stockQuantity"
-                  type="number"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Cost Price"
-                  name="costPrice"
-                  type="number"
-                  value={formData.costPrice}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Selling Price"
-                  name="sellingPrice"
-                  type="number"
-                  value={formData.sellingPrice}
-                  onChange={handleInputChange}
-                />
+                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleInputChange} />
+                <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleInputChange} />
+                <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleInputChange} />
               </div>
               <div className="flex flex-wrap gap-4">
-                <InputField
-                  label="Category"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Supplier"
-                  name="supplier"
-                  value={formData.supplier}
-                  onChange={handleInputChange}
-                />
+                <InputField label="Category" name="category" value={formData.category} onChange={handleInputChange} />
+                <InputField label="Supplier" name="supplier" value={formData.supplier} onChange={handleInputChange} />
               </div>
               <div className="flex flex-wrap gap-4">
-                <InputField
-                  label="Expiration Date"
-                  name="expirationDate"
-                  type="date"
-                  value={formData.expirationDate}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Low Stock Threshold for Replenishment"
-                  name="threshold"
-                  type="number"
-                  value={formData.threshold}
-                  onChange={handleInputChange}
-                />
+                <InputField label="Expiration Date" name="expirationDate" type="date" value={formData.expirationDate} onChange={handleInputChange} />
+                <InputField label="Low Stock Threshold for Replenishment" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
               </div>
             </div>
 
@@ -642,7 +596,7 @@ export default function Inventory() {
                 disabled={saving}
                 className="px-6 py-2 rounded-xl font-extrabold text-xs text-white uppercase tracking-wider bg-blue-600 hover:bg-blue-500 shadow-md transition active:scale-95 disabled:opacity-60"
               >
-                {saving ? "Submitting..." : currentUserRole === "staff" ? "Submit for Approval" : "Add Product"}
+                {saving ? "Submitting..." : (currentUserRole === "staff" || hideSidebar) ? "Submit for Approval" : "Add Product"}
               </button>
             </div>
           </form>
@@ -659,21 +613,14 @@ export default function Inventory() {
                     Expiration Dates Batch
                   </h2>
                 </div>
-                <button
-                  onClick={() => setExpiryModalProduct(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
+                <button onClick={() => setExpiryModalProduct(null)} className="text-gray-400 hover:text-gray-600">
                   <X size={18} />
                 </button>
               </div>
 
               <div>
-                <p className="font-extrabold text-sm text-[#17347a]">
-                  {expiryModalProduct.productName}
-                </p>
-                <p className="text-[11px] font-mono text-gray-500 mt-0.5">
-                  Barcode: {expiryModalProduct.barcode}
-                </p>
+                <p className="font-extrabold text-sm text-[#17347a]">{expiryModalProduct.productName}</p>
+                <p className="text-[11px] font-mono text-gray-500 mt-0.5">Barcode: {expiryModalProduct.barcode}</p>
               </div>
 
               <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
@@ -688,22 +635,13 @@ export default function Inventory() {
                     {modalBatchesToDisplay.length > 0 ? (
                       modalBatchesToDisplay.map((batch, i) => (
                         <tr key={i} className="hover:bg-blue-50/40">
-                          <td className="p-2.5 font-mono text-gray-600">
-                            {batch.date || "No Expiry Date"}
-                          </td>
-                          <td className="p-2.5 text-right font-extrabold text-gray-900">
-                            {batch.qty} pcs
-                          </td>
+                          <td className="p-2.5 font-mono text-gray-600">{batch.date || "No Expiry Date"}</td>
+                          <td className="p-2.5 text-right font-extrabold text-gray-900">{batch.qty} pcs</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td
-                          colSpan={2}
-                          className="p-4 text-center text-gray-400 italic"
-                        >
-                          No expiration dates recorded.
-                        </td>
+                        <td colSpan={2} className="p-4 text-center text-gray-400 italic">No expiration dates recorded.</td>
                       </tr>
                     )}
                   </tbody>
@@ -730,61 +668,19 @@ export default function Inventory() {
                 <h2 className="font-extrabold text-[#17347a] text-sm uppercase tracking-wider flex items-center gap-2">
                   <Edit3 size={16} /> Edit Product Details
                 </h2>
-                <button
-                  onClick={() => setEditingProduct(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
+                <button onClick={() => setEditingProduct(null)} className="text-gray-400 hover:text-gray-600">
                   <X size={18} />
                 </button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <InputField
-                  label="Product Name"
-                  name="productName"
-                  value={formData.productName}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Barcode"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Stock Quantity"
-                  name="stockQuantity"
-                  type="number"
-                  value={formData.stockQuantity}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Cost Price"
-                  name="costPrice"
-                  type="number"
-                  value={formData.costPrice}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Selling Price"
-                  name="sellingPrice"
-                  type="number"
-                  value={formData.sellingPrice}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Category"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                />
-                <InputField
-                  label="Threshold"
-                  name="threshold"
-                  type="number"
-                  value={formData.threshold}
-                  onChange={handleInputChange}
-                />
+                <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleInputChange} />
+                <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleInputChange} />
+                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleInputChange} />
+                <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleInputChange} />
+                <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleInputChange} />
+                <InputField label="Category" name="category" value={formData.category} onChange={handleInputChange} />
+                <InputField label="Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
               </div>
 
               <div className="border-t border-gray-200 pt-3 space-y-3">
@@ -802,44 +698,27 @@ export default function Inventory() {
                 </div>
 
                 {editExpiryBatches.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">
-                    No expiry date batches assigned yet. Click "Add Expiry Date" to add one.
-                  </p>
+                  <p className="text-xs text-gray-400 italic">No expiry date batches assigned yet. Click "Add Expiry Date" to add one.</p>
                 ) : (
                   <div className="space-y-2">
                     {editExpiryBatches.map((batch, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200"
-                      >
+                      <div key={index} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
                         <div className="flex-1">
-                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">
-                            Expiry Date
-                          </label>
+                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">Expiry Date</label>
                           <input
                             type="date"
                             value={batch.date}
-                            onChange={(e) =>
-                              handleBatchChange(index, "date", e.target.value)
-                            }
+                            onChange={(e) => handleBatchChange(index, "date", e.target.value)}
                             className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono bg-white"
                           />
                         </div>
                         <div className="w-28">
-                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">
-                            Quantity
-                          </label>
+                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">Quantity</label>
                           <input
                             type="number"
                             min="0"
                             value={batch.qty}
-                            onChange={(e) =>
-                              handleBatchChange(
-                                index,
-                                "qty",
-                                Number(e.target.value)
-                              )
-                            }
+                            onChange={(e) => handleBatchChange(index, "qty", Number(e.target.value))}
                             className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold bg-white"
                           />
                         </div>
@@ -870,28 +749,23 @@ export default function Inventory() {
                   onClick={handlePreSaveEditProduct}
                   className="px-5 py-1.5 bg-blue-600 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-blue-500 shadow-md transition active:scale-95"
                 >
-                  {currentUserRole === "staff" ? "Submit for Approval" : "Save Changes"}
+                  {(currentUserRole === "staff" || hideSidebar) ? "Submit for Approval" : "Save Changes"}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* REASON / DESCRIPTION MODAL FOR STOCK ADJUSTMENT */}
+        {/* REASON MODAL FOR STOCK ADJUSTMENT */}
         {stockReasonModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
               <div className="flex justify-between items-center border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-2 text-[#17347a]">
                   <FileText size={20} />
-                  <h2 className="font-extrabold text-xs uppercase tracking-wider">
-                    Reason for Stock Change
-                  </h2>
+                  <h2 className="font-extrabold text-xs uppercase tracking-wider">Reason for Stock Change</h2>
                 </div>
-                <button
-                  onClick={() => setStockReasonModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
+                <button onClick={() => setStockReasonModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                   <X size={18} />
                 </button>
               </div>
@@ -940,10 +814,7 @@ export default function Inventory() {
         {/* MAIN DATA TABLE */}
         {!showAdd && (
           <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden w-full flex flex-col">
-            <div
-              className="max-h-[500px] overflow-y-auto overflow-x-auto w-full"
-              style={{ scrollbarGutter: "stable" }}
-            >
+            <div className="max-h-[500px] overflow-y-auto overflow-x-auto w-full" style={{ scrollbarGutter: "stable" }}>
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-[#17347a] text-white font-bold uppercase text-[11px] tracking-wider sticky top-0 z-20 shadow-sm">
                   {view === "list" ? (
@@ -953,12 +824,8 @@ export default function Inventory() {
                       <th className="py-3 px-4 border-b border-blue-900 w-[16%]">Category</th>
                       <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Cost Price</th>
                       <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Selling Price</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[11%] text-center">
-                        Stock / Threshold
-                      </th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[9%] text-center">
-                        Expiry Dates
-                      </th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[11%] text-center">Stock / Threshold</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[9%] text-center">Expiry Dates</th>
                       {canEditInventory && <th className="py-3 px-4 border-b border-blue-900 w-[6%] text-center">Action</th>}
                     </tr>
                   ) : (
@@ -968,68 +835,39 @@ export default function Inventory() {
                       <th className="py-3 px-4 border-b border-blue-900 w-[16%]">Category</th>
                       <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Cost Price</th>
                       <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Selling Price</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[12%] text-center">
-                        Expected Stock
-                      </th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[14%] text-center">
-                        Actual Count
-                      </th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[12%] text-center">Expected Stock</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[14%] text-center">Actual Count</th>
                     </tr>
                   )}
                 </thead>
                 <tbody className="divide-y divide-gray-200 font-medium text-gray-700">
                   {loading ? (
                     <tr>
-                      <td
-                        colSpan={view === "list" ? 8 : 7}
-                        className="p-12 text-center text-gray-400 italic"
-                      >
+                      <td colSpan={view === "list" ? 8 : 7} className="p-12 text-center text-gray-400 italic">
                         Loading products from database...
                       </td>
                     </tr>
                   ) : displayedItems.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={view === "list" ? 8 : 7}
-                        className="p-12 text-center text-gray-400 italic"
-                      >
-                        {isSearching
-                          ? `No products found matching "${searchTerm}".`
-                          : "No products available in inventory."}
+                      <td colSpan={view === "list" ? 8 : 7} className="p-12 text-center text-gray-400 italic">
+                        {isSearching ? `No products found matching "${searchTerm}".` : "No products available in inventory."}
                       </td>
                     </tr>
                   ) : (
                     displayedItems.map((item, index) => {
                       const isEven = index % 2 === 0;
                       return (
-                        <tr
-                          key={item.id}
-                          className={`transition-colors ${
-                            isEven ? "bg-white" : "bg-blue-50/40"
-                          } hover:bg-blue-100/50`}
-                        >
+                        <tr key={item.id} className={`transition-colors ${isEven ? "bg-white" : "bg-blue-50/40"} hover:bg-blue-100/50`}>
                           <td className="py-3 px-4">
-                            <div className="font-bold text-gray-800 leading-snug break-words">
-                              {item.productName}
-                            </div>
+                            <div className="font-bold text-gray-800 leading-snug break-words">{item.productName}</div>
                             {item.description && (
-                              <div className="mt-0.5 text-[11px] text-gray-500 break-words leading-tight">
-                                {item.description}
-                              </div>
+                              <div className="mt-0.5 text-[11px] text-gray-500 break-words leading-tight">{item.description}</div>
                             )}
                           </td>
-                          <td className="py-3 px-4 font-mono font-bold text-gray-500 break-all">
-                            {item.barcode}
-                          </td>
-                          <td className="py-3 px-4 font-semibold text-gray-800 break-words">
-                            {item.category}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-gray-600 whitespace-nowrap">
-                            ₱ {Number(item.costPrice).toFixed(2)}
-                          </td>
-                          <td className="py-3 px-4 font-bold text-gray-800 whitespace-nowrap">
-                            ₱ {Number(item.sellingPrice).toFixed(2)}
-                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-gray-500 break-all">{item.barcode}</td>
+                          <td className="py-3 px-4 font-semibold text-gray-800 break-words">{item.category}</td>
+                          <td className="py-3 px-4 font-bold text-gray-600 whitespace-nowrap">₱ {Number(item.costPrice).toFixed(2)}</td>
+                          <td className="py-3 px-4 font-bold text-gray-800 whitespace-nowrap">₱ {Number(item.sellingPrice).toFixed(2)}</td>
 
                           {view === "list" ? (
                             <>
@@ -1047,30 +885,27 @@ export default function Inventory() {
                                   <Calendar size={12} /> View Dates
                                 </button>
                               </td>
-                              {canEditInventory && <td className="py-3 px-4 text-center whitespace-nowrap">
-                                <button
-                                  onClick={() => openEditModal(item)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 border border-blue-200 transition active:scale-95"
-                                >
-                                  <Edit3 size={12} /> Edit
-                                </button>
-                              </td>}
+                              {canEditInventory && (
+                                <td className="py-3 px-4 text-center whitespace-nowrap">
+                                  <button
+                                    onClick={() => openEditModal(item)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold text-[#17347a] bg-blue-50 hover:bg-blue-100 border border-blue-200 transition active:scale-95"
+                                  >
+                                    <Edit3 size={12} /> Edit
+                                  </button>
+                                </td>
+                              )}
                             </>
                           ) : (
                             <>
-                              <td className="py-3 px-4 text-center font-bold whitespace-nowrap">
-                                {Number(item.stockQuantity)}
-                              </td>
+                              <td className="py-3 px-4 text-center font-bold whitespace-nowrap">{Number(item.stockQuantity)}</td>
                               <td className="py-3 px-4 text-center whitespace-nowrap text-gray-500 font-normal">
-                                {item.actualCount !== null &&
-                                item.actualCount !== undefined ? (
+                                {item.actualCount !== null && item.actualCount !== undefined ? (
                                   <span className="font-extrabold text-[#17347a] bg-blue-100 px-2.5 py-0.5 rounded-full border border-blue-300 text-xs">
                                     {item.actualCount}
                                   </span>
                                 ) : (
-                                  <span className="text-gray-400 italic text-[11px]">
-                                    Not counted
-                                  </span>
+                                  <span className="text-gray-400 italic text-[11px]">Not counted</span>
                                 )}
                               </td>
                             </>
