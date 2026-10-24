@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../../components/Sidebar';
-import { apiRequest } from '../../services/api';
 import { 
   CalendarDays, 
   Printer, 
@@ -96,7 +95,11 @@ export default function DailyReports() {
     setLoading(true);
     setError('');
     try {
-      const response = await apiRequest(`/getdailyreport.php?date=${reportDate}`);
+      const res = await fetch(`http://localhost/One-Convenience/backend/api/getdailyreport.php?date=${reportDate}`);
+      const response = await res.json();
+      
+      console.log("Daily Report API Response:", response);
+
       if (!response.success) {
         throw new Error(response.message || 'Unable to fetch daily report.');
       }
@@ -110,13 +113,25 @@ export default function DailyReports() {
         setCashiers(data.cashiers || sampleCashiers);
         setTotals(data.totals || sampleTotals);
       } else {
-        setItems(sampleItems);
-        setCategories(sampleCategories);
-        setCashiers(sampleCashiers);
-        setTotals(sampleTotals);
+        setItems([]);
+        setCategories([]);
+        setCashiers([]);
+        setTotals({
+          grandTotal: 0,
+          totalCash: 0,
+          totalEpayments: 0,
+          totalGcash: 0,
+          totalCredit: 0,
+          returned: 0,
+          voidedAmount: 0,
+          transactionCount: 0,
+          totalItemCount: 0,
+          totalDiscounts: 0,
+          netSales: 0,
+        });
       }
     } catch (err) {
-      console.warn("Backend report endpoint not active yet, using sample view:", err);
+      console.warn("API Error, using fallback:", err);
       setItems(sampleItems);
       setCategories(sampleCategories);
       setCashiers(sampleCashiers);
