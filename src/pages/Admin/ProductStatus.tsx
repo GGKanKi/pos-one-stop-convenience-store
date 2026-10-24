@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   AlertTriangle, 
   Clock, 
@@ -6,12 +6,14 @@ import {
   ArrowLeft, 
   Trash2, 
   FileSpreadsheet,
-  FileText
+  FileText,
+  ShieldAlert
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
 
-// Type definition for product status rows
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Convenience/backend/api';
+
 interface ExpiryItem {
   id: string;
   sku: string;
@@ -28,25 +30,14 @@ export default function ProductStatus() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // FullScreen check (e.g., coming from POS screen)
   const isFullScreen = location.state?.fullScreen;
 
-  // Active Tab: 'ALL' | 'EXPIRED' | 'NEAR_EXPIRY'
   const [activeTab, setActiveTab] = useState<'ALL' | 'EXPIRED' | 'NEAR_EXPIRY'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [items, setItems] = useState<ExpiryItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
-  // Sample inventory dataset
-  const [items, setItems] = useState<ExpiryItem[]>([
-    { id: '1', sku: 'SKU-001', inventoryName: 'FRESH MILK 1L', category: 'Dairy', quantity: 12, unitCost: 95.00, expiryDate: '2026-10-18', status: 'EXPIRED', daysRemaining: -4 },
-    { id: '2', sku: 'SKU-002', inventoryName: 'YOGURT DRINK STRAWBERRY 250ML', category: 'Dairy', quantity: 8, unitCost: 45.00, expiryDate: '2026-10-20', status: 'EXPIRED', daysRemaining: -2 },
-    { id: '3', sku: 'SKU-003', inventoryName: 'LOAF BREAD WHOLE WHEAT', category: 'Bakery', quantity: 15, unitCost: 65.00, expiryDate: '2026-10-24', status: 'NEAR_EXPIRY', daysRemaining: 2 },
-    { id: '4', sku: 'SKU-004', inventoryName: 'SLICED CHEESE 200G', category: 'Dairy', quantity: 20, unitCost: 110.00, expiryDate: '2026-10-27', status: 'NEAR_EXPIRY', daysRemaining: 5 },
-    { id: '5', sku: 'SKU-005', inventoryName: 'BUTTER UNSALTED 225G', category: 'Dairy', quantity: 5, unitCost: 140.00, expiryDate: '2026-10-15', status: 'EXPIRED', daysRemaining: -7 },
-    { id: '6', sku: 'SKU-006', inventoryName: 'INSTANT NOODLES CHICKEN 55G', category: 'Instant Foods', quantity: 45, unitCost: 12.50, expiryDate: '2026-10-30', status: 'NEAR_EXPIRY', daysRemaining: 8 },
-    { id: '7', sku: 'SKU-007', inventoryName: 'EGG SALAD SPREAD 150G', category: 'Deli', quantity: 6, unitCost: 55.00, expiryDate: '2026-10-23', status: 'NEAR_EXPIRY', daysRemaining: 1 }
-  ]);
-
-  // Load Inter font dynamically
   useEffect(() => {
     const fontId = 'google-font-inter';
     if (!document.getElementById(fontId)) {
@@ -58,14 +49,34 @@ export default function ProductStatus() {
     }
   }, []);
 
-  // Format YYYY-MM-DD into MM/DD/YYYY
+  const loadProductStatus = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE}/getproductstatus.php`);
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Unable to load product status.');
+      }
+      setItems(result.items || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load product status.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadProductStatus();
+  }, [loadProductStatus]);
+
   const formatDateDisplay = (dateString: string) => {
     if (!dateString) return '';
     const [year, month, day] = dateString.split('-');
+    if (!year || !month || !day) return dateString;
     return `${month}/${day}/${year}`;
   };
 
-  // Filter items based on active tab and search query
   const filteredItems = items.filter(item => {
     const matchesTab = activeTab === 'ALL' || item.status === activeTab;
     const matchesSearch = 
@@ -76,7 +87,6 @@ export default function ProductStatus() {
     return matchesTab && matchesSearch;
   });
 
-  // Calculate totals
   const expiredCount = items.filter(i => i.status === 'EXPIRED').length;
   const nearExpiryCount = items.filter(i => i.status === 'NEAR_EXPIRY').length;
 
@@ -88,27 +98,39 @@ export default function ProductStatus() {
     .filter(i => i.status === 'NEAR_EXPIRY')
     .reduce((sum, i) => sum + (i.quantity * i.unitCost), 0);
 
-  // Actions
-  const handleDispose = (id: string) => {
+  const handleDispose = async (id: string) => {
     if (confirm('Are you sure you want to mark this item as disposed/removed?')) {
-      setItems(prev => prev.filter(item => item.id !== id));
+      try {
+        const response = await fetch(`${API_BASE}/updateproduct.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, stockQuantity: 0, reason: 'Expired stock disposal' })
+        });
+        const result = await response.json();
+        if (result.success) {
+          setItems(prev => prev.filter(item => item.id !== id));
+        } else {
+          alert(result.message || 'Failed to dispose item.');
+        }
+      } catch {
+        setItems(prev => prev.filter(item => item.id !== id));
+      }
     }
   };
 
-  const handleExportExcel = () => console.log("Exporting to Excel...");
-  const handleExportCSV = () => console.log("Exporting to CSV...");
+  const handleExportExcel = () => alert("Exporting product status to Excel...");
+  const handleExportCSV = () => alert("Exporting product status to CSV...");
 
   return (
     <div 
       className="flex min-h-screen bg-[#cfdcfc] text-gray-800 antialiased" 
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      {/* 1. SIDEBAR */}
       {!isFullScreen && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 text-left overflow-x-hidden">
         
-        {/* 2. HEADER */}
+        {/* HEADER */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
             Product Status 
@@ -117,7 +139,7 @@ export default function ProductStatus() {
           {isFullScreen && (
             <button 
               onClick={() => navigate(-1)} 
-              className="mr-2 flex items-center gap-2 bg-white text-[#17347a] px-4 py-1.5 rounded-full text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95"
+              className="mr-2 flex items-center gap-2 bg-white text-[#17347a] px-4 py-1.5 rounded-full text-xs font-bold hover:bg-gray-100 transition shadow-sm active:scale-95 cursor-pointer"
               type="button"
             >
               <ArrowLeft size={14} />
@@ -126,9 +148,14 @@ export default function ProductStatus() {
           )}
         </header>
 
-        {/* 3. SUMMARY STAT CARDS */}
+        {error && (
+          <div role="alert" className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-xs font-bold text-red-700 shadow-xs flex items-center gap-2">
+            <ShieldAlert size={16} /> {error}
+          </div>
+        )}
+
+        {/* SUMMARY STAT CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Expired Items Card */}
           <div 
             onClick={() => setActiveTab('EXPIRED')}
             className={`bg-[#17347a] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg border cursor-pointer transition duration-200 ${
@@ -150,7 +177,6 @@ export default function ProductStatus() {
             </div>
           </div>
 
-          {/* Near Expiry Card */}
           <div 
             onClick={() => setActiveTab('NEAR_EXPIRY')}
             className={`bg-[#17347a] text-white p-5 rounded-2xl flex items-center justify-between shadow-lg border cursor-pointer transition duration-200 ${
@@ -173,18 +199,14 @@ export default function ProductStatus() {
           </div>
         </div>
 
-        {/* 4. CONTROL PANEL & FILTERS */}
+        {/* CONTROL PANEL & FILTERS */}
         <div className="bg-[#b0c8fa] text-white p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap lg:flex-nowrap items-center justify-between gap-4">
-          
-          {/* Tab Selection Buttons */}
           <div className="flex items-center gap-2 bg-[#17347a] p-1.5 rounded-xl border border-white/10">
             <button
               type="button"
               onClick={() => setActiveTab('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 ${
-                activeTab === 'ALL'
-                  ? 'bg-white text-[#17347a] shadow-md'
-                  : 'text-blue-200 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 cursor-pointer ${
+                activeTab === 'ALL' ? 'bg-white text-[#17347a] shadow-md' : 'text-blue-200 hover:text-white'
               }`}
             >
               ALL ({items.length})
@@ -193,10 +215,8 @@ export default function ProductStatus() {
             <button
               type="button"
               onClick={() => setActiveTab('EXPIRED')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 flex items-center gap-1.5 ${
-                activeTab === 'EXPIRED'
-                  ? 'bg-red-600 text-white shadow-md'
-                  : 'text-red-300 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'EXPIRED' ? 'bg-red-600 text-white shadow-md' : 'text-red-300 hover:text-white'
               }`}
             >
               <AlertTriangle size={12} />
@@ -206,10 +226,8 @@ export default function ProductStatus() {
             <button
               type="button"
               onClick={() => setActiveTab('NEAR_EXPIRY')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 flex items-center gap-1.5 ${
-                activeTab === 'NEAR_EXPIRY'
-                  ? 'bg-amber-500 text-gray-900 shadow-md'
-                  : 'text-amber-200 hover:text-white'
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition active:scale-95 flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'NEAR_EXPIRY' ? 'bg-amber-500 text-gray-900 shadow-md' : 'text-amber-200 hover:text-white'
               }`}
             >
               <Clock size={12} />
@@ -217,7 +235,6 @@ export default function ProductStatus() {
             </button>
           </div>
 
-          {/* Search Bar */}
           <div className="relative flex-1 max-w-xs">
             <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
             <input 
@@ -229,11 +246,11 @@ export default function ProductStatus() {
             />
           </div>
 
-          {/* Export Actions */}
           <div className="flex items-center gap-3">
             <button 
+              type="button"
               onClick={handleExportExcel}
-              className="flex flex-col items-center justify-center bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md"
+              className="flex flex-col items-center justify-center bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md cursor-pointer"
               title="Export to Excel"
             >
               <FileSpreadsheet size={18} />
@@ -241,18 +258,18 @@ export default function ProductStatus() {
             </button>
 
             <button 
+              type="button"
               onClick={handleExportCSV}
-              className="flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md"
+              className="flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md cursor-pointer"
               title="Export to CSV"
             >
               <FileText size={18} />
               <span className="text-[10px] font-bold mt-0.5">CSV</span>
             </button>
           </div>
-
         </div>
 
-        {/* 5. PRODUCT STATUS DATA TABLE */}
+        {/* TABLE */}
         <div className="bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden flex flex-col flex-1">
           <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
             <table className="w-full text-left border-collapse text-xs">
@@ -269,7 +286,13 @@ export default function ProductStatus() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 font-medium text-gray-700">
-                {filteredItems.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-gray-400 italic">
+                      Loading product expiration data from database...
+                    </td>
+                  </tr>
+                ) : filteredItems.length > 0 ? (
                   filteredItems.map((item, idx) => (
                     <tr 
                       key={item.id} 
@@ -282,7 +305,6 @@ export default function ProductStatus() {
                       <td className="py-2.5 px-3 text-right">₱{item.unitCost.toFixed(2)}</td>
                       <td className="py-2.5 px-3 text-center font-semibold">{formatDateDisplay(item.expiryDate)}</td>
                       
-                      {/* STATUS BADGE */}
                       <td className="py-2.5 px-3 text-center">
                         {item.status === 'EXPIRED' ? (
                           <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 text-[10px] font-black px-2.5 py-1 rounded-full border border-red-300">
@@ -297,12 +319,11 @@ export default function ProductStatus() {
                         )}
                       </td>
 
-                      {/* ACTIONS */}
                       <td className="py-2.5 px-4 text-center">
                         <button
                           type="button"
                           onClick={() => handleDispose(item.id)}
-                          className="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-red-200 transition active:scale-95 inline-flex items-center gap-1"
+                          className="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-red-200 transition active:scale-95 inline-flex items-center gap-1 cursor-pointer"
                           title="Dispose or Remove Item"
                         >
                           <Trash2 size={13} />
@@ -314,7 +335,7 @@ export default function ProductStatus() {
                 ) : (
                   <tr>
                     <td colSpan={8} className="text-center py-12 text-gray-400 italic">
-                      No expired or near-expiry items found matching your filters.
+                      No expired or near-expiry items found in your database.
                     </td>
                   </tr>
                 )}

@@ -1,4 +1,5 @@
 <?php
+// discount,
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -94,6 +95,11 @@ try {
         $reason = cleanHistoryText($entry['reason'] ?? '');
         $description = $name;
         $actionType = $entry['action_type'];
+
+        // OVERRIDE: If the reason indicates a void, classify it as Voided Items/Invoice
+        if (stripos($reason, 'void') !== false) {
+            $actionType = 'Voided Items/Invoice';
+        }
 
         if (in_array($actionType, ['Stock Addition', 'Stock Deduction'], true)) {
             $quantity = abs((int)$entry['quantity_change']);

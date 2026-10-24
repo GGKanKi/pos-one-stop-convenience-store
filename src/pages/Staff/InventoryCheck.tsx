@@ -35,7 +35,6 @@ export default function InventoryCheck() {
       document.head.appendChild(link);
     }
 
-    // Load existing saved counts if available
     const savedCounts = localStorage.getItem("inventory_actual_counts");
     const savedConfirmed = localStorage.getItem("inventory_confirmed_barcodes");
     if (savedCounts) setActualStocks(JSON.parse(savedCounts));
@@ -132,17 +131,38 @@ export default function InventoryCheck() {
   const handleComplete = () => {
     if (confirmedBarcodes.length === 0) {
       alert(
-        "Are you sure you want to complete the inventory check without confirming any products? This will discard all entered counts."
+        "Please mark at least one product as Done before completing the check."
       );
       return;
     }
 
     const isConfirmed = window.confirm(
-      "Are you sure you want to confirm and go back to POS?"
+      "Are you sure you want to complete the inventory check? Mismatched items will be logged as discrepancies."
     );
 
     if (isConfirmed) {
-      navigate("/pos");
+      const discrepancies = products
+        .filter((prod) => confirmedBarcodes.includes(prod.barcode))
+        .map((prod) => {
+          const actual = Number(actualStocks[prod.barcode] ?? prod.stockQuantity);
+          const expected = prod.stockQuantity;
+          const diff = actual - expected;
+          return {
+            id: prod.id,
+            productName: prod.productName,
+            barcode: prod.barcode,
+            category: prod.category,
+            expectedStock: expected,
+            actualStock: actual,
+            difference: diff,
+            status: "Pending" as const,
+            dateChecked: new Date().toISOString(),
+          };
+        })
+        .filter((item) => item.difference !== 0);
+
+      localStorage.setItem("inventory_discrepancies", JSON.stringify(discrepancies));
+      navigate("/discrepancies");
     }
   };
 
@@ -157,7 +177,7 @@ export default function InventoryCheck() {
         <header className="bg-[#122b68] text-white p-3.5 px-6 rounded-2xl shadow-md shrink-0 flex items-center justify-between">
           <button
             onClick={() => navigate("/pos")}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs cursor-pointer"
           >
             <ArrowLeft size={16} />
             <span>POS Terminal</span>
@@ -174,7 +194,7 @@ export default function InventoryCheck() {
           </div>
         )}
 
-        {/* Search & Actions Bar - Matching Periwinkle Control Panel Style */}
+        {/* Search & Actions Bar */}
         <div className="bg-[#adbde6] p-2.5 px-4 rounded-2xl shadow-xs flex items-center justify-between gap-4 shrink-0">
           <div className="relative flex-1 max-w-2xl">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -188,7 +208,7 @@ export default function InventoryCheck() {
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
                 title="Clear Search"
               >
                 <X size={16} />
@@ -200,7 +220,7 @@ export default function InventoryCheck() {
             <button
               type="button"
               onClick={() => setShowSummaryModal(true)}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-95 transition-all"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl font-extrabold text-xs uppercase bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs active:scale-95 transition-all cursor-pointer"
             >
               <ListChecks size={16} />
               Checked Results ({checkedProducts.length})
@@ -209,14 +229,14 @@ export default function InventoryCheck() {
             <button
               onClick={handleComplete}
               type="button"
-              className="flex items-center gap-2 px-6 py-2 rounded-xl font-extrabold text-xs uppercase bg-[#122b68] hover:bg-[#1a3880] text-white shadow-xs active:scale-95 transition-all"
+              className="flex items-center gap-2 px-6 py-2 rounded-xl font-extrabold text-xs uppercase bg-[#122b68] hover:bg-[#1a3880] text-white shadow-xs active:scale-95 transition-all cursor-pointer"
             >
               <FileText size={16} /> Complete Check
             </button>
           </div>
         </div>
 
-        {/* Table Container - Solid Navy Banner with White Card Layout */}
+        {/* Table Container */}
         <div className="flex-1 bg-white rounded-2xl shadow-md overflow-hidden min-h-0 flex flex-col">
           <div className="w-full h-full overflow-y-auto overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[950px]">
@@ -290,14 +310,14 @@ export default function InventoryCheck() {
                             <button
                               type="button"
                               onClick={() => handleMarkDone(item.barcode)}
-                              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black uppercase transition-all shadow-xs active:scale-95 ${
+                              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black uppercase transition-all shadow-xs active:scale-95 cursor-pointer ${
                                 isDone
                                   ? "bg-emerald-600 text-white hover:bg-emerald-500"
                                   : "bg-[#122b68] text-white hover:bg-[#1a3880]"
                               }`}
                             >
                               <Check size={14} />
-                              {isDone ? "Done" : "Done"}
+                              Done
                             </button>
                           </div>
                         </td>
@@ -310,7 +330,7 @@ export default function InventoryCheck() {
           </div>
         </div>
 
-        {/* SUMMARY MODAL - MATCHING THEME */}
+        {/* SUMMARY MODAL */}
         {showSummaryModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d1e47]/70 backdrop-blur-xs p-4">
             <div className="bg-white rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
@@ -321,7 +341,7 @@ export default function InventoryCheck() {
                 </div>
                 <button
                   onClick={() => setShowSummaryModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
                 >
                   <X size={20} />
                 </button>
@@ -399,7 +419,7 @@ export default function InventoryCheck() {
                 <button
                   type="button"
                   onClick={() => setShowSummaryModal(false)}
-                  className="px-6 py-2 bg-[#122b68] text-white text-xs font-black rounded-xl hover:bg-[#1a3880] transition uppercase"
+                  className="px-6 py-2 bg-[#122b68] text-white text-xs font-black rounded-xl hover:bg-[#1a3880] transition uppercase cursor-pointer"
                 >
                   Close
                 </button>
