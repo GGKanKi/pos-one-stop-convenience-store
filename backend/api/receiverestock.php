@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $input = getJsonInput();
 $requestId = filter_var($input['request_id'] ?? null, FILTER_VALIDATE_INT);
 $actualQty = filter_var($input['actual_qty'] ?? null, FILTER_VALIDATE_INT);
+$expirationDate = trim((string)($input['expiration_date'] ?? ''));
 $staffName = trim((string)($input['staff_name'] ?? 'Staff'));
 
 if (!$requestId || $actualQty === false || $actualQty <= 0) {
@@ -29,7 +30,6 @@ if (!$requestId || $actualQty === false || $actualQty <= 0) {
 try {
     $pdo->beginTransaction();
 
-    // 1. Fetch the approved restock request
     $reqStmt = $pdo->prepare("SELECT * FROM inventory_change_requests WHERE id = ? AND status = 'approved' LIMIT 1 FOR UPDATE");
     $reqStmt->execute([$requestId]);
     $request = $reqStmt->fetch(PDO::FETCH_ASSOC);
@@ -39,7 +39,6 @@ try {
         sendJsonResponse(false, "Approved restock order not found or already received.", null, 404);
     }
 
-    // 2. Extract product ID
     $productId = (int)($request['product_id'] ?? 0);
 
     if ($productId <= 0 && !empty($request['requested_data'])) {
@@ -54,7 +53,6 @@ try {
         sendJsonResponse(false, "Could not determine product ID for this restock request.", null, 400);
     }
 
-    // 3. Fetch current product from inventory
     $prodStmt = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
     $prodStmt->execute([$productId]);
     $product = $prodStmt->fetch(PDO::FETCH_ASSOC);
@@ -64,15 +62,61 @@ try {
         sendJsonResponse(false, "Product ID $productId no longer exists in inventory.", null, 404);
     }
 
-    $productName = $product['productName'] ?? ('Product #' . $productId);
-    $oldStock = (int)($product['stockQuantity'] ?? 0);
+    $productName = $product['productName'] ?? $product['name'] ?? ('Product #' . $productId);
+    $oldStock = (int)($product['stockQuantity'] ?? $product['stock'] ?? 0);
     $newStock = $oldStock + $actualQty;
 
-    // 4. Update product stock in inventory
-    $updateStmt = $pdo->prepare("UPDATE products SET stockQuantity = ? WHERE id = ?");
-    $updateStmt->execute([$newStock, $productId]);
+    // Load existing batches and append new batch separately
+    $existingBatchesRaw = $product['expiry_batches'] ?? $product['expiryBatches'] ?? null;
+    $batches = [];
+    
+    if (!empty($existingBatchesRaw)) {
+        if (is_string($existingBatchesRaw)) {
+            $decoded = json_decode($existingBatchesRaw, true);
+            if (is_array($decoded)) {
+                $batches = $decoded;
+            }
+        } elseif (is_array($existingBatchesRaw)) {
+            $batches = $existingBatchesRaw;
+        }
+    }
 
-    // 5. Insert audit log so it records as "Stock Addition" in Transaction History
+    if (empty($batches)) {
+        $legacyExpiry = $product['expirationDate'] ?? $product['expiration_date'] ?? null;
+        if (!empty($legacyExpiry) && $oldStock > 0) {
+            $batches[] = ['date' => (string)$legacyExpiry, 'qty' => $oldStock];
+        }
+    }
+
+    // Push new batch row as a separate entry
+    if (!empty($expirationDate)) {
+        $batches[] = ['date' => $expirationDate, 'qty' => $actualQty];
+    } else {
+        $batches[] = ['date' => 'No Expiry Date', 'qty' => $actualQty];
+    }
+
+    $colStmt = $pdo->query("SHOW COLUMNS FROM products");
+    $productColumns = $colStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $updateFields = ["stockQuantity = ?"];
+    $updateValues = [$newStock];
+
+    $encodedFinalBatches = json_encode($batches, JSON_THROW_ON_ERROR);
+
+    if (in_array('expiry_batches', $productColumns, true)) {
+        $updateFields[] = "expiry_batches = ?";
+        $updateValues[] = $encodedFinalBatches;
+    } elseif (in_array('expiryBatches', $productColumns, true)) {
+        $updateFields[] = "expiryBatches = ?";
+        $updateValues[] = $encodedFinalBatches;
+    }
+
+    $updateValues[] = $productId;
+    $setClause = implode(", ", $updateFields);
+
+    $updateStmt = $pdo->prepare("UPDATE products SET $setClause WHERE id = ?");
+    $updateStmt->execute($updateValues);
+
     $auditStmt = $pdo->prepare("
         INSERT INTO inventory_audit (action_type, product_id, product_name, before_data, after_data, quantity_change, reason, user_name, created_at) 
         VALUES ('Stock Addition', ?, ?, ?, ?, ?, ?, ?, NOW())
@@ -81,18 +125,17 @@ try {
         $productId,
         $productName,
         json_encode(['stockQuantity' => $oldStock], JSON_THROW_ON_ERROR),
-        json_encode(['stockQuantity' => $newStock], JSON_THROW_ON_ERROR),
+        json_encode(['stockQuantity' => $newStock, 'expiryBatches' => $batches], JSON_THROW_ON_ERROR),
         $actualQty,
-        'Restock Order #' . $requestId . ' received (Actual Qty: ' . $actualQty . ')',
+        $productName . ' | ' . $actualQty . ' units added | Reason: Restock Order #' . $requestId . ' received' . (!empty($expirationDate) ? " (New Batch Expiry: $expirationDate)" : ""),
         $staffName
     ]);
 
-    // 6. Mark the request as completed
     $completeStmt = $pdo->prepare("UPDATE inventory_change_requests SET status = 'completed' WHERE id = ?");
     $completeStmt->execute([$requestId]);
 
     $pdo->commit();
-    sendJsonResponse(true, "Restock received successfully. Added to inventory and recorded in transaction history.");
+    sendJsonResponse(true, "Restock received successfully! Added to inventory and recorded in transaction history.");
 
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {

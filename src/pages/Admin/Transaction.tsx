@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Conv
 
 const ACTION_OPTIONS = [
   { label: 'All Actions', value: '' },
+  { label: 'Restock Approved', value: 'Restock Approved' },
   { label: 'Stock Deduction', value: 'Stock Deduction' },
   { label: 'Stock Addition', value: 'Stock Addition' },
   { label: 'Discount', value: 'Discount' },
@@ -35,7 +36,6 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Inject Inter font exactly like StaffPage
   useEffect(() => {
     const fontId = 'google-font-inter';
     if (!document.getElementById(fontId)) {
@@ -109,13 +109,15 @@ export default function Transactions() {
 
   const getActionBadgeColor = (actionType: string) => {
     switch (actionType) {
+      case 'Restock Approved':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
       case 'Stock Addition':
       case 'Added New Product':
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'Stock Deduction':
         return 'bg-amber-100 text-amber-800 border-amber-300';
       case 'Discount':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+        return 'bg-teal-100 text-teal-800 border-teal-300';
       case 'Voided Items/Invoice':
         return 'bg-red-100 text-red-800 border-red-300';
       case 'Product Details Update':
@@ -133,7 +135,6 @@ export default function Transactions() {
       <Sidebar />
 
       <main className="flex-1 p-6 flex flex-col gap-5 overflow-y-auto text-left">
-        {/* 1. HEADER */}
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <div className="ml-2">
             <h1 className="text-lg font-extrabold uppercase tracking-wider flex items-center gap-2">
@@ -142,7 +143,6 @@ export default function Transactions() {
           </div>
         </header>
 
-        {/* 2. CONTROL PANEL & FILTERS */}
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -151,7 +151,6 @@ export default function Transactions() {
           className="bg-[#b0c8fa] p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap items-center justify-between gap-4"
         >
           <div className="flex flex-wrap items-center gap-3 bg-[#17347a] p-2.5 rounded-xl border border-white/10 flex-1">
-            {/* Start Date */}
             <label className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border-2 border-transparent focus-within:border-blue-400 cursor-pointer shadow-inner">
               <Calendar size={16} className="text-[#17347a]" />
               <span className="text-gray-700 font-bold text-xs">From:</span>
@@ -163,7 +162,6 @@ export default function Transactions() {
               />
             </label>
 
-            {/* End Date */}
             <label className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border-2 border-transparent focus-within:border-blue-400 cursor-pointer shadow-inner">
               <Calendar size={16} className="text-[#17347a]" />
               <span className="text-gray-700 font-bold text-xs">To:</span>
@@ -175,7 +173,6 @@ export default function Transactions() {
               />
             </label>
 
-            {/* Action Filter */}
             <label className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border-2 border-transparent focus-within:border-blue-400 cursor-pointer shadow-inner">
               <Tag size={16} className="text-[#17347a]" />
               <select
@@ -191,7 +188,6 @@ export default function Transactions() {
               </select>
             </label>
 
-            {/* Keyword Search */}
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
               <input
@@ -215,7 +211,6 @@ export default function Transactions() {
           </div>
         </form>
 
-        {/* 3. TRANSACTION DATA TABLE */}
         <div className="bg-[#17347a] rounded-2xl shadow-md border border-gray-200 overflow-hidden flex flex-col">
           <div className="bg-[#132a63] px-5 py-2.5 text-xs font-extrabold uppercase tracking-wider text-blue-200 border-b border-blue-900 flex items-center justify-between">
             <span className="flex items-center gap-1.5">

@@ -47,6 +47,20 @@ try {
         sendJsonResponse(false, "This request is no longer pending.", null, 409);
     }
 
+    $originalUserId = (int)($request['requested_by'] ?? $request['user_id'] ?? $adminId);
+    $originalUserName = trim((string)($request['user_name'] ?? ''));
+    if ($originalUserName === '' && $originalUserId !== $adminId) {
+        $uStmt = $pdo->prepare("SELECT first_name, last_name, email FROM users WHERE id = ? LIMIT 1");
+        $uStmt->execute([$originalUserId]);
+        $uData = $uStmt->fetch();
+        if ($uData) {
+            $originalUserName = trim(($uData['first_name'] ?? '') . ' ' . ($uData['last_name'] ?? '')) ?: ($uData['email'] ?? 'Staff');
+        }
+    }
+    if ($originalUserName === '') {
+        $originalUserName = 'Staff';
+    }
+
     if ($decision === 'approve') {
         $data = json_decode($request['requested_data'], true);
         if (!is_array($data)) {
@@ -55,18 +69,24 @@ try {
 
         $audit = $pdo->prepare("INSERT INTO inventory_audit (action_type, product_id, product_name, before_data, after_data, quantity_change, reason, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-        // -------------------------------------------------------------
-        // 1. RESTOCK ACTION TYPE
-        // -------------------------------------------------------------
         if ($request['action_type'] === 'restock') {
-            // RESTOCK APPROVAL: Do NOT touch product inventory here. 
-            // It moves to 'approved' so staff can view it under "Approved Restocked Orders (To Be Bought)",
-            // edit the received quantity upon arrival, and finalize it using the Receive button.
-        } 
-        // -------------------------------------------------------------
-        // 2. ADD OR UPDATE ACTION TYPES
-        // -------------------------------------------------------------
-        else {
+            // RESTOCK APPROVAL: Log approved restock order to audit history
+            $restockQty = (int)($data['restockQty'] ?? $data['stockQuantity'] ?? 0);
+            $productName = trim((string)($data['productName'] ?? 'Product'));
+            $productId = (int)($request['product_id'] ?? $data['id'] ?? 0);
+
+            $audit->execute([
+                'Restock Approved',
+                $productId > 0 ? $productId : null,
+                $productName,
+                null,
+                json_encode(['approvedQty' => $restockQty], JSON_THROW_ON_ERROR),
+                $restockQty,
+                $productName . ' | ' . $restockQty . ' units approved for restock | Reason: ' . ($note !== '' ? $note : 'Manager Approval'),
+                $originalUserId,
+                $originalUserName
+            ]);
+        } else {
             $name = trim((string)($data['productName'] ?? ''));
             $barcode = trim((string)($data['barcode'] ?? ''));
             $category = trim((string)($data['category'] ?? ''));
@@ -111,7 +131,18 @@ try {
                 $insert = $pdo->prepare("INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $insert->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold]);
                 $productId = (int)$pdo->lastInsertId();
-                $audit->execute(['Added New Product', $productId, $name, null, json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), $stock, 'Approved staff request #' . $requestId, $adminId, $adminName]);
+                
+                $audit->execute([
+                    'Added New Product', 
+                    $productId, 
+                    $name, 
+                    null, 
+                    json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), 
+                    $stock, 
+                    $name . ' | ' . $stock . ' units added | Reason: Approved staff request #' . $requestId, 
+                    $originalUserId, 
+                    $originalUserName
+                ]);
             } else {
                 $productId = (int)$request['product_id'];
                 $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
@@ -216,7 +247,7 @@ try {
                 }
 
                 if ($changedAfter !== []) {
-                    $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
+                    $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, $name . ' details updated', $originalUserId, $originalUserName]);
                 }
 
                 if ($stockDelta !== 0) {
@@ -227,9 +258,9 @@ try {
                         json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
                         json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR),
                         $stockDelta,
-                        $reason,
-                        $adminId,
-                        $adminName
+                        $name . ' | ' . abs($stockDelta) . ' units ' . ($stockDelta > 0 ? 'added' : 'deducted') . ' | Reason: ' . $reason,
+                        $originalUserId,
+                        $originalUserName
                     ]);
                 }
             }
@@ -241,7 +272,7 @@ try {
     $review->execute([$status, $adminId, $note !== '' ? substr($note, 0, 500) : null, $requestId]);
 
     $pdo->commit();
-    sendJsonResponse(true, $decision === 'approve' ? "Restock order approved. Moved to staff dashboard for receiving." : "Change rejected.");
+    sendJsonResponse(true, $decision === 'approve' ? "Request approved and processed successfully." : "Change rejected.");
 } catch (InvalidArgumentException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     sendJsonResponse(false, $e->getMessage(), null, 400);

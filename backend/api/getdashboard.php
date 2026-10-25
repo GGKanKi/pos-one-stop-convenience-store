@@ -33,7 +33,7 @@ try {
     $salesStmt->execute([$date]);
     $grossSales = (float)$salesStmt->fetchColumn();
 
-    // 2. Sales Trend (Fixed syntax)
+    // 2. Sales Trend
     $trendStart = (new DateTime($date))->modify('-' . ($trendDays - 1) . ' days')->format('Y-m-d');
     $trendStmt = $pdo->prepare(
         "SELECT DATE(created_at) AS sale_date, SUM(total_amount) AS total
@@ -85,13 +85,21 @@ try {
     $topStmt->execute([$date]);
     $topProducts = $topStmt->fetchAll();
 
-    // 5. Low Stock Products
-    $lowStock = $pdo->query(
+    // 5. Low Stock Products (Excluding items with pending restock requests)
+    $lowStockStmt = $pdo->prepare(
         'SELECT id, productName AS name, barcode, stockQuantity, threshold
-         FROM products
-         WHERE stockQuantity <= threshold
-         ORDER BY (threshold - stockQuantity) DESC, productName ASC'
-    )->fetchAll();
+         FROM products p
+         WHERE p.stockQuantity <= p.threshold
+           AND NOT EXISTS (
+               SELECT 1 FROM inventory_change_requests icr 
+               WHERE icr.product_id = p.id 
+                 AND icr.action_type = "restock" 
+                 AND icr.status = "pending"
+           )
+         ORDER BY (p.threshold - p.stockQuantity) DESC, p.productName ASC'
+    );
+    $lowStockStmt->execute();
+    $lowStock = $lowStockStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 6. Approved Restock Requests (Purchases to be bought)
     $approvedRestocksStmt = $pdo->query("

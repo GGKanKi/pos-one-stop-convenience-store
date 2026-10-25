@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Package,
   X,
+  Calendar,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
@@ -89,8 +90,9 @@ export default function AdminDashboard() {
   const [receivedQuantities, setReceivedQuantities] = useState<Record<number, number>>({});
   const [receivingId, setReceivingId] = useState<number | null>(null);
 
-  // MODAL CONFIRMATION STATE
+  // MODAL CONFIRMATION STATE WITH EXPIRATION DATE FILL-IN
   const [confirmModalItem, setConfirmModalItem] = useState<ApprovedRestockItem | null>(null);
+  const [modalExpirationDate, setModalExpirationDate] = useState<string>("");
 
   useEffect(() => {
     const fontId = "google-font-inter";
@@ -179,10 +181,11 @@ export default function AdminDashboard() {
     }
     setError("");
     setNotice("");
+    setModalExpirationDate("");
     setConfirmModalItem(order);
   };
 
-  // EXECUTE RECEIVE RESTOCK ORDER (AFTER MODAL CONFIRMATION)
+  // EXECUTE RECEIVE RESTOCK ORDER (AFTER MODAL CONFIRMATION WITH EXPIRATION DATE)
   const handleReceiveRestock = async () => {
     if (!confirmModalItem) return;
     const order = confirmModalItem;
@@ -199,12 +202,13 @@ export default function AdminDashboard() {
       const response = await apiRequest("/receiverestock.php", "POST", {
         request_id: order.id,
         actual_qty: actualQty,
+        expiration_date: modalExpirationDate || null,
         staff_name: staffName,
       });
 
       if (!response.success) throw new Error(response.message || "Failed to receive restock order.");
       
-      setNotice(`Successfully received ${actualQty} units for ${order.productName}. Added to inventory and recorded in transaction history!`);
+      setNotice(`Successfully received ${actualQty} units for ${order.productName}. Added to inventory with batch expiration and recorded in transaction history!`);
       setRefreshKey((key) => key + 1); // Refresh dashboard to clear/update lists
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to receive restock order.");
@@ -526,7 +530,7 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* CONFIRMATION MODAL POPUP */}
+      {/* CONFIRMATION MODAL POPUP WITH EXPIRATION DATE INPUT */}
       {confirmModalItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full p-6 text-left relative">
@@ -544,11 +548,11 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-gray-900">Confirm Restock Receipt</h3>
-                <p className="text-xs text-gray-500 font-medium">Verify shipment before adding to inventory</p>
+                <p className="text-xs text-gray-500 font-medium">Verify shipment and fill expiration date</p>
               </div>
             </div>
 
-            <div className="bg-emerald-50/60 rounded-xl p-4 border border-emerald-100 mb-5 space-y-2">
+            <div className="bg-emerald-50/60 rounded-xl p-4 border border-emerald-100 mb-4 space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500 font-medium">Product:</span>
                 <span className="font-bold text-gray-800">{confirmModalItem.productName}</span>
@@ -569,9 +573,19 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-              Clicking confirm will automatically add this stock to your inventory and record a <strong className="text-gray-700">Stock Addition</strong> entry in your transaction history.
-            </p>
+            {/* EXPIRATION DATE INPUT FOR BATCH TRACKING */}
+            <div className="mb-5 space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <Calendar size={14} className="text-[#17347a]" /> Expiration Date (Batch)
+              </label>
+              <input
+                type="date"
+                value={modalExpirationDate}
+                onChange={(e) => setModalExpirationDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-mono bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
+              />
+              <p className="text-[10px] text-gray-400 italic">Optional: Leave blank if non-perishable or unknown.</p>
+            </div>
 
             <div className="flex items-center gap-3">
               <button
