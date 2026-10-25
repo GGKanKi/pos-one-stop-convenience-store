@@ -1,4 +1,5 @@
 <?php
+// product status API endpoint
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -17,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 require __DIR__ . '/../config/db.php';
 
 try {
+    // Strictly require expirationDate to be set, not empty, and either expired or within the next 30 days
     $stmt = $pdo->prepare("
         SELECT 
             id,
@@ -28,7 +30,10 @@ try {
             expirationDate,
             DATEDIFF(expirationDate, CURDATE()) AS days_remaining
         FROM products
-        ORDER BY id DESC
+        WHERE expirationDate IS NOT NULL 
+          AND TRIM(expirationDate) != ''
+          AND expirationDate <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+        ORDER BY expirationDate ASC, id DESC
     ");
     $stmt->execute();
     $rawProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -37,15 +42,16 @@ try {
 
     foreach ($rawProducts as $p) {
         $expDate = $p['expirationDate'];
+        $daysRemaining = (int)($p['days_remaining'] ?? 0);
         
-        // If no expiry date is set in DB yet, treat as Near Expiry or default for testing
-        if (empty($expDate)) {
+        // Determine status safely
+        if ($daysRemaining < 0) {
+            $status = 'EXPIRED';
+        } elseif ($daysRemaining <= 30) {
             $status = 'NEAR_EXPIRY';
-            $daysRemaining = 10;
-            $expDate = date('Y-m-d', strtotime('+10 days'));
         } else {
-            $daysRemaining = (int)($p['days_remaining'] ?? 0);
-            $status = ($daysRemaining < 0) ? 'EXPIRED' : 'NEAR_EXPIRY';
+            // Skip if it somehow bypassed the SQL filter
+            continue;
         }
 
         $items[] = [

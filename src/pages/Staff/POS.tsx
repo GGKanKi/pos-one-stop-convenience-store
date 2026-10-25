@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag, Lock
+  Search, Trash2, Plus, Minus, ScanLine, Check, Printer, X, ShoppingBag, Lock, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
@@ -15,7 +15,54 @@ interface Product {
   qty: number;
   stock?: number;
   category?: string;
-  discount?: number; // Per-item discount amount
+  discount?: number;
+  expiryBatches?: any[];
+  expirationDate?: string;
+  expiration_date?: string;
+}
+
+// Helper to securely parse dates and check expiration against today (2026-10-25)
+function checkProductExpiration(product: any): { isExpired: boolean; message: string } {
+  const today = new Date("2026-10-25");
+  today.setHours(0, 0, 0, 0);
+
+  const parseDateString = (dateStr: string) => {
+    if (!dateStr) return null;
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        return new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]));
+      }
+    }
+    const parsed = new Date(dateStr);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const batches = Array.isArray(product.expiryBatches) ? product.expiryBatches : [];
+  if (batches.length > 0) {
+    const hasExpiredBatch = batches.some((b: any) => {
+      const batchDate = parseDateString(b.date);
+      return batchDate && batchDate < today && Number(b.qty) > 0;
+    });
+    if (hasExpiredBatch) {
+      return { 
+        isExpired: true, 
+        message: `⚠️ WARNING: "${product.name || product.productName}" has expired stock batches! Please verify before selling.` 
+      };
+    }
+  }
+
+  const primaryExpiryStr = product.expirationDate || product.expiration_date;
+  const primaryExpiryDate = parseDateString(primaryExpiryStr);
+  
+  if (primaryExpiryDate && primaryExpiryDate < today) {
+    return { 
+      isExpired: true, 
+      message: `⚠️ WARNING: "${product.name || product.productName}" expired on ${primaryExpiryStr}! Please check the expiry date.` 
+    };
+  }
+
+  return { isExpired: false, message: '' };
 }
 
 export default function POS() {
@@ -54,8 +101,15 @@ export default function POS() {
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'GCash'>('Cash');
   const [cashTendered, setCashTendered] = useState("0.00");
+  const [gcashReference, setGcashReference] = useState("");
+  const [gcashParticulars, setGcashParticulars] = useState("");
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Expiration Warning Modal State
+  const [showExpiryModal, setShowExpiryModal] = useState(false);
+  const [expiryWarningMessage, setExpiryWarningMessage] = useState("");
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null);
 
   // Discount Modal State
   const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -90,6 +144,26 @@ export default function POS() {
       cartTableContainerRef.current.scrollTop = cartTableContainerRef.current.scrollHeight;
     }
   }, [cart]);
+
+  // Helper to safely add product to cart state and cleanup search modals
+  const insertProductIntoCart = (productToAdd: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.id === productToAdd.id || item.code === productToAdd.code);
+      if (existing) {
+        return prev.map(item =>
+          item.id === productToAdd.id || item.code === productToAdd.code
+            ? { ...item, qty: item.qty + 1 }
+            : item
+        );
+      }
+      return [...prev, productToAdd];
+    });
+
+    setSelectedItemId(productToAdd.id);
+    setShowSearchModal(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
 
   // Open discount modal only if an item in cart is selected
   const triggerDiscountModal = useCallback(() => {
@@ -158,30 +232,32 @@ export default function POS() {
         const productToAdd: Product = {
           id: Number(exactMatch.id),
           code: String(exactMatch.code || ''),
-          name: String(exactMatch.name || ''),
+          name: String(exactMatch.name || exactMatch.productName || ''),
           description: String(exactMatch.description || ''),
-          price: parseFloat(String(exactMatch.price ?? "0")) || 0,
+          price: parseFloat(String(exactMatch.price ?? exactMatch.sellingPrice ?? "0")) || 0,
           qty: 1,
-          stock: Number(exactMatch.stock || 0),
+          stock: Number(exactMatch.stock || exactMatch.stockQuantity || 0),
           category: String(exactMatch.category || ''),
-          discount: 0
+          discount: 0,
+          expiryBatches: exactMatch.expiryBatches,
+          expirationDate: exactMatch.expirationDate,
+          expiration_date: exactMatch.expiration_date
         };
 
-        setCart(prev => {
-          const existing = prev.find(item => item.id === productToAdd.id || item.code === productToAdd.code);
-          if (existing) {
-            return prev.map(item =>
-              item.id === productToAdd.id || item.code === productToAdd.code
-                ? { ...item, qty: item.qty + 1 }
-                : item
-            );
-          }
-          return [...prev, productToAdd];
-        });
-
-        setSelectedItemId(productToAdd.id);
+        // CLOSE SEARCH MODAL FIRST BEFORE TRIGGERING EXPIRY MODAL
         setShowSearchModal(false);
         setSearchQuery("");
+
+        // CHECK EXPIRATION UPON SCANNING
+        const expiryCheck = checkProductExpiration(exactMatch);
+        if (expiryCheck.isExpired) {
+          setPendingProduct(productToAdd);
+          setExpiryWarningMessage(expiryCheck.message);
+          setShowExpiryModal(true);
+        } else {
+          insertProductIntoCart(productToAdd);
+        }
+
       } else {
         console.warn("Hardware Scanner: Product not found for barcode:", barcode);
       }
@@ -192,7 +268,6 @@ export default function POS() {
 
   useEffect(() => {
     const handleGlobalScanKeypress = (e: KeyboardEvent) => {
-      // If modal or dialogs are active except scan/search boxes, allow normal typing
       const target = e.target as HTMLElement;
       if (
         (target.tagName === "INPUT" && target.id !== "pos-main-scan-input" && target !== scanInputRef.current) ||
@@ -202,9 +277,8 @@ export default function POS() {
       }
 
       const currentTime = Date.now();
-      // Hardware barcode scanners send characters extremely fast (< 80ms interval)
       if (currentTime - lastKeyTimeRef.current > 100) {
-        barcodeBufferRef.current = ""; // Reset buffer if typing is too slow (human input)
+        barcodeBufferRef.current = ""; 
       }
       lastKeyTimeRef.current = currentTime;
 
@@ -248,14 +322,17 @@ export default function POS() {
       if (response.success && Array.isArray(response.products)) {
         const mapped: Product[] = response.products.map((item: Record<string, unknown>) => ({
           id: Number(item.id),
-          code: String(item.code || ''),
-          name: String(item.name || ''),
+          code: String(item.code || item.barcode || ''),
+          name: String(item.name || item.productName || ''),
           description: String(item.description || ''),
-          price: parseFloat(String(item.price ?? "0")) || 0,
+          price: parseFloat(String(item.price ?? item.sellingPrice ?? "0")) || 0,
           qty: 1,
-          stock: Number(item.stock || 0),
+          stock: Number(item.stock || item.stockQuantity || 0),
           category: String(item.category || ''),
-          discount: 0
+          discount: 0,
+          expiryBatches: item.expiryBatches,
+          expirationDate: item.expirationDate,
+          expiration_date: item.expiration_date
         }));
         setSearchResults(mapped);
       }
@@ -292,22 +369,19 @@ export default function POS() {
   };
 
   const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id || item.code === product.code);
-      if (existing) {
-        return prev.map(item =>
-          item.id === product.id || item.code === product.code
-            ? { ...item, qty: item.qty + 1 }
-            : item
-        );
-      }
-      return [...prev, { ...product, qty: 1, discount: 0 }];
-    });
-
-    setSelectedItemId(product.id);
+    // CLOSE SEARCH MODAL FIRST BEFORE CHECKING EXPIRATION
     setShowSearchModal(false);
     setSearchQuery("");
-    setTimeout(() => scanInputRef.current?.focus(), 50);
+    setSearchResults([]);
+
+    const expiryCheck = checkProductExpiration(product);
+    if (expiryCheck.isExpired) {
+      setPendingProduct(product);
+      setExpiryWarningMessage(expiryCheck.message);
+      setShowExpiryModal(true);
+    } else {
+      insertProductIntoCart(product);
+    }
   };
 
   const handleModalSubmit = (e: React.FormEvent) => {
@@ -368,6 +442,12 @@ export default function POS() {
   const handleConfirm = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!cart.length) return alert("Cart is empty");
+    
+    if (paymentMethod === 'GCash' && !gcashReference.trim()) {
+      alert("Please enter the GCash Reference Number.");
+      return;
+    }
+
     setShowPaymentModal(false);
     setShowReceiptModal(true);
   };
@@ -442,6 +522,8 @@ export default function POS() {
     const transactionData = {
       paymentMethod,
       totalAmount: total,
+      gcashReference: paymentMethod === 'GCash' ? gcashReference : null,
+      gcashParticulars: paymentMethod === 'GCash' ? gcashParticulars : null,
       actor: (() => {
         try {
           const user = getAuthUser();
@@ -488,6 +570,7 @@ export default function POS() {
         itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
         paymentMethod,
         totalAmount: total,
+        gcashReference: paymentMethod === 'GCash' ? gcashReference : null,
         items: transactionData.items.map((item, index) => ({
           ...item,
           transactionItemId: savedResponse.items?.[index]?.transactionItemId,
@@ -504,6 +587,8 @@ export default function POS() {
     setCart([]);
     setSelectedItemId(null);
     setCashTendered("0.00");
+    setGcashReference("");
+    setGcashParticulars("");
     setScanCode("");
     setSearchQuery("");
   };
@@ -516,6 +601,49 @@ export default function POS() {
       {clockInError && (
         <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
           {clockInError}
+        </div>
+      )}
+
+      {/* EXPIRATION WARNING MODAL (HIGHEST Z-INDEX 100 TO PREVENT FREEZING) */}
+      {showExpiryModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-all">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[460px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-in zoom-in-95 duration-150">
+            <div className="w-16 h-16 bg-red-950 border-2 border-red-500 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(239,68,68,0.6)]">
+              <AlertTriangle className="text-red-400" size={32} />
+            </div>
+
+            <h2 className="text-xl font-black text-white mb-2 tracking-wider text-center">EXPIRED PRODUCT WARNING</h2>
+            <p className="text-red-200 text-center mb-6 font-medium text-sm px-2">
+              {expiryWarningMessage}
+            </p>
+
+            <div className="w-full flex gap-3">
+              <button 
+                type="button"
+                onClick={() => {
+                  if (pendingProduct) insertProductIntoCart(pendingProduct);
+                  setShowExpiryModal(false);
+                  setPendingProduct(null);
+                  setTimeout(() => scanInputRef.current?.focus(), 50);
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3.5 rounded-xl font-black text-xs tracking-wider uppercase transition shadow-[0_0_15px_rgba(239,68,68,0.4)] cursor-pointer"
+              >
+                Proceed Anyway
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowExpiryModal(false);
+                  setPendingProduct(null);
+                  setTimeout(() => scanInputRef.current?.focus(), 50);
+                }}
+                className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-xs tracking-wider uppercase hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)] cursor-pointer"
+              >
+                Cancel / Do Not Sell
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -616,7 +744,7 @@ export default function POS() {
 
       {/* SEARCH OVERLAY MODAL */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md p-6">
           <div className="bg-[#0e214d] border-2 border-cyan-400/60 w-full max-w-3xl h-[75vh] rounded-[26px] p-6 flex flex-col gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)] animate-in zoom-in-95 duration-150">
             
             <div className="flex justify-between items-center pb-2 border-b border-cyan-500/30">
@@ -716,7 +844,7 @@ export default function POS() {
         </div>
       )}
 
-      {/* PAYMENT MODAL */}
+      {/* PAYMENT MODAL WITH GCASH SUPPORT */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <form 
@@ -747,33 +875,59 @@ export default function POS() {
                   </div>
                 </div>
 
-                <div>
-                  <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">CASH TENDERED</p>
-                  <div className="relative mt-1.5">
-                    <input 
-                      ref={cashInputRef}
-                      type="text"
-                      value={cashTendered} 
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => setCashTendered(e.target.value)} 
-                      className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cyan-500">₱</span>
-                  </div>
-                  <div className="flex gap-2 mt-2 text-sm">
-                    {[100, 500, 1000].map((v) => (
-                      <button type="button" key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
-                </div>
+                {paymentMethod === 'Cash' ? (
+                  <>
+                    <div>
+                      <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide">CASH TENDERED</p>
+                      <div className="relative mt-1.5">
+                        <input 
+                          ref={cashInputRef}
+                          type="text"
+                          value={cashTendered} 
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) => setCashTendered(e.target.value)} 
+                          className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cyan-500">₱</span>
+                      </div>
+                      <div className="flex gap-2 mt-2 text-sm">
+                        {[100, 500, 1000].map((v) => (
+                          <button type="button" key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
+                    </div>
 
-                <div>
-                  <p className="text-xs font-bold text-cyan-300 mb-1.5 uppercase tracking-wide">CHANGE DUE</p>
-                  <div className="bg-gradient-to-r from-[#183478] to-[#0c1d45] text-cyan-300 p-3.5 rounded-xl text-center shadow-[0_0_15px_rgba(0,140,255,0.2)]">
-                    <span className="text-lg font-black tracking-wider text-cyan-400">₱ {changeDue.toFixed(2)}</span>
+                    <div>
+                      <p className="text-xs font-bold text-cyan-300 mb-1.5 uppercase tracking-wide">CHANGE DUE</p>
+                      <div className="bg-gradient-to-r from-[#183478] to-[#0c1d45] text-cyan-300 p-3.5 rounded-xl text-center shadow-[0_0_15px_rgba(0,140,255,0.2)]">
+                        <span className="text-lg font-black tracking-wider text-cyan-400">₱ {changeDue.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <label className="text-xs font-bold text-cyan-300 uppercase tracking-wide block mb-1">GCASH REFERENCE NO.</label>
+                      <input 
+                        type="text"
+                        value={gcashReference}
+                        onChange={(e) => setGcashReference(e.target.value)}
+                        placeholder="Enter 13-digit ref number"
+                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-cyan-300 uppercase tracking-wide block mb-1">PARTICULARS / NOTES (OPTIONAL)</label>
+                      <input 
+                        type="text"
+                        value={gcashParticulars}
+                        onChange={(e) => setGcashParticulars(e.target.value)}
+                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -959,47 +1113,47 @@ export default function POS() {
           </div>
 
           {/* Bottom Total Panel */}
-          <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3.5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center shadow-[0_0_30px_rgba(0,150,255,0.3)] text-cyan-200 shrink-0">
-            <div className="min-w-0 flex items-center gap-4 sm:gap-6 flex-wrap">
-              <div className="flex items-center gap-3 pr-4 border-r border-cyan-500/30">
-                <div className="w-10 h-10 rounded-xl border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shadow-[0_0_10px_rgba(0,140,255,0.3)] shrink-0">
-                  <span className="font-black text-lg">📄</span>
+          <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3 flex flex-col md:flex-row justify-between items-center gap-4 shadow-[0_0_30px_rgba(0,150,255,0.3)] text-cyan-200 shrink-0">
+            <div className="flex items-center gap-4 sm:gap-6 flex-wrap w-full md:w-auto">
+              <div className="flex items-center gap-2.5 pr-4 border-r border-cyan-500/30">
+                <div className="w-9 h-9 rounded-xl border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shadow-[0_0_10px_rgba(0,140,255,0.3)] shrink-0 text-sm">
+                  📄
                 </div>
-                <span className="text-amber-400 font-bold tracking-widest text-xs sm:text-sm uppercase whitespace-nowrap">--- TRANSACTION TOTAL ---</span>
+                <span className="text-amber-400 font-bold tracking-wider text-xs sm:text-sm uppercase whitespace-nowrap">TRANSACTION TOTAL</span>
               </div>
 
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="flex items-center gap-3 pr-6 border-r border-cyan-500/30">
-                  <div className="w-9 h-9 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shadow-[0_0_10px_rgba(0,140,255,0.2)] shrink-0">
+              <div className="flex items-center gap-5 flex-wrap">
+                <div className="flex items-center gap-2.5 pr-5 border-r border-cyan-500/30">
+                  <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shrink-0 text-xs">
                     💳
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide">Sub Total</span>
-                    <strong className="text-white font-mono text-base sm:text-lg">Php {subTotal.toFixed(2)}</strong>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-semibold text-cyan-300 uppercase tracking-wide">Sub Total</span>
+                    <strong className="text-white font-mono text-sm sm:text-base">₱{subTotal.toFixed(2)}</strong>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shadow-[0_0_10px_rgba(0,140,255,0.2)] shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shrink-0 text-xs font-bold">
                     %
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-semibold text-cyan-300 uppercase tracking-wide">Discount</span>
-                    <strong className="text-white font-mono text-base sm:text-lg">Php {transactionDiscount.toFixed(2)}</strong>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-semibold text-cyan-300 uppercase tracking-wide">Discount</span>
+                    <strong className="text-white font-mono text-sm sm:text-base">₱{transactionDiscount.toFixed(2)}</strong>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="border border-cyan-400/50 rounded-xl px-6 py-2.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] flex items-center justify-between gap-6 shadow-[0_0_20px_rgba(0,140,255,0.25)] shrink-0">
-              <div className="flex items-center gap-3 pr-4 border-r border-cyan-500/30">
-                <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shrink-0 text-xs">
+            <div className="border border-cyan-400/50 rounded-xl px-5 py-2 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] flex items-center justify-between gap-5 shadow-[0_0_20px_rgba(0,140,255,0.25)] w-full md:w-auto shrink-0">
+              <div className="flex items-center gap-2.5 pr-4 border-r border-cyan-500/30">
+                <div className="w-7 h-7 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shrink-0 text-xs">
                   💰
                 </div>
                 <span className="font-black text-amber-400 tracking-wider text-xs uppercase">TOTAL</span>
               </div>
-              <span className="font-black text-amber-400 tracking-wider text-xl sm:text-2xl font-mono drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
-                Php {total.toFixed(2)}
+              <span className="font-black text-amber-400 tracking-wider text-lg sm:text-xl font-mono drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                ₱{total.toFixed(2)}
               </span>
             </div>
           </div>

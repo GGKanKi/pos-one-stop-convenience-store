@@ -1,4 +1,5 @@
 <?php
+// inventory and approvals
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -30,13 +31,13 @@ if (!$requestId || $actualQty === false || $actualQty <= 0) {
 try {
     $pdo->beginTransaction();
 
-    $reqStmt = $pdo->prepare("SELECT * FROM inventory_change_requests WHERE id = ? AND status = 'approved' LIMIT 1 FOR UPDATE");
+    $reqStmt = $pdo->prepare("SELECT * FROM inventory_change_requests WHERE id = ? LIMIT 1 FOR UPDATE");
     $reqStmt->execute([$requestId]);
     $request = $reqStmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$request) {
         $pdo->rollBack();
-        sendJsonResponse(false, "Approved restock order not found or already received.", null, 404);
+        sendJsonResponse(false, "Restock order not found.", null, 404);
     }
 
     $productId = (int)($request['product_id'] ?? 0);
@@ -88,7 +89,6 @@ try {
         }
     }
 
-    // Push new batch row as a separate entry
     if (!empty($expirationDate)) {
         $batches[] = ['date' => $expirationDate, 'qty' => $actualQty];
     } else {
@@ -131,8 +131,38 @@ try {
         $staffName
     ]);
 
-    $completeStmt = $pdo->prepare("UPDATE inventory_change_requests SET status = 'completed' WHERE id = ?");
-    $completeStmt->execute([$requestId]);
+    // Update inventory_change_requests table: status = 'completed', and update quantity/requested_data JSON safely
+    // ex. admin changed the quantity approved to a different value than originally requested, so we need to reflect that in the request record
+    $reqColStmt = $pdo->query("SHOW COLUMNS FROM inventory_change_requests");
+    $reqColumns = $reqColStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $reqUpdateFields = ["status = 'completed'"];
+    $reqUpdateValues = [];
+
+    if (in_array('quantity', $reqColumns, true)) {
+        $reqUpdateFields[] = "quantity = ?";
+        $reqUpdateValues[] = $actualQty;
+    } elseif (in_array('approved_quantity', $reqColumns, true)) {
+        $reqUpdateFields[] = "approved_quantity = ?";
+        $reqUpdateValues[] = $actualQty;
+    }
+
+    if (!empty($request['requested_data'])) {
+        $reqJson = json_decode($request['requested_data'], true);
+        if (is_array($reqJson)) {
+            if (isset($reqJson['quantity'])) $reqJson['quantity'] = $actualQty;
+            if (isset($reqJson['qty'])) $reqJson['qty'] = $actualQty;
+            if (isset($reqJson['approved_quantity'])) $reqJson['approved_quantity'] = $actualQty;
+            $reqUpdateFields[] = "requested_data = ?";
+            $reqUpdateValues[] = json_encode($reqJson, JSON_THROW_ON_ERROR);
+        }
+    }
+
+    $reqUpdateValues[] = $requestId;
+    $reqSetClause = implode(", ", $reqUpdateFields);
+
+    $completeStmt = $pdo->prepare("UPDATE inventory_change_requests SET $reqSetClause WHERE id = ?");
+    $completeStmt->execute($reqUpdateValues);
 
     $pdo->commit();
     sendJsonResponse(true, "Restock received successfully! Added to inventory and recorded in transaction history.");

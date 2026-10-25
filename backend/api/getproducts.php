@@ -29,7 +29,7 @@ try {
     $search = trim($_GET['search'] ?? '');
 
     if (!empty($search)) {
-        // Query products table by productName, barcode, category, OR supplier
+        // Query products table by productName, barcode, category, OR supplier (Added expirationDate and expiry_batches)
         $stmt = $pdo->prepare("
             SELECT 
                 id, 
@@ -55,7 +55,7 @@ try {
         $likeSearch = "%" . $search . "%";
         $stmt->execute([$likeSearch, $likeSearch, $likeSearch, $likeSearch]);
     } else {
-        // Kukunin ang LAHAT ng 111 products (WALANG LIMIT)
+        // Kukunin ang LAHAT ng products (WALANG LIMIT)
         $stmt = $pdo->query("
             SELECT 
                 id, 
@@ -81,7 +81,7 @@ try {
 
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Decode the JSON column so the inventory editor receives a real batch array.
+    // Decode the JSON column so the inventory/POS receives a real batch array.
     foreach ($products as &$product) {
         $decodedBatches = json_decode((string)($product['expiry_batches'] ?? ''), true);
         $product['expiryBatches'] = is_array($decodedBatches) ? $decodedBatches : [];

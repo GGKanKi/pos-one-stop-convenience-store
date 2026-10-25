@@ -70,8 +70,16 @@ try {
         $audit = $pdo->prepare("INSERT INTO inventory_audit (action_type, product_id, product_name, before_data, after_data, quantity_change, reason, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
         if ($request['action_type'] === 'restock') {
-            // RESTOCK APPROVAL: Log approved restock order to audit history
-            $restockQty = (int)($data['restockQty'] ?? $data['stockQuantity'] ?? 0);
+            // RESTOCK APPROVAL: Use the newly edited approvedQty if provided, otherwise fallback to original
+            $restockQty = ($approvedQty !== null && $approvedQty > 0) ? $approvedQty : (int)($data['restockQty'] ?? $data['stockQuantity'] ?? 0);
+            
+            // Update requested_data JSON with the new approved quantity so downstream receive screens display it correctly
+            if ($approvedQty !== null && $approvedQty > 0) {
+                $data['restockQty'] = $approvedQty;
+                $updJson = $pdo->prepare("UPDATE inventory_change_requests SET requested_data = ? WHERE id = ?");
+                $updJson->execute([json_encode($data, JSON_THROW_ON_ERROR), $requestId]);
+            }
+
             $productName = trim((string)($data['productName'] ?? 'Product'));
             $productId = (int)($request['product_id'] ?? $data['id'] ?? 0);
 
