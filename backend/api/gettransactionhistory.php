@@ -1,5 +1,5 @@
 <?php
-// discount,
+// discount, voided items, and inventory changes
 header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
@@ -68,7 +68,7 @@ if (!in_array($action, $validActions, true)) {
 try {
     $rows = [];
 
-    // 1. INVENTORY AUDIT LOGS
+    // 1. INVENTORY AUDIT LOGS (Strictly bounded by date range)
     $auditStmt = $pdo->prepare(
         "SELECT id, action_type, product_name, before_data, after_data, quantity_change, reason, user_name, created_at
          FROM inventory_audit 
@@ -90,7 +90,7 @@ try {
         'threshold' => 'Low-stock threshold',
     ];
 
-    foreach ($auditStmt->fetchAll() as $entry) {
+    foreach ($auditStmt->fetchAll(PDO::FETCH_ASSOC) as $entry) {
         $name = cleanHistoryText($entry['product_name']);
         $reason = cleanHistoryText($entry['reason'] ?? '');
         $description = $name;
@@ -138,7 +138,7 @@ try {
         ];
     }
 
-    // 2. COMPLETED POS TRANSACTIONS (ONLY INCLUDE DISCOUNTS, OMIT NORMAL SALES)
+    // 2. COMPLETED POS TRANSACTIONS WITH DISCOUNTS (Strictly bounded by date range)
     $salesStmt = $pdo->prepare(
         "SELECT t.id, t.created_at, t.total_amount, 
                 COALESCE(t.discount, 0) AS transaction_discount,
@@ -162,7 +162,7 @@ try {
     );
     $salesStmt->execute([$start, $end]);
 
-    foreach ($salesStmt->fetchAll() as $sale) {
+    foreach ($salesStmt->fetchAll(PDO::FETCH_ASSOC) as $sale) {
         $itemCount = (int)($sale['item_count'] ?? 0);
         $totalAmt = (float)$sale['total_amount'];
         $transDisc = (float)($sale['transaction_discount'] ?? 0);

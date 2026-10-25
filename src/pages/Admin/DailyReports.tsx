@@ -34,6 +34,16 @@ interface CashierSummary {
   credit_payments: number;
 }
 
+// Helper function to format product names into Title Case (Capitalize Every Word)
+function toTitleCase(str: string): string {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export default function DailyReports() {
   const [reportDate, setReportDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -268,7 +278,9 @@ export default function DailyReports() {
                   ) : (
                     filteredItems.map((item, idx) => (
                       <tr key={idx} className="hover:bg-blue-50/50 transition">
-                        <td className="py-3 px-4 font-extrabold text-[#17347a]">{item.product_name}</td>
+                        <td className="py-3 px-4 font-bold text-[#17347a] normal-case">
+                          {toTitleCase(item.product_name)}
+                        </td>
                         <td className="py-3 px-3 text-center text-gray-700 font-bold">{Number(item.qty).toFixed(2)}</td>
                         <td className="py-3 px-4 text-right text-gray-900 font-black">₱{Number(item.total).toFixed(2)}</td>
                       </tr>

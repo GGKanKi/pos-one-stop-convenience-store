@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { Search, ArrowLeft, ShoppingBag, X, AlertTriangle, Lock, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { Search, ArrowLeft, ShoppingBag, X, AlertTriangle, Lock, ShieldAlert, CheckCircle2, Calendar as CalendarIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getAuthUser } from "../../services/authSession";
 
@@ -33,8 +33,20 @@ export default function RecallTransactions() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"today" | "today_only">("today");
+  const [activeFilter, setActiveFilter] = useState<"today" | "date">("today");
   
+  // Dynamic Today Date Helper for YYYY-MM-DD
+  const getTodayDateString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Single Date Selection State (Automatically sets to real-time current date)
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString);
+
   // Selection States
   const [selectedTxId, setSelectedTxId] = useState<string | number | null>(null);
   const [openTx, setOpenTx] = useState<Transaction | null>(null);
@@ -116,23 +128,26 @@ export default function RecallTransactions() {
 
     let combinedList: Transaction[] = [];
 
+    // Ipinapasa na natin ang eksaktong petsa sa backend PHP upang salain nito sa database
+    const targetDate = activeFilter === "today" ? getTodayDateString() : selectedDate;
+
     try {
-      const response = await fetch(`${API_BASE}/gettransactions.php`);
+      const response = await fetch(`${API_BASE}/gettransactions.php?date=${targetDate}`);
       if (response.ok) {
         const data = await response.json();
         const rawList = Array.isArray(data) ? data : Array.isArray(data?.transactions) ? data.transactions : [];
         const mapped: Transaction[] = rawList.map((tx: Record<string, unknown>, idx: number) => ({
-          id: tx.id ? String(tx.id) : String(idx + 1).padStart(2, '0'),
+          id: tx.id !== undefined && tx.id !== null ? String(tx.id) : String(idx + 1).padStart(2, '0'),
           dbTransactionId: Number(tx.dbTransactionId || tx.id) || undefined,
           time: String(tx.time || tx.created_at || "09:15 AM"),
-          created_at: tx.created_at,
+          created_at: tx.created_at ? String(tx.created_at) : undefined,
           itemCount: Number(tx.itemCount || tx.total_items || 1),
           paymentMethod: String(tx.paymentMethod || tx.payment_type || "Cash"),
           totalAmount: Number(tx.totalAmount || tx.total_price || 0),
           items: tx.items || [],
         }));
 
-        // Deduplicate using String conversion for both ID and dbTransactionId to prevent string vs number duplicate rows
+        // Deduplicate using String conversion for both ID and dbTransactionId
         const databaseIds = new Set(
           mapped.flatMap((tx) => [String(tx.id), String(tx.dbTransactionId || "")])
         );
@@ -155,7 +170,7 @@ export default function RecallTransactions() {
     // Sort strictly DESCENDING (newest transactions at the top)
     const sortedDesc = combinedList.sort((a, b) => getSortTimestamp(b) - getSortTimestamp(a));
     setTransactions(sortedDesc);
-  }, []);
+  }, [activeFilter, selectedDate]);
 
   useEffect(() => {
     void loadTransactions();
@@ -199,7 +214,7 @@ export default function RecallTransactions() {
     setShowVoidModal(true);
   }, [openTx, transactions, selectedTxId]);
 
-  // Keyboard Shortcuts (F1, F2, F3)
+  // Keyboard Shortcuts (F2, F3)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
@@ -226,9 +241,10 @@ export default function RecallTransactions() {
 
   const displayedTransactions = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return transactions;
 
     return transactions.filter((tx) => {
+      // Search Query Filtering
+      if (!query) return true;
       const payment = tx.paymentMethod.toLowerCase();
       const amount = tx.totalAmount.toString();
       const hasMatchingItem = tx.items?.some(
@@ -397,9 +413,9 @@ export default function RecallTransactions() {
 
               <div className="text-xs text-blue-100 font-medium">
                 {voidType === "item" ? (
-                  <p>You are about to void selected item from Transaction <strong>#{String(openTx?.id).padStart(2, '0')}</strong>.</p>
+                  <p>You are about to void selected item from Transaction <strong>#{String(openTx?.id)}</strong>.</p>
                 ) : (
-                  <p>You are about to void the complete transaction invoice <strong>#{String(openTx?.id || selectedTxId).padStart(2, '0')}</strong>.</p>
+                  <p>You are about to void the complete transaction invoice <strong>#{String(openTx?.id || selectedTxId)}</strong>.</p>
                 )}
               </div>
 
@@ -508,9 +524,9 @@ export default function RecallTransactions() {
           </button>
         </div>
 
-        {/* SEARCH & FILTER BAR - PERIWINKLE CONTAINER STYLE */}
-        <div className="bg-[#adbde6] rounded-2xl p-2.5 px-4 flex items-center justify-between gap-4 shrink-0 shadow-xs">
-          <div className="relative flex-1">
+        {/* SEARCH & FILTER BAR WITH CALENDAR DATE PICKER */}
+        <div className="bg-[#adbde6] rounded-2xl p-2.5 px-4 flex items-center justify-between gap-4 shrink-0 shadow-xs flex-wrap">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
@@ -523,8 +539,11 @@ export default function RecallTransactions() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveFilter("today")}
-              className={`px-8 py-2 rounded-xl font-extrabold text-xs uppercase transition-all shadow-xs ${
+              onClick={() => {
+                setActiveFilter("today");
+                setSelectedDate(getTodayDateString());
+              }}
+              className={`px-6 py-2 rounded-xl font-extrabold text-xs uppercase transition-all shadow-xs ${
                 activeFilter === "today"
                   ? "bg-[#122b68] text-white"
                   : "bg-white/70 text-[#122b68] hover:bg-white"
@@ -532,6 +551,33 @@ export default function RecallTransactions() {
             >
               Today
             </button>
+
+            {/* Calendar Date Picker Filter */}
+            <div className="relative flex items-center">
+              <div 
+                onClick={() => setActiveFilter("date")}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl cursor-pointer font-extrabold text-xs uppercase transition-all shadow-xs ${
+                  activeFilter === "date"
+                    ? "bg-[#122b68] text-white"
+                    : "bg-white/70 text-[#122b68] hover:bg-white"
+                }`}
+              >
+                <CalendarIcon size={15} className={activeFilter === "date" ? "text-amber-300" : "text-[#122b68]"} />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveFilter("date");
+                  }}
+                  onChange={(e) => {
+                    setActiveFilter("date");
+                    setSelectedDate(e.target.value);
+                  }}
+                  className="bg-transparent text-inherit font-extrabold text-xs outline-none cursor-pointer uppercase"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -653,7 +699,7 @@ export default function RecallTransactions() {
                   {displayedTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-16 text-center text-gray-400 font-bold">
-                        No transactions found.
+                        No transactions found for the selected date.
                       </td>
                     </tr>
                   ) : (
@@ -678,7 +724,7 @@ export default function RecallTransactions() {
                                   : "bg-[#122b68] text-white"
                               }`}
                             >
-                              {String(tx.id).padStart(2, '0')}
+                              {String(tx.id)}
                             </span>
                           </td>
                           <td className={`py-3.5 px-6 ${isTxSelected ? "text-blue-100" : "text-gray-600"}`}>

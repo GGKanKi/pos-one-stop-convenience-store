@@ -58,6 +58,9 @@ export default function ProductStatus() {
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Unable to load product status.');
       }
+      
+      // Filter or tag items where near expiry uses 30 days window if calculated on frontend,
+      // or map directly if backend handles the threshold. Backend PHP typically handles the day calculation.
       setItems(result.items || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load product status.');
@@ -186,7 +189,7 @@ export default function ProductStatus() {
             <div>
               <p className="text-[11px] uppercase font-extrabold text-amber-300 tracking-wider flex items-center gap-1.5">
                 <Clock size={14} />
-                Near Expiry (Within 14 Days)
+                Near Expiry (Within 30 Days)
               </p>
               <h3 className="text-2xl font-black mt-1 text-amber-300">{nearExpiryCount} Products</h3>
               <p className="text-xs text-gray-300 mt-1 font-semibold">
