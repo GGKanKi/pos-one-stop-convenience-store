@@ -34,6 +34,43 @@ function isValidDate(string $date): bool
     return $parsed !== false && $parsed->format('Y-m-d') === $date;
 }
 
+// Helper to format audit values cleanly (converting batch arrays into human-readable strings)
+function formatAuditValue($val): string
+{
+    if (is_array($val)) {
+        if (isset($val[0]) && is_array($val[0])) {
+            $parts = [];
+            foreach ($val as $item) {
+                $qty = $item['qty'] ?? $item['quantity'] ?? 0;
+                $date = $item['date'] ?? $item['expiryDate'] ?? 'No Date';
+                $parts[] = "{$qty} pcs ({$date})";
+            }
+            return implode(', ', $parts);
+        }
+        return json_encode($val);
+    }
+    if (is_string($val)) {
+        $trimmed = trim($val);
+        if (str_starts_with($trimmed, '[') || str_starts_with($trimmed, '{')) {
+            $decoded = json_decode($val, true);
+            if (is_array($decoded)) {
+                $parts = [];
+                foreach ($decoded as $item) {
+                    if (is_array($item)) {
+                        $qty = $item['qty'] ?? $item['quantity'] ?? 0;
+                        $date = $item['date'] ?? $item['expiryDate'] ?? 'No Date';
+                        $parts[] = "{$qty} pcs ({$date})";
+                    }
+                }
+                if (!empty($parts)) {
+                    return implode(', ', $parts);
+                }
+            }
+        }
+    }
+    return is_scalar($val) ? cleanHistoryText($val) : '';
+}
+
 $startValue = $_GET['start'] ?? date('Y-m-01');
 $endValue = $_GET['end'] ?? date('Y-m-d');
 $actionValue = $_GET['action'] ?? '';
@@ -48,6 +85,7 @@ $validActions = [
     '', 
     'Stock Deduction', 
     'Stock Addition', 
+    'Expired Items Dispose',
     'Discount', 
     'Voided Items/Invoice', 
     'Added New Product', 
@@ -87,6 +125,7 @@ try {
         'supplier' => 'Supplier',
         'expirationDate' => 'Expiry date',
         'expiryBatches' => 'Expiry batches',
+        'expiry_batches' => 'Expiry batches',
         'threshold' => 'Low-stock threshold',
     ];
 
@@ -96,14 +135,19 @@ try {
         $description = $name;
         $actionType = $entry['action_type'];
 
-        // OVERRIDE: If the reason indicates a void, classify it as Voided Items/Invoice
-        if (stripos($reason, 'void') !== false) {
+        // OVERRIDE: If the reason indicates expired disposal or void, classify accordingly
+        if (stripos($reason, 'expired stock batch disposal') !== false) {
+            $actionType = 'Expired Items Dispose';
+        } elseif (stripos($reason, 'void') !== false) {
             $actionType = 'Voided Items/Invoice';
         }
 
-        if (in_array($actionType, ['Stock Addition', 'Stock Deduction'], true)) {
+        if (in_array($actionType, ['Stock Addition', 'Stock Deduction', 'Expired Items Dispose'], true)) {
             $quantity = abs((int)$entry['quantity_change']);
             $verb = $actionType === 'Stock Addition' ? 'added' : 'deducted';
+            if ($actionType === 'Expired Items Dispose') {
+                $verb = 'disposed';
+            }
             $description .= ' | ' . $quantity . ' ' . ($quantity === 1 ? 'unit' : 'units') . ' ' . $verb;
             if ($reason !== '') {
                 $description .= ' | Reason: ' . $reason;
@@ -116,11 +160,16 @@ try {
             $before = json_decode($entry['before_data'] ?: '{}', true) ?: [];
             $after = json_decode($entry['after_data'] ?: '{}', true) ?: [];
             $changes = [];
-            foreach ($after as $field => $value) {
+            
+            $allKeys = array_unique(array_merge(array_keys($before), array_keys($after)));
+            foreach ($allKeys as $field) {
                 $label = $fieldLabels[$field] ?? $field;
-                $old = is_scalar($before[$field] ?? null) ? cleanHistoryText($before[$field]) : '';
-                $new = is_scalar($value) ? cleanHistoryText($value) : '';
-                $changes[] = $label . ': ' . ($old !== '' ? $old : '—') . ' to ' . ($new !== '' ? $new : '—');
+                $oldVal = formatAuditValue($before[$field] ?? null);
+                $newVal = formatAuditValue($after[$field] ?? null);
+
+                if ($oldVal !== $newVal) {
+                    $changes[] = $label . ': ' . ($oldVal !== '' ? $oldVal : '—') . ' to ' . ($newVal !== '' ? $newVal : '—');
+                }
             }
             $description .= $changes ? ' | Updated ' . implode('; ', $changes) : ' | Product details updated';
         } elseif ($actionType === 'Voided Items/Invoice' && $reason !== '') {

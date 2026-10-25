@@ -9,6 +9,7 @@ const ACTION_OPTIONS = [
   { label: 'Restock Approved', value: 'Restock Approved' },
   { label: 'Stock Deduction', value: 'Stock Deduction' },
   { label: 'Stock Addition', value: 'Stock Addition' },
+  { label: 'Expired Items Dispose', value: 'Expired Items Dispose' },
   { label: 'Discount', value: 'Discount' },
   { label: 'Voided Items/Invoice', value: 'Voided Items/Invoice' },
   { label: 'Added New Product', value: 'Added New Product' },
@@ -116,6 +117,8 @@ export default function Transactions() {
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'Stock Deduction':
         return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'Expired Items Dispose':
+        return 'bg-rose-100 text-rose-800 border-rose-300';
       case 'Discount':
         return 'bg-teal-100 text-teal-800 border-teal-300';
       case 'Voided Items/Invoice':
