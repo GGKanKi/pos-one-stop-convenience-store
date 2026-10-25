@@ -47,6 +47,20 @@ try {
         sendJsonResponse(false, "This request is no longer pending.", null, 409);
     }
 
+    $originalUserId = (int)($request['requested_by'] ?? $request['user_id'] ?? $adminId);
+    $originalUserName = trim((string)($request['user_name'] ?? ''));
+    if ($originalUserName === '' && $originalUserId !== $adminId) {
+        $uStmt = $pdo->prepare("SELECT first_name, last_name, email FROM users WHERE id = ? LIMIT 1");
+        $uStmt->execute([$originalUserId]);
+        $uData = $uStmt->fetch();
+        if ($uData) {
+            $originalUserName = trim(($uData['first_name'] ?? '') . ' ' . ($uData['last_name'] ?? '')) ?: ($uData['email'] ?? 'Staff');
+        }
+    }
+    if ($originalUserName === '') {
+        $originalUserName = 'Staff';
+    }
+
     if ($decision === 'approve') {
         $data = json_decode($request['requested_data'], true);
         if (!is_array($data)) {
@@ -55,48 +69,24 @@ try {
 
         $audit = $pdo->prepare("INSERT INTO inventory_audit (action_type, product_id, product_name, before_data, after_data, quantity_change, reason, user_id, user_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-        // -------------------------------------------------------------
-        // 1. RESTOCK ACTION TYPE
-        // -------------------------------------------------------------
         if ($request['action_type'] === 'restock') {
-            $productId = (int)$request['product_id'];
-            $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
-            $find->execute([$productId]);
-            $before = $find->fetch();
-
-            if (!$before) {
-                throw new InvalidArgumentException("The product was removed before this restock request could be approved.");
-            }
-
-            $qtyToAdd = ($approvedQty !== false && $approvedQty !== null && $approvedQty > 0) 
-                ? $approvedQty 
-                : (int)($data['restockQty'] ?? 0);
-
-            if ($qtyToAdd <= 0) {
-                throw new InvalidArgumentException("Invalid restock quantity specified.");
-            }
-
-            $newStock = (int)$before['stockQuantity'] + $qtyToAdd;
-
-            $update = $pdo->prepare("UPDATE products SET stockQuantity = ? WHERE id = ?");
-            $update->execute([$newStock, $productId]);
+            // RESTOCK APPROVAL: Log approved restock order to audit history
+            $restockQty = (int)($data['restockQty'] ?? $data['stockQuantity'] ?? 0);
+            $productName = trim((string)($data['productName'] ?? 'Product'));
+            $productId = (int)($request['product_id'] ?? $data['id'] ?? 0);
 
             $audit->execute([
-                'Stock Addition',
-                $productId,
-                $before['productName'],
-                json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
-                json_encode(['stockQuantity' => $newStock], JSON_THROW_ON_ERROR),
-                $qtyToAdd,
-                $note !== '' ? $note : 'Approved restock request #' . $requestId,
-                $adminId,
-                $adminName
+                'Restock Approved',
+                $productId > 0 ? $productId : null,
+                $productName,
+                null,
+                json_encode(['approvedQty' => $restockQty], JSON_THROW_ON_ERROR),
+                $restockQty,
+                $productName . ' | ' . $restockQty . ' units approved for restock | Reason: ' . ($note !== '' ? $note : 'Manager Approval'),
+                $originalUserId,
+                $originalUserName
             ]);
-        } 
-        // -------------------------------------------------------------
-        // 2. ADD OR UPDATE ACTION TYPES
-        // -------------------------------------------------------------
-        else {
+        } else {
             $name = trim((string)($data['productName'] ?? ''));
             $barcode = trim((string)($data['barcode'] ?? ''));
             $category = trim((string)($data['category'] ?? ''));
@@ -141,7 +131,18 @@ try {
                 $insert = $pdo->prepare("INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $insert->execute([$name, $barcode, $description, $stock, $cost, $price, $category, $supplier, $expirationDate, $encodedBatches, $threshold]);
                 $productId = (int)$pdo->lastInsertId();
-                $audit->execute(['Added New Product', $productId, $name, null, json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), $stock, 'Approved staff request #' . $requestId, $adminId, $adminName]);
+                
+                $audit->execute([
+                    'Added New Product', 
+                    $productId, 
+                    $name, 
+                    null, 
+                    json_encode(['stockQuantity' => $stock, 'barcode' => $barcode], JSON_THROW_ON_ERROR), 
+                    $stock, 
+                    $name . ' | ' . $stock . ' units added | Reason: Approved staff request #' . $requestId, 
+                    $originalUserId, 
+                    $originalUserName
+                ]);
             } else {
                 $productId = (int)$request['product_id'];
                 $find = $pdo->prepare("SELECT * FROM products WHERE id = ? LIMIT 1 FOR UPDATE");
@@ -154,8 +155,8 @@ try {
 
                 $submittedBefore = json_decode((string)$request['before_data'], true) ?: [];
                 
-                // Corrected stock delta calculation
-                $requestedStockDelta = $stock - (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
+                $submittedStockBefore = (int)($submittedBefore['stockQuantity'] ?? $before['stockQuantity']);
+                $requestedStockDelta = $stock - $submittedStockBefore;
                 $stock = (int)$before['stockQuantity'] + $requestedStockDelta;
 
                 if ($stock < 0) {
@@ -246,10 +247,9 @@ try {
                 }
 
                 if ($changedAfter !== []) {
-                    $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, null, $adminId, $adminName]);
+                    $audit->execute(['Product Details Update', $productId, $name, json_encode($changedBefore, JSON_THROW_ON_ERROR), json_encode($changedAfter, JSON_THROW_ON_ERROR), null, $name . ' details updated', $originalUserId, $originalUserName]);
                 }
 
-                // Logs to inventory_audit upon approval
                 if ($stockDelta !== 0) {
                     $audit->execute([
                         $stockDelta > 0 ? 'Stock Addition' : 'Stock Deduction',
@@ -258,9 +258,9 @@ try {
                         json_encode(['stockQuantity' => (int)$before['stockQuantity']], JSON_THROW_ON_ERROR),
                         json_encode(['stockQuantity' => $stock], JSON_THROW_ON_ERROR),
                         $stockDelta,
-                        $reason,
-                        $adminId,
-                        $adminName
+                        $name . ' | ' . abs($stockDelta) . ' units ' . ($stockDelta > 0 ? 'added' : 'deducted') . ' | Reason: ' . $reason,
+                        $originalUserId,
+                        $originalUserName
                     ]);
                 }
             }
@@ -272,7 +272,7 @@ try {
     $review->execute([$status, $adminId, $note !== '' ? substr($note, 0, 500) : null, $requestId]);
 
     $pdo->commit();
-    sendJsonResponse(true, $decision === 'approve' ? "Change approved and applied to inventory." : "Change rejected.");
+    sendJsonResponse(true, $decision === 'approve' ? "Request approved and processed successfully." : "Change rejected.");
 } catch (InvalidArgumentException $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     sendJsonResponse(false, $e->getMessage(), null, 400);

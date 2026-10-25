@@ -82,6 +82,57 @@ try {
         $payload['stockChangeReason'] = trim((string)$stockReason);
     }
 
+    // CLEAN & HUMAN-READABLE DESCRIPTION GENERATOR
+    $changeDetails = [];
+    if ($action === 'update' && $before) {
+        $trackedFields = [
+            'productName' => 'Product Name',
+            'costPrice' => 'Cost Price',
+            'sellingPrice' => 'Selling Price',
+            'stockQuantity' => 'Stock Quantity',
+            'threshold' => 'Threshold',
+            'category' => 'Category',
+            'supplier' => 'Supplier'
+        ];
+
+        foreach ($trackedFields as $field => $label) {
+            $oldVal = $before[$field] ?? $before[strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $field))] ?? null;
+            $newVal = $payload[$field] ?? null;
+
+            if ($newVal !== null && (string)$oldVal !== (string)$newVal) {
+                // Format prices with peso signs nicely
+                if (in_array($field, ['costPrice', 'sellingPrice'], true)) {
+                    $oldVal = '₱' . number_format((float)$oldVal, 2);
+                    $newVal = '₱' . number_format((float)$newVal, 2);
+                }
+                $changeDetails[] = "$label: $oldVal → $newVal";
+            }
+        }
+
+        // Clean comparison for expiry batches
+        $oldBatches = $before['expiryBatches'] ?? [];
+        $newBatches = $payload['expiryBatches'] ?? [];
+        if ($newBatches !== $oldBatches && is_array($newBatches) && !empty($newBatches)) {
+            $batchStrs = [];
+            foreach ($newBatches as $b) {
+                $bDate = $b['date'] ?? 'No Date';
+                $bQty = $b['qty'] ?? 0;
+                $batchStrs[] = "$bQty pcs (Exp: $bDate)";
+            }
+            $changeDetails[] = "Batches: " . implode(", ", $batchStrs);
+        }
+    } elseif ($action === 'restock') {
+        $restockQty = $payload['restockQty'] ?? $payload['stockQuantity'] ?? 0;
+        $changeDetails[] = "Restock requested quantity: $restockQty pcs";
+    } elseif ($action === 'add') {
+        $changeDetails[] = "New product record created";
+    }
+
+    $readableDescription = $productName . (!empty($changeDetails) ? " | " . implode(" | ", $changeDetails) : "");
+    if (!empty($stockReason)) {
+        $readableDescription .= " | Reason: " . $stockReason;
+    }
+
     // Clean payload metadata before storing as requested_data JSON
     $cleanPayload = $payload;
     unset($cleanPayload['actor']);
@@ -115,6 +166,10 @@ try {
     if (in_array('user_name', $existingColumns, true)) {
         $insertFields[] = 'user_name';
         $insertValues[] = $requesterName;
+    }
+    if (in_array('description', $existingColumns, true)) {
+        $insertFields[] = 'description';
+        $insertValues[] = $readableDescription;
     }
 
     $fieldList = implode(', ', $insertFields);

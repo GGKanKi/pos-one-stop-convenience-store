@@ -12,6 +12,8 @@ import {
   ShoppingCart,
   CheckCircle2,
   Package,
+  X,
+  Calendar,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
@@ -84,6 +86,14 @@ export default function AdminDashboard() {
   const [restockQuantities, setRestockQuantities] = useState<Record<number, number>>({});
   const [submittingId, setSubmittingId] = useState<number | null>(null);
 
+  // EDITABLE RECEIVED QUANTITIES FOR APPROVED RESTOCK ORDERS (Staff only)
+  const [receivedQuantities, setReceivedQuantities] = useState<Record<number, number>>({});
+  const [receivingId, setReceivingId] = useState<number | null>(null);
+
+  // MODAL CONFIRMATION STATE WITH EXPIRATION DATE FILL-IN
+  const [confirmModalItem, setConfirmModalItem] = useState<ApprovedRestockItem | null>(null);
+  const [modalExpirationDate, setModalExpirationDate] = useState<string>("");
+
   useEffect(() => {
     const fontId = "google-font-inter";
     if (!document.getElementById(fontId)) {
@@ -115,6 +125,13 @@ export default function AdminDashboard() {
           initialQtyMap[item.id] = defaultReorder;
         });
         setRestockQuantities(initialQtyMap);
+
+        // INITIALIZE RECEIVED QUANTITIES FOR APPROVED ORDERS
+        const initialReceivedMap: Record<number, number> = {};
+        (dashboardResult.approvedRestocks || []).forEach((item) => {
+          initialReceivedMap[item.id] = item.approvedQty;
+        });
+        setReceivedQuantities(initialReceivedMap);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Unable to load dashboard data.");
@@ -155,8 +172,53 @@ export default function AdminDashboard() {
     }
   };
 
+  // OPEN CONFIRMATION MODAL BEFORE RECEIVING
+  const promptReceiveRestock = (order: ApprovedRestockItem) => {
+    const actualQty = receivedQuantities[order.id] ?? order.approvedQty;
+    if (actualQty <= 0) {
+      setError("Please specify a valid received quantity greater than 0.");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setModalExpirationDate("");
+    setConfirmModalItem(order);
+  };
+
+  // EXECUTE RECEIVE RESTOCK ORDER (AFTER MODAL CONFIRMATION WITH EXPIRATION DATE)
+  const handleReceiveRestock = async () => {
+    if (!confirmModalItem) return;
+    const order = confirmModalItem;
+    const actualQty = receivedQuantities[order.id] ?? order.approvedQty;
+
+    setReceivingId(order.id);
+    setConfirmModalItem(null);
+    setError("");
+    setNotice("");
+    try {
+      const user = getActiveStaffUser();
+      const staffName = [user.first_name, user.last_name].filter(Boolean).join(" ") || "Staff";
+      
+      const response = await apiRequest("/receiverestock.php", "POST", {
+        request_id: order.id,
+        actual_qty: actualQty,
+        expiration_date: modalExpirationDate || null,
+        staff_name: staffName,
+      });
+
+      if (!response.success) throw new Error(response.message || "Failed to receive restock order.");
+      
+      setNotice(`Successfully received ${actualQty} units for ${order.productName}. Added to inventory with batch expiration and recorded in transaction history!`);
+      setRefreshKey((key) => key + 1); // Refresh dashboard to clear/update lists
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to receive restock order.");
+    } finally {
+      setReceivingId(null);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
+    <div className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased relative" style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
       {!hideSidebar && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 text-left overflow-x-hidden">
@@ -313,7 +375,7 @@ export default function AdminDashboard() {
           )}
         </section>
 
-        {/* APPROVED RESTOCK ORDERS (TO BE BOUGHT) PANEL */}
+        {/* APPROVED RESTOCK ORDERS (TO BE BOUGHT) PANEL WITH EDITABLE QUANTITIES & RECEIVE BUTTON */}
         {data?.approvedRestocks && data.approvedRestocks.length > 0 && (
           <section className="bg-emerald-50/60 rounded-2xl shadow-md border border-emerald-200 p-4 sm:p-5">
             <div className="flex items-center gap-2.5 mb-3">
@@ -322,24 +384,57 @@ export default function AdminDashboard() {
               </span>
               <div>
                 <h2 className="font-extrabold tracking-tight text-emerald-900 text-sm">Approved Restock Orders (To Be Bought)</h2>
-                <p className="text-[11px] text-emerald-700 font-medium">Restock orders approved by manager ready for supplier purchase</p>
+                <p className="text-[11px] text-emerald-700 font-medium">Restock orders approved by manager ready for supplier purchase and store arrival</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {data.approvedRestocks.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-bold text-gray-800">{item.productName}</p>
-                    <p className="text-[10px] text-gray-500 font-mono">{item.barcode}</p>
+              {data.approvedRestocks.map((item) => {
+                const currentReceivedQty = receivedQuantities[item.id] ?? item.approvedQty;
+
+                return (
+                  <div key={item.id} className="flex flex-col gap-2.5 bg-white p-3.5 rounded-xl border border-emerald-200 shadow-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-gray-800" title={item.productName}>{item.productName}</p>
+                        <p className="text-[10px] text-gray-500 font-mono">{item.barcode}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-300">
+                          Approved: {item.approvedQty}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!isAdmin && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-emerald-100">
+                        <label className="text-[10px] font-extrabold text-gray-600 uppercase">Received:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={currentReceivedQty}
+                          onChange={(e) =>
+                            setReceivedQuantities((prev) => ({
+                              ...prev,
+                              [item.id]: Math.max(1, Number(e.target.value)),
+                            }))
+                          }
+                          className="w-16 px-2 py-1 border border-emerald-300 rounded-lg text-xs font-bold text-center bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
+                        />
+                        <button
+                          type="button"
+                          disabled={receivingId === item.id}
+                          onClick={() => promptReceiveRestock(item)}
+                          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-[11px] font-extrabold uppercase transition active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                        >
+                          <CheckCircle2 size={13} />
+                          {receivingId === item.id ? "Receiving..." : "Receive"}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs border border-emerald-300">
-                      Buy {item.approvedQty} pcs
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
@@ -434,6 +529,83 @@ export default function AdminDashboard() {
           </section>
         </div>
       </main>
+
+      {/* CONFIRMATION MODAL POPUP WITH EXPIRATION DATE INPUT */}
+      {confirmModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full p-6 text-left relative">
+            <button
+              onClick={() => setConfirmModalItem(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+              type="button"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-900">Confirm Restock Receipt</h3>
+                <p className="text-xs text-gray-500 font-medium">Verify shipment and fill expiration date</p>
+              </div>
+            </div>
+
+            <div className="bg-emerald-50/60 rounded-xl p-4 border border-emerald-100 mb-4 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500 font-medium">Product:</span>
+                <span className="font-bold text-gray-800">{confirmModalItem.productName}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500 font-medium">Barcode:</span>
+                <span className="font-mono text-gray-600">{confirmModalItem.barcode}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500 font-medium">Approved Qty:</span>
+                <span className="font-bold text-gray-700">{confirmModalItem.approvedQty} pcs</span>
+              </div>
+              <div className="flex justify-between text-xs pt-2 border-t border-emerald-200/60">
+                <span className="text-emerald-900 font-extrabold uppercase">Receiving Qty:</span>
+                <span className="font-black text-emerald-700 text-sm">
+                  {receivedQuantities[confirmModalItem.id] ?? confirmModalItem.approvedQty} pcs
+                </span>
+              </div>
+            </div>
+
+            {/* EXPIRATION DATE INPUT FOR BATCH TRACKING */}
+            <div className="mb-5 space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <Calendar size={14} className="text-[#17347a]" /> Expiration Date (Batch)
+              </label>
+              <input
+                type="date"
+                value={modalExpirationDate}
+                onChange={(e) => setModalExpirationDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs font-mono bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
+              />
+              <p className="text-[10px] text-gray-400 italic">Optional: Leave blank if non-perishable or unknown.</p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmModalItem(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-xs font-bold transition active:scale-95 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleReceiveRestock()}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition active:scale-95 cursor-pointer shadow-md shadow-emerald-600/20"
+              >
+                Confirm & Add to Inventory
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

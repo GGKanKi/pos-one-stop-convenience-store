@@ -141,6 +141,89 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItemId, cart, triggerDiscountModal]);
 
+  // ==========================================
+  // GLOBAL HARDWARE SCANNER LISTENER (D-Tech MP6300IR)
+  // ==========================================
+  const barcodeBufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+
+  const handleBarcodeScanned = useCallback(async (barcode: string) => {
+    if (!barcode.trim()) return;
+
+    try {
+      const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(barcode.trim())}`, "GET");
+      if (response.success && response.products && response.products.length > 0) {
+        const exactMatch = response.products.find((p: Record<string, unknown>) => p.code === barcode.trim()) || response.products[0];
+        
+        const productToAdd: Product = {
+          id: Number(exactMatch.id),
+          code: String(exactMatch.code || ''),
+          name: String(exactMatch.name || ''),
+          description: String(exactMatch.description || ''),
+          price: parseFloat(String(exactMatch.price ?? "0")) || 0,
+          qty: 1,
+          stock: Number(exactMatch.stock || 0),
+          category: String(exactMatch.category || ''),
+          discount: 0
+        };
+
+        setCart(prev => {
+          const existing = prev.find(item => item.id === productToAdd.id || item.code === productToAdd.code);
+          if (existing) {
+            return prev.map(item =>
+              item.id === productToAdd.id || item.code === productToAdd.code
+                ? { ...item, qty: item.qty + 1 }
+                : item
+            );
+          }
+          return [...prev, productToAdd];
+        });
+
+        setSelectedItemId(productToAdd.id);
+        setShowSearchModal(false);
+        setSearchQuery("");
+      } else {
+        console.warn("Hardware Scanner: Product not found for barcode:", barcode);
+      }
+    } catch (err) {
+      console.error("Scanner lookup error:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalScanKeypress = (e: KeyboardEvent) => {
+      // If modal or dialogs are active except scan/search boxes, allow normal typing
+      const target = e.target as HTMLElement;
+      if (
+        (target.tagName === "INPUT" && target.id !== "pos-main-scan-input" && target !== scanInputRef.current) ||
+        target.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      const currentTime = Date.now();
+      // Hardware barcode scanners send characters extremely fast (< 80ms interval)
+      if (currentTime - lastKeyTimeRef.current > 100) {
+        barcodeBufferRef.current = ""; // Reset buffer if typing is too slow (human input)
+      }
+      lastKeyTimeRef.current = currentTime;
+
+      if (e.key === 'Enter') {
+        const scannedCode = barcodeBufferRef.current.trim();
+        if (scannedCode.length > 1) {
+          e.preventDefault();
+          handleBarcodeScanned(scannedCode);
+        }
+        barcodeBufferRef.current = "";
+      } else if (e.key.length === 1) {
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalScanKeypress, true);
+    return () => window.removeEventListener('keydown', handleGlobalScanKeypress, true);
+  }, [handleBarcodeScanned]);
+
   // Auto-focus on Cash Input when Payment Modal opens
   useEffect(() => {
     if (showPaymentModal) {
@@ -238,27 +321,9 @@ export default function POS() {
     e.preventDefault();
     if (!scanCode.trim()) return;
 
-    try {
-      const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(scanCode.trim())}`, "GET");
-      if (response.success && response.products.length > 0) {
-        const exactMatch = response.products.find((p: Record<string, unknown>) => p.code === scanCode.trim()) || response.products[0];
-        addToCart({
-          id: Number(exactMatch.id),
-          code: String(exactMatch.code || ''),
-          name: String(exactMatch.name || ''),
-          description: String(exactMatch.description || ''),
-          price: parseFloat(exactMatch.price) || 0,
-          qty: 1,
-          stock: Number(exactMatch.stock || 0),
-          discount: 0
-        });
-        setScanCode("");
-      } else {
-        alert("Product not found for barcode: " + scanCode);
-      }
-    } catch (err) {
-      console.error("Scan error:", err);
-    }
+    const codeToSearch = scanCode.trim();
+    setScanCode("");
+    await handleBarcodeScanned(codeToSearch);
   };
 
   // Subtotal calculated before discounts
@@ -764,6 +829,7 @@ export default function POS() {
             <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 pointer-events-none" size={20} />
             <input
               ref={scanInputRef}
+              id="pos-main-scan-input"
               value={scanCode}
               onChange={(e) => setScanCode(e.target.value)}
               placeholder="SCAN Product Code & Press Enter"
@@ -882,7 +948,7 @@ export default function POS() {
                         <div className="flex flex-col items-center justify-center gap-2">
                           <ShoppingBag className="text-slate-300" size={32} />
                           <p className="font-semibold text-sm text-slate-500">Cart is empty</p>
-                          <p className="text-xs text-slate-400">Scan a barcode or search product name to add items.</p>
+                          <p className="text-xs text-slate-400">Scan with your D-Tech MP6300IR scanner or search product name to add items.</p>
                         </div>
                       </td>
                     </tr>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { getAuthToken, getAuthUser } from "../../services/authSession";
@@ -137,6 +137,41 @@ export default function Inventory() {
   const [stockReasonModalOpen, setStockReasonModalOpen] = useState(false);
   const [stockChangeReason, setStockChangeReason] = useState("");
 
+  // ==========================================
+  // HARDWARE SCANNER LISTENER (D-Tech MP6300IR)
+  // ==========================================
+  const barcodeBufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+
+  useEffect(() => {
+    const handleGlobalScanKeypress = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === "TEXTAREA") {
+        return;
+      }
+
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTimeRef.current > 100) {
+        barcodeBufferRef.current = ""; 
+      }
+      lastKeyTimeRef.current = currentTime;
+
+      if (e.key === 'Enter') {
+        const scannedCode = barcodeBufferRef.current.trim();
+        if (scannedCode.length > 1) {
+          e.preventDefault();
+          setSearchTerm(scannedCode);
+        }
+        barcodeBufferRef.current = "";
+      } else if (e.key.length === 1) {
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalScanKeypress, true);
+    return () => window.removeEventListener('keydown', handleGlobalScanKeypress, true);
+  }, []);
+
   useEffect(() => {
     const fontId = "google-font-inter";
     if (!document.getElementById(fontId)) {
@@ -263,7 +298,11 @@ export default function Inventory() {
         expirationDate: formData.expirationDate || null,
         supplier: formData.supplier || null,
         description: formData.description || null,
-        actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", role: user.role || "staff" },
+        actor: { 
+          id: user.id || null, 
+          name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", 
+          role: user.role || "staff" 
+        },
       };
       
       const token = getInventoryAuthToken();
@@ -376,7 +415,11 @@ export default function Inventory() {
       expirationDate: primaryExpiry,
       expiryBatches: editExpiryBatches,
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
-      actor: { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", role: user.role || "staff" },
+      actor: { 
+        id: user.id || null, 
+        name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", 
+        role: user.role || "staff" 
+      },
     };
 
     setSaving(true);
@@ -384,8 +427,6 @@ export default function Inventory() {
     try {
       const token = getInventoryAuthToken();
 
-      // IF STAFF: Route through submitinventorychange.php for Admin approval
-      // IF ADMIN: Directly update products via updateproduct.php
       const endpoint = isStaffMode ? "submitinventorychange.php" : "updateproduct.php";
       const payload = isStaffMode
         ? { action: "update", product: updatedProductData }
@@ -499,7 +540,7 @@ export default function Inventory() {
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search product name, barcode, category, or supplier..."
+              placeholder="Scan barcode with scanner or search product name..."
               className="w-full pl-9 pr-8 py-2 bg-white text-gray-800 text-xs font-medium rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-inner"
             />
             {searchTerm && (
