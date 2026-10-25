@@ -14,6 +14,11 @@ import Sidebar from '../../components/Sidebar';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Convenience/backend/api';
 
+// Helper to get token safely without broken file paths
+const getAuthToken = () => {
+  return localStorage.getItem('token') || localStorage.getItem('auth_token') || '';
+};
+
 interface ExpiryItem {
   id: string;
   sku: string;
@@ -21,9 +26,14 @@ interface ExpiryItem {
   category: string;
   quantity: number;
   unitCost: number;
+  sellingPrice?: number;
+  threshold?: number;
+  barcode?: string;
   expiryDate: string; // YYYY-MM-DD
   status: 'EXPIRED' | 'NEAR_EXPIRY';
   daysRemaining: number;
+  batchIndex?: number | null;
+  batches?: any[];
 }
 
 export default function ProductStatus() {
@@ -53,14 +63,16 @@ export default function ProductStatus() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE}/getproductstatus.php`);
+      const response = await fetch(`${API_BASE}/getproductstatus.php`, {
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+      });
       const result = await response.json();
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Unable to load product status.');
       }
       
-      // Filter or tag items where near expiry uses 30 days window if calculated on frontend,
-      // or map directly if backend handles the threshold. Backend PHP typically handles the day calculation.
       setItems(result.items || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load product status.');
@@ -101,22 +113,50 @@ export default function ProductStatus() {
     .filter(i => i.status === 'NEAR_EXPIRY')
     .reduce((sum, i) => sum + (i.quantity * i.unitCost), 0);
 
-  const handleDispose = async (id: string) => {
-    if (confirm('Are you sure you want to mark this item as disposed/removed?')) {
+  const handleDispose = async (item: ExpiryItem) => {
+    if (confirm(`Are you sure you want to dispose of this expired batch (${item.quantity} pcs) for ${item.inventoryName}?`)) {
       try {
+        let updatedBatches = item.batches ? [...item.batches] : [];
+        let newStock = item.quantity;
+
+        if (item.batchIndex !== undefined && item.batchIndex !== null && item.batches) {
+          // Remove only the specific expired batch
+          updatedBatches.splice(item.batchIndex, 1);
+          // Recalculate total stock from remaining valid batches
+          newStock = updatedBatches.reduce((sum: number, b: any) => sum + Number(b.qty || 0), 0);
+        } else {
+          newStock = 0;
+          updatedBatches = [];
+        }
+
         const response = await fetch(`${API_BASE}/updateproduct.php`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, stockQuantity: 0, reason: 'Expired stock disposal' })
+          headers: { 
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getAuthToken()}`,
+          },
+          body: JSON.stringify({ 
+            id: item.id, 
+            sku: item.sku,
+            productName: item.inventoryName,
+            category: item.category,
+            barcode: item.barcode || item.sku,
+            stockQuantity: newStock, 
+            costPrice: item.unitCost,
+            sellingPrice: item.sellingPrice || 0,
+            threshold: item.threshold || 10,
+            expiryBatches: updatedBatches,
+            reason: 'Expired stock batch disposal' 
+          })
         });
         const result = await response.json();
         if (result.success) {
-          setItems(prev => prev.filter(item => item.id !== id));
+          void loadProductStatus();
         } else {
           alert(result.message || 'Failed to dispose item.');
         }
-      } catch {
-        setItems(prev => prev.filter(item => item.id !== id));
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Failed to dispose item.');
       }
     }
   };
@@ -298,7 +338,7 @@ export default function ProductStatus() {
                 ) : filteredItems.length > 0 ? (
                   filteredItems.map((item, idx) => (
                     <tr 
-                      key={item.id} 
+                      key={`${item.id}-${item.expiryDate}-${idx}`} 
                       className={`${idx % 2 === 0 ? 'bg-white' : 'bg-blue-50/40'} hover:bg-blue-100/50 transition-colors`}
                     >
                       <td className="py-2.5 px-4 font-bold text-gray-500">{item.sku}</td>
@@ -325,7 +365,7 @@ export default function ProductStatus() {
                       <td className="py-2.5 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => handleDispose(item.id)}
+                          onClick={() => void handleDispose(item)}
                           className="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-red-200 transition active:scale-95 inline-flex items-center gap-1 cursor-pointer"
                           title="Dispose or Remove Item"
                         >

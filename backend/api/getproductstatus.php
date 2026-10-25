@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 require __DIR__ . '/../config/db.php';
 
 try {
-    // Strictly require expirationDate to be set, not empty, and either expired or within the next 30 days
+    // Select only columns that exist in the products table
     $stmt = $pdo->prepare("
         SELECT 
             id,
@@ -27,44 +27,115 @@ try {
             category,
             stockQuantity,
             costPrice,
+            sellingPrice,
+            threshold,
+            barcode,
             expirationDate,
-            DATEDIFF(expirationDate, CURDATE()) AS days_remaining
+            expiry_batches
         FROM products
-        WHERE expirationDate IS NOT NULL 
-          AND TRIM(expirationDate) != ''
-          AND expirationDate <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-        ORDER BY expirationDate ASC, id DESC
     ");
     $stmt->execute();
     $rawProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $items = [];
-
+    $currentDate = new DateTime();
+    $currentDate->setTime(0, 0, 0);
+    
+// Loop through each product and check for expiration status
     foreach ($rawProducts as $p) {
-        $expDate = $p['expirationDate'];
-        $daysRemaining = (int)($p['days_remaining'] ?? 0);
-        
-        // Determine status safely
-        if ($daysRemaining < 0) {
-            $status = 'EXPIRED';
-        } elseif ($daysRemaining <= 30) {
-            $status = 'NEAR_EXPIRY';
-        } else {
-            // Skip if it somehow bypassed the SQL filter
-            continue;
+        $productId = (string)$p['id'];
+        $sku = $p['sku'];
+        $productName = $p['productName'];
+        $category = $p['category'] ?? 'General';
+        $unitCost = (float)$p['costPrice'];
+        $sellingPrice = (float)($p['sellingPrice'] ?? 0);
+        $threshold = (int)($p['threshold'] ?? 10);
+        $barcode = $p['barcode'] ?? $sku;
+
+        $batchesRaw = $p['expiry_batches'] ?? null;
+        $batches = [];
+        if (!empty($batchesRaw)) {
+            $decoded = is_string($batchesRaw) ? json_decode($batchesRaw, true) : $batchesRaw;
+            if (is_array($decoded)) {
+                $batches = $decoded;
+            }
         }
 
-        $items[] = [
-            'id' => (string)$p['id'],
-            'sku' => $p['sku'],
-            'inventoryName' => $p['productName'],
-            'category' => $p['category'] ?? 'General',
-            'quantity' => (int)$p['stockQuantity'],
-            'unitCost' => (float)$p['costPrice'],
-            'expiryDate' => $expDate,
-            'status' => $status,
-            'daysRemaining' => $daysRemaining
-        ];
+        if (!empty($batches)) {
+            foreach ($batches as $index => $batch) {
+                $batchDateStr = $batch['date'] ?? '';
+                $batchQty = (int)($batch['qty'] ?? 0);
+
+                if (empty($batchDateStr) || $batchDateStr === 'No Expiry Date' || $batchQty <= 0) {
+                    continue;
+                }
+
+                $batchDate = DateTime::createFromFormat('!Y-m-d', $batchDateStr);
+                if (!$batchDate) {
+                    $batchDate = new DateTime($batchDateStr);
+                }
+                if (!$batchDate) continue;
+                $batchDate->setTime(0, 0, 0);
+
+                $interval = $currentDate->diff($batchDate);
+                $daysRemaining = (int)$interval->format('%r%a');
+
+                if ($daysRemaining <= 30) {
+                    $status = ($daysRemaining < 0) ? 'EXPIRED' : 'NEAR_EXPIRY';
+
+                    $items[] = [
+                        'id' => $productId,
+                        'sku' => $sku,
+                        'inventoryName' => $productName,
+                        'category' => $category,
+                        'quantity' => $batchQty, // Exact batch quantity (e.g. 1 pc)
+                        'unitCost' => $unitCost,
+                        'sellingPrice' => $sellingPrice,
+                        'threshold' => $threshold,
+                        'barcode' => $barcode,
+                        'expiryDate' => $batchDate->format('Y-m-d'),
+                        'status' => $status,
+                        'daysRemaining' => $daysRemaining,
+                        'batchIndex' => $index,
+                        'batches' => $batches
+                    ];
+                }
+            }
+        } else {
+            $expDate = $p['expirationDate'] ?? null;
+            if (empty($expDate) || trim($expDate) === '') continue;
+
+            $expDateTime = DateTime::createFromFormat('!Y-m-d', $expDate);
+            if (!$expDateTime) {
+                $expDateTime = new DateTime($expDate);
+            }
+            if (!$expDateTime) continue;
+            $expDateTime->setTime(0, 0, 0);
+
+            $interval = $currentDate->diff($expDateTime);
+            $daysRemaining = (int)$interval->format('%r%a');
+
+            if ($daysRemaining <= 30) {
+                $status = ($daysRemaining < 0) ? 'EXPIRED' : 'NEAR_EXPIRY';
+
+                $items[] = [
+                    'id' => $productId,
+                    'sku' => $sku,
+                    'inventoryName' => $productName,
+                    'category' => $category,
+                    'quantity' => (int)$p['stockQuantity'],
+                    'unitCost' => $unitCost,
+                    'sellingPrice' => $sellingPrice,
+                    'threshold' => $threshold,
+                    'barcode' => $barcode,
+                    'expiryDate' => $expDateTime->format('Y-m-d'),
+                    'status' => $status,
+                    'daysRemaining' => $daysRemaining,
+                    'batchIndex' => null,
+                    'batches' => []
+                ];
+            }
+        }
     }
 
     echo json_encode(['success' => true, 'items' => $items]);
