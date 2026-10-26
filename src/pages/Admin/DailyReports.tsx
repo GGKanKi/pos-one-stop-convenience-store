@@ -9,7 +9,8 @@ import {
   ShoppingBag, 
   Users, 
   TrendingUp, 
-  RefreshCw 
+  RefreshCw,
+  WalletCards 
 } from 'lucide-react';
 
 interface ReportItem {
@@ -28,10 +29,13 @@ interface CashierSummary {
   cashier_name: string;
   start_time: string;
   register_start: number;
-  cash_sales: number;
-  epayment_sales: number;
-  gcash_sales: number;
-  credit_payments: number;
+}
+
+interface PayoutItem {
+  pay_out_to: string;
+  amount: number;
+  description: string;
+  created_at?: string;
 }
 
 // Helper function to format product names into Title Case (Capitalize Every Word)
@@ -50,56 +54,24 @@ export default function DailyReports() {
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  const sampleItems: ReportItem[] = [
-    { product_name: 'BEAR BRAND SWAK 33G TINGI', qty: 2, total: 30.00, category: 'MILK' },
-    { product_name: 'BOSTON PAMINTA PINO TINGI 25/1.4G', qty: 2, total: 4.00, category: 'CONDIMENTS' },
-    { product_name: 'COKE MISMO 290ML', qty: 1, total: 22.00, category: 'BEVERAGES' },
-    { product_name: 'CREAM BAR UBE QUESO PASTILLAS', qty: 1, total: 16.00, category: 'ICE CREAM' },
-    { product_name: 'DOVE COND STRTSLKY P 12ML', qty: 2, total: 20.00, category: 'HAIR CARE' },
-    { product_name: 'FITA CRACKER SINGLES PACK 30G', qty: 1, total: 8.00, category: 'BISCUIT' },
-    { product_name: 'FITA CRACKER SINGLES PC 30G', qty: 3, total: 30.00, category: 'BISCUIT' },
-    { product_name: 'FUDGEE BARR CHOCOLATE 42G', qty: 1, total: 10.00, category: 'SNACKS' },
-    { product_name: 'KASALO COKE/SPRITE/ROYAL', qty: 1, total: 35.00, category: 'DRINKS' },
-    { product_name: 'KOPIKO BLANCA/WINTER BLEND/WIT', qty: 2, total: 24.00, category: 'COFFEE' },
-    { product_name: 'KOPIKO COFFEE BROWN TWIN PACK', qty: 1, total: 17.00, category: 'COFFEE' },
-    { product_name: 'SAN MIG SUGAR FREE ORIGINAL 7G', qty: 1, total: 10.00, category: 'COFFEE' },
-    { product_name: 'YAKULT 80ML', qty: 3, total: 36.00, category: 'BEVERAGES' },
-  ];
-
-  const sampleCategories: CategorySale[] = [
-    { category: 'BEVERAGES', total: 58.00 },
-    { category: 'BISCUIT', total: 38.00 },
-    { category: 'COFFEE', total: 51.00 },
-    { category: 'CONDIMENTS', total: 4.00 },
-    { category: 'DRINKS', total: 35.00 },
-    { category: 'HAIR CARE', total: 20.00 },
-    { category: 'ICE CREAM', total: 16.00 },
-    { category: 'MILK', total: 30.00 },
-    { category: 'SNACKS', total: 10.00 },
-  ];
-
-  const sampleCashiers: CashierSummary[] = [
-    { cashier_name: 'Partisala Rose', start_time: '6:17:53 am', register_start: 33177.00, cash_sales: 262.00, epayment_sales: 0, gcash_sales: 0, credit_payments: 0 }
-  ];
-
-  const sampleTotals = {
-    grandTotal: 262.00,
-    totalCash: 262.00,
-    totalEpayments: 0.00,
-    totalGcash: 0.00,
-    totalCredit: 0.00,
-    returned: 0.00,
-    voidedAmount: 0.00,
-    transactionCount: 2,
-    totalItemCount: 21,
-    totalDiscounts: 0.00,
-    netSales: 262.00,
-  };
-
-  const [items, setItems] = useState<ReportItem[]>(sampleItems);
-  const [categories, setCategories] = useState<CategorySale[]>(sampleCategories);
-  const [cashiers, setCashiers] = useState<CashierSummary[]>(sampleCashiers);
-  const [totals, setTotals] = useState(sampleTotals);
+  const [items, setItems] = useState<ReportItem[]>([]);
+  const [categories, setCategories] = useState<CategorySale[]>([]);
+  const [cashiers, setCashiers] = useState<CashierSummary[]>([]);
+  const [payouts, setPayouts] = useState<PayoutItem[]>([]);
+  const [totals, setTotals] = useState({
+    grandTotal: 0,
+    totalCash: 0,
+    totalEpayments: 0,
+    totalGcash: 0,
+    totalCredit: 0,
+    returned: 0,
+    voidedAmount: 0,
+    transactionCount: 0,
+    totalItemCount: 0,
+    totalDiscounts: 0,
+    totalPayouts: 0,
+    netSales: 0,
+  });
 
   const loadReport = useCallback(async () => {
     setLoading(true);
@@ -115,37 +87,47 @@ export default function DailyReports() {
       }
 
       const data = response.data || response;
-      const fetchedItems = data.items || [];
       
-      if (fetchedItems.length > 0) {
-        setItems(fetchedItems);
-        setCategories(data.categories || sampleCategories);
-        setCashiers(data.cashiers || sampleCashiers);
-        setTotals(data.totals || sampleTotals);
-      } else {
-        setItems([]);
-        setCategories([]);
-        setCashiers([]);
-        setTotals({
-          grandTotal: 0,
-          totalCash: 0,
-          totalEpayments: 0,
-          totalGcash: 0,
-          totalCredit: 0,
-          returned: 0,
-          voidedAmount: 0,
-          transactionCount: 0,
-          totalItemCount: 0,
-          totalDiscounts: 0,
-          netSales: 0,
-        });
-      }
+      setItems(data.items || []);
+      setCategories(data.categories || []);
+      setCashiers(data.cashiers || []);
+      setPayouts(data.payouts || []);
+      setTotals(data.totals || {
+        grandTotal: 0,
+        totalCash: 0,
+        totalEpayments: 0,
+        totalGcash: 0,
+        totalCredit: 0,
+        returned: 0,
+        voidedAmount: 0,
+        transactionCount: 0,
+        totalItemCount: 0,
+        totalDiscounts: 0,
+        totalPayouts: 0,
+        netSales: 0,
+      });
+
     } catch (err) {
-      console.warn("API Error, using fallback:", err);
-      setItems(sampleItems);
-      setCategories(sampleCategories);
-      setCashiers(sampleCashiers);
-      setTotals(sampleTotals);
+      console.error("API Error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load daily sales report.");
+      setItems([]);
+      setCategories([]);
+      setCashiers([]);
+      setPayouts([]);
+      setTotals({
+        grandTotal: 0,
+        totalCash: 0,
+        totalEpayments: 0,
+        totalGcash: 0,
+        totalCredit: 0,
+        returned: 0,
+        voidedAmount: 0,
+        transactionCount: 0,
+        totalItemCount: 0,
+        totalDiscounts: 0,
+        totalPayouts: 0,
+        netSales: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -269,7 +251,13 @@ export default function DailyReports() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-bold text-gray-800">
-                  {filteredItems.length === 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={3} className="py-12 text-center text-xs text-gray-400 italic">
+                        Loading database records...
+                      </td>
+                    </tr>
+                  ) : filteredItems.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="py-12 text-center text-xs text-gray-400 italic">
                         No sales recorded for this date.
@@ -331,7 +319,11 @@ export default function DailyReports() {
                   <span>Voided Amount</span>
                   <strong className="text-rose-600">₱{Number(totals.voidedAmount).toFixed(2)}</strong>
                 </div>
-                <div className="flex justify-between py-1">
+                <div className="flex justify-between py-1 border-b border-gray-50">
+                  <span>Total Payouts / Expenses</span>
+                  <strong className="text-amber-600">₱{Number(totals.totalPayouts || 0).toFixed(2)}</strong>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-50">
                   <span>Transaction Count</span>
                   <strong className="text-[#17347a]">{totals.transactionCount}</strong>
                 </div>
@@ -339,6 +331,29 @@ export default function DailyReports() {
                   <span>Total Items Sold</span>
                   <strong className="text-[#17347a]">{totals.totalItemCount}</strong>
                 </div>
+              </div>
+            </section>
+
+            {/* PAYOUTS LIST CARD */}
+            <section className="rounded-2xl bg-white p-5 shadow-lg border border-gray-200 space-y-3">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                <WalletCards size={15} className="text-[#17347a]" /> Payout Records ({payouts.length})
+              </h3>
+
+              <div className="space-y-2 max-h-[160px] overflow-y-auto text-xs font-bold text-gray-700 pr-1">
+                {payouts.length === 0 ? (
+                  <p className="text-gray-400 italic text-center py-2">No payouts recorded for this date.</p>
+                ) : (
+                  payouts.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center py-1.5 border-b border-gray-50">
+                      <div>
+                        <span className="uppercase text-gray-900 font-extrabold block">{p.pay_out_to}</span>
+                        <span className="text-[10px] text-gray-400 font-normal">{p.description || "No description"}</span>
+                      </div>
+                      <strong className="text-rose-600 font-black">-₱{Number(p.amount).toFixed(2)}</strong>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 
@@ -362,7 +377,7 @@ export default function DailyReports() {
               </div>
 
               <div className="pt-2 border-t border-gray-200 flex justify-between items-center bg-[#17347a] text-white p-3 rounded-xl">
-                <span className="text-xs font-extrabold uppercase">Net Sales</span>
+                <span className="text-xs font-extrabold uppercase">Net Sales (Less Payouts)</span>
                 <span className="text-sm font-black">₱{Number(totals.netSales).toFixed(2)}</span>
               </div>
             </section>

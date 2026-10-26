@@ -76,6 +76,21 @@ try {
     $voidStmt->execute([$date]);
     $voidRow = $voidStmt->fetch(PDO::FETCH_ASSOC);
 
+    // Calculate total payouts / expenses for the day
+    $payoutsStmt = $pdo->prepare("
+        SELECT pay_out_to, amount, description, created_at 
+        FROM payouts 
+        WHERE DATE(created_at) = ?
+        ORDER BY id DESC
+    ");
+    $payoutsStmt->execute([$date]);
+    $payouts = $payoutsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $totalPayouts = 0.00;
+    foreach ($payouts as $p) {
+        $totalPayouts += (float)$p['amount'];
+    }
+
     $itemCountStmt = $pdo->prepare("
         SELECT COALESCE(SUM(ti.quantity), 0) AS total_items
         FROM transaction_items ti
@@ -88,14 +103,18 @@ try {
     $grandTotal = (float)($tRow['grand_total'] ?? 0);
     $totalDiscounts = (float)($tRow['total_discounts'] ?? 0);
     $voidedAmount = (float)($voidRow['voided_amount'] ?? 0);
+    
+    // Net Sales = Grand Total - Discounts - Payouts/Expenses
+    $netSales = $grandTotal - $totalDiscounts - $totalPayouts;
 
     echo json_encode([
         'success' => true,
         'data' => [
             'items' => $items,
             'categories' => $categories,
+            'payouts' => $payouts,
             'cashiers' => [
-                ['cashier_name' => 'Partisala Rose', 'start_time' => '6:17:53 am', 'register_start' => 33177.00]
+                ['cashier_name' => 'Rhiel Mulingbayan', 'start_time' => '6:17:53 am', 'register_start' => 0]
             ],
             'totals' => [
                 'grandTotal' => $grandTotal,
@@ -108,7 +127,8 @@ try {
                 'transactionCount' => (int)($tRow['transaction_count'] ?? 0),
                 'totalItemCount' => (int)($itemCountRow['total_items'] ?? 0),
                 'totalDiscounts' => $totalDiscounts,
-                'netSales' => $grandTotal - $totalDiscounts,
+                'totalPayouts' => $totalPayouts,
+                'netSales' => $netSales
             ]
         ]
     ]);

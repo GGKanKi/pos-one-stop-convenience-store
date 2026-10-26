@@ -20,6 +20,7 @@ import SalesProfit from './pages/Admin/SalesProfit';
 import ProductStatus from './pages/Admin/ProductStatus';
 import InventoryApprovals from './pages/Admin/InventoryApprovals';
 import DailyReports from './pages/Admin/DailyReports';
+import Payout from './pages/Admin/Payouts';
 
 function App() {
   return (
@@ -58,6 +59,7 @@ function App() {
         <Route path="/admin/productstatus" element={<ProductStatus />} />
         <Route path="/admin/daily-reports" element={<DailyReports />} />
         <Route path="/admin/dailyreports" element={<DailyReports />} />
+        <Route path="/admin/payouts" element={<Payout />} /> {/* <-- Idinagdag ang Payout route */}
 
         {/* FALLBACK */}
         <Route
