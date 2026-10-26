@@ -3,7 +3,7 @@
 
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp, BadgeCheck, CalendarDays
+  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp, BadgeCheck, CalendarDays, WalletCards
 } from 'lucide-react';
 import { clearAuthSession, getAuthUser } from '../services/authSession';
 
@@ -28,6 +28,7 @@ export default function Sidebar() {
     { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale, allowedForStaff: false },
     { name: 'Sales And Profit', path: '/admin/salesprofit', icon: TrendingUp, allowedForStaff: false },
     { name: 'Daily Sales Report', path: '/admin/daily-reports', icon: CalendarDays, allowedForStaff: false },
+    { name: 'Payouts', path: '/admin/payouts', icon: WalletCards, allowedForStaff: false },
   ];
 
   return (
