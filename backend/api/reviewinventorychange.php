@@ -83,6 +83,12 @@ try {
             $productName = trim((string)($data['productName'] ?? 'Product'));
             $productId = (int)($request['product_id'] ?? $data['id'] ?? 0);
 
+            // Automatically increase the actual product stock quantity upon restock approval
+            if ($productId > 0) {
+                $stockUpdate = $pdo->prepare("UPDATE products SET stockQuantity = stockQuantity + ? WHERE id = ?");
+                $stockUpdate->execute([$restockQty, $productId]);
+            }
+
             $audit->execute([
                 'Restock Approved',
                 $productId > 0 ? $productId : null,

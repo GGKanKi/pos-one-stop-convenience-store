@@ -27,6 +27,9 @@ interface Transaction {
   items?: PurchasedItem[];
   timestamp?: number;
   created_at?: string;
+  cashTendered?: number;
+  changeDue?: number;
+  gcashReference?: string;
 }
 
 export default function RecallTransactions() {
@@ -128,7 +131,6 @@ export default function RecallTransactions() {
 
     let combinedList: Transaction[] = [];
 
-    // Ipinapasa na natin ang eksaktong petsa sa backend PHP upang salain nito sa database
     const targetDate = activeFilter === "today" ? getTodayDateString() : selectedDate;
 
     try {
@@ -145,9 +147,11 @@ export default function RecallTransactions() {
           paymentMethod: String(tx.paymentMethod || tx.payment_type || "Cash"),
           totalAmount: Number(tx.totalAmount || tx.total_price || 0),
           items: tx.items || [],
+          cashTendered: tx.cashTendered !== undefined ? Number(tx.cashTendered) : undefined,
+          changeDue: tx.changeDue !== undefined ? Number(tx.changeDue) : undefined,
+          gcashReference: tx.gcashReference ? String(tx.gcashReference) : undefined,
         }));
 
-        // Deduplicate using String conversion for both ID and dbTransactionId
         const databaseIds = new Set(
           mapped.flatMap((tx) => [String(tx.id), String(tx.dbTransactionId || "")])
         );
@@ -163,11 +167,9 @@ export default function RecallTransactions() {
         combinedList = localTxList;
       }
     } catch {
-      // Backend offline fallback
       combinedList = localTxList;
     }
 
-    // Sort strictly DESCENDING (newest transactions at the top)
     const sortedDesc = combinedList.sort((a, b) => getSortTimestamp(b) - getSortTimestamp(a));
     setTransactions(sortedDesc);
   }, [activeFilter, selectedDate]);
@@ -184,6 +186,122 @@ export default function RecallTransactions() {
       window.removeEventListener("pos_transaction_saved", handleSync);
     };
   }, [loadTransactions]);
+
+  // Hidden Iframe Silent Print Function for Reprinting
+  const printThermalReceipt = (tx: Transaction) => {
+    const existingIframe = document.getElementById('thermal-print-iframe');
+    if (existingIframe) {
+      existingIframe.remove();
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'thermal-print-iframe';
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const itemsHtml = (tx.items || []).map((item: PurchasedItem) => `
+      <tr>
+        <td colspan="3" class="bold">${item.name}</td>
+      </tr>
+      <tr>
+        <td>₱${item.price.toFixed(2)} ${item.discount ? `(-₱${item.discount})` : ''}</td>
+        <td class="text-center">${item.qty}</td>
+        <td class="amount-col">₱${((item.price * item.qty) - (item.discount || 0)).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Reprint Receipt - #${tx.id}</title>
+          <style>
+            @page { margin: 0; size: 58mm auto; }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 11px;
+              width: 54mm;
+              margin: 0 auto;
+              padding: 4px;
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .bold { font-weight: bold; }
+            .flex-between { display: flex; justify-content: space-between; }
+            .line { border-bottom: dashed 1px #000; margin: 4px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th, td { font-size: 10px; text-align: left; padding: 1px 0; }
+            .amount-col { text-align: right; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center bold" style="font-size: 12px;">STORE NAME / POS</div>
+          <div class="text-center">[REPRINT COPY]</div>
+          <div class="text-center">Terminal: 202603 - Bernice</div>
+          <div class="text-center">Time: ${tx.time}</div>
+          <div class="text-center">Tx ID: #${tx.id}</div>
+          <div class="line"></div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="amount-col">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="line"></div>
+          <div class="flex-between bold" style="font-size: 12px;"><span>TOTAL:</span> <span>₱${tx.totalAmount.toFixed(2)}</span></div>
+          
+          <div class="line"></div>
+          <div class="flex-between"><span>Payment:</span> <span>${tx.paymentMethod}</span></div>
+          ${tx.paymentMethod === 'Cash' ? `
+            <div class="flex-between"><span>Cash Tendered:</span> <span>₱${Number(tx.cashTendered || tx.totalAmount).toFixed(2)}</span></div>
+            <div class="flex-between"><span>Change Due:</span> <span>₱${Number(tx.changeDue || 0).toFixed(2)}</span></div>
+          ` : `
+            <div class="flex-between"><span>Ref No:</span> <span>${tx.gcashReference || 'N/A'}</span></div>
+          `}
+
+          <div class="line"></div>
+          <div class="text-center" style="margin-top: 6px;">Thank you for your purchase!</div>
+          <div class="text-center" style="font-size: 8px; margin-top: 2px;">Powered by POS System</div>
+        </body>
+      </html>
+    `;
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(htmlContent);
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      }, 300);
+    }
+  };
+
+  // Trigger Reprint Receipt Action (F1)
+  const triggerReprint = useCallback(() => {
+    const targetTx = openTx || transactions.find(t => String(t.id) === String(selectedTxId));
+    if (!targetTx) {
+      showAlert("Please select or double click a transaction to reprint.", "Action Required", "info");
+      return;
+    }
+    printThermalReceipt(targetTx);
+  }, [openTx, transactions, selectedTxId]);
 
   // Trigger Void Item Action
   const triggerVoidItem = useCallback(() => {
@@ -214,10 +332,13 @@ export default function RecallTransactions() {
     setShowVoidModal(true);
   }, [openTx, transactions, selectedTxId]);
 
-  // Keyboard Shortcuts (F2, F3)
+  // Keyboard Shortcuts (F1, F2, F3)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F2') {
+      if (e.key === 'F1') {
+        e.preventDefault();
+        triggerReprint();
+      } else if (e.key === 'F2') {
         e.preventDefault();
         triggerVoidItem();
       } else if (e.key === 'F3') {
@@ -228,7 +349,7 @@ export default function RecallTransactions() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [triggerVoidItem, triggerVoidInvoice]);
+  }, [triggerReprint, triggerVoidItem, triggerVoidInvoice]);
 
   // Auto-focus on manager PIN input when modal opens
   useEffect(() => {
@@ -243,7 +364,6 @@ export default function RecallTransactions() {
     const query = searchTerm.trim().toLowerCase();
 
     return transactions.filter((tx) => {
-      // Search Query Filtering
       if (!query) return true;
       const payment = tx.paymentMethod.toLowerCase();
       const amount = tx.totalAmount.toString();
@@ -353,7 +473,7 @@ export default function RecallTransactions() {
       className="flex h-screen bg-[#b0c7ff] font-sans text-gray-800 antialiased overflow-hidden p-6 relative"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      {/* CUSTOM ALERT / ACCESS DENIED MODAL (STAYS IN FRONT AT z-[60]) */}
+      {/* CUSTOM ALERT / ACCESS DENIED MODAL */}
       {alertModal.show && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#0d1e47]/85 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="bg-[#122b68] border-2 border-blue-400/50 w-full max-w-sm rounded-2xl p-6 shadow-2xl flex flex-col gap-4 text-white">
@@ -395,7 +515,7 @@ export default function RecallTransactions() {
 
       <main className="p-0 flex flex-col gap-4 max-w-[1400px] mx-auto text-left w-full h-full overflow-hidden">
 
-        {/* VOID REASON & MANAGER PIN MODAL WINDOW (LAYER AT z-50) */}
+        {/* VOID REASON & MANAGER PIN MODAL WINDOW */}
         {showVoidModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d1e47]/70 backdrop-blur-xs p-4">
             <form onSubmit={submitVoid} className="bg-[#122b68] border-2 border-blue-400/40 w-full max-w-md rounded-2xl p-6 shadow-2xl flex flex-col gap-4 text-white">
@@ -419,7 +539,6 @@ export default function RecallTransactions() {
                 )}
               </div>
 
-              {/* MANAGER PIN INPUT */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-extrabold text-blue-200 uppercase tracking-wide flex items-center gap-1.5">
                   <Lock size={14} className="text-amber-400" />
@@ -436,7 +555,6 @@ export default function RecallTransactions() {
                 />
               </div>
 
-              {/* REASON INPUT */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-extrabold text-blue-200 uppercase tracking-wide">
                   Reason for Void *
@@ -453,14 +571,14 @@ export default function RecallTransactions() {
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95"
+                  className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 cursor-pointer"
                 >
                   Confirm Void
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowVoidModal(false)}
-                  className="flex-1 bg-[#1d387d] border border-blue-400/30 text-white py-2.5 rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-[#25469b] active:scale-95 transition-all"
+                  className="flex-1 bg-[#1d387d] border border-blue-400/30 text-white py-2.5 rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-[#25469b] active:scale-95 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -469,11 +587,12 @@ export default function RecallTransactions() {
           </div>
         )}
 
-        {/* TOP NAV BAR - MATCHING DESIGN BANNER */}
+        {/* TOP NAV BAR */}
         <header className="bg-[#122b68] text-white p-3.5 px-6 rounded-2xl shadow-md shrink-0 flex items-center justify-between">
           <button
+            type="button"
             onClick={() => navigate("/pos")}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs cursor-pointer"
           >
             <ArrowLeft size={16} />
             <span>POS Terminal</span>
@@ -484,9 +603,18 @@ export default function RecallTransactions() {
           </h1>
         </header>
 
-        {/* F-KEYS BAR - MATCHING CONTROLS CONTAINER */}
+        {/* F-KEYS BAR */}
         <div className="bg-[#adbde6] rounded-2xl p-2.5 px-3 flex items-center justify-between gap-3 shadow-xs shrink-0">
-          <button className="flex-1 bg-[#122b68] hover:bg-[#1a3880] text-white rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all">
+          {/* F1 REPRINT BUTTON */}
+          <button 
+            type="button"
+            onClick={triggerReprint}
+            className={`flex-1 rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all cursor-pointer ${
+              selectedTxId || openTx 
+                ? "bg-blue-600 hover:bg-blue-500 text-white shadow-md" 
+                : "bg-[#122b68] hover:bg-[#1a3880] text-white"
+            }`}
+          >
             <span className="text-2xl font-black text-white">F1</span>
             <span className="text-[11px] font-extrabold uppercase leading-tight text-left">
               Reprint<br />Receipt
@@ -495,8 +623,9 @@ export default function RecallTransactions() {
 
           {/* F2 VOID ITEM BUTTON */}
           <button 
+            type="button"
             onClick={triggerVoidItem}
-            className={`flex-1 rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all ${
+            className={`flex-1 rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all cursor-pointer ${
               openTx && selectedItemId 
                 ? "bg-red-600 hover:bg-red-500 text-white shadow-md animate-pulse" 
                 : "bg-[#122b68] hover:bg-[#1a3880] text-white"
@@ -510,8 +639,9 @@ export default function RecallTransactions() {
 
           {/* F3 VOID INVOICE BUTTON */}
           <button 
+            type="button"
             onClick={triggerVoidInvoice}
-            className={`flex-1 rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all ${
+            className={`flex-1 rounded-xl py-2 px-4 flex items-center justify-center gap-3 transition-all cursor-pointer ${
               !openTx && selectedTxId 
                 ? "bg-red-600 hover:bg-red-500 text-white shadow-md" 
                 : "bg-[#122b68] hover:bg-[#1a3880] text-white"
@@ -524,7 +654,7 @@ export default function RecallTransactions() {
           </button>
         </div>
 
-        {/* SEARCH & FILTER BAR WITH CALENDAR DATE PICKER */}
+        {/* SEARCH & FILTER BAR */}
         <div className="bg-[#adbde6] rounded-2xl p-2.5 px-4 flex items-center justify-between gap-4 shrink-0 shadow-xs flex-wrap">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -539,11 +669,12 @@ export default function RecallTransactions() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 setActiveFilter("today");
                 setSelectedDate(getTodayDateString());
               }}
-              className={`px-6 py-2 rounded-xl font-extrabold text-xs uppercase transition-all shadow-xs ${
+              className={`px-6 py-2 rounded-xl font-extrabold text-xs uppercase transition-all shadow-xs cursor-pointer ${
                 activeFilter === "today"
                   ? "bg-[#122b68] text-white"
                   : "bg-white/70 text-[#122b68] hover:bg-white"
@@ -552,7 +683,6 @@ export default function RecallTransactions() {
               Today
             </button>
 
-            {/* Calendar Date Picker Filter */}
             <div className="relative flex items-center">
               <div 
                 onClick={() => setActiveFilter("date")}
@@ -581,20 +711,20 @@ export default function RecallTransactions() {
           </div>
         </div>
 
-        {/* MAIN DATA CONTAINER - CARD WITH NAVY HEADER TABLE */}
+        {/* MAIN DATA CONTAINER */}
         <div className="flex-1 bg-white rounded-2xl overflow-hidden min-h-0 flex flex-col shadow-md">
           {openTx ? (
             <div className="w-full h-full flex flex-col justify-between">
               
-              {/* BREAKDOWN NAVY BAR */}
               <div className="bg-[#122b68] text-white p-3.5 px-6 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-4">
                   <button
+                    type="button"
                     onClick={() => {
                       setOpenTx(null);
                       setSelectedItemId(null);
                     }}
-                    className="flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-extrabold uppercase transition-all"
+                    className="flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-extrabold uppercase transition-all cursor-pointer"
                   >
                     <ArrowLeft size={16} /> Back
                   </button>
@@ -616,7 +746,6 @@ export default function RecallTransactions() {
                 </div>
               </div>
 
-              {/* ITEM BREAKDOWN TABLE */}
               <div className="flex-1 overflow-y-auto p-0 min-h-0">
                 <table className="w-full text-left border-collapse select-none">
                   <thead className="bg-[#122b68] text-white font-extrabold text-[11px] uppercase tracking-wider sticky top-0 z-10">
@@ -672,7 +801,6 @@ export default function RecallTransactions() {
                 </table>
               </div>
 
-              {/* FOOTER BAR */}
               <div className="bg-[#adbde6]/40 p-3 px-6 border-t border-gray-200 flex items-center justify-between text-xs font-extrabold text-[#122b68] shrink-0">
                 <span>
                   Total Purchased Items: <strong className="text-gray-900">{openTx.itemCount} items</strong>

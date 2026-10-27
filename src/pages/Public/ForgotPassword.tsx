@@ -1,6 +1,5 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { BarChart3, Package, ShoppingCart, Store } from "lucide-react";
 import { apiRequest } from "../../services/api";
 
 export default function ForgotPasswordPage() {
@@ -26,45 +25,55 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      <div className="hidden md:flex flex-1 relative overflow-hidden">
-        <img src="/pictures/store.jpg" alt="Store Environment" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/80 via-blue-800/70 to-blue-950/90" />
-        <div className="relative z-10 flex flex-col justify-between w-full text-white p-6 md:p-10 lg:p-16">
-          <div>
-            <div className="flex items-center gap-3 mb-6 md:mb-8">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-2xl flex items-center justify-center"><Store className="w-7 h-7 text-white" /></div>
-              <div><h1 className="text-xl md:text-2xl lg:text-3xl font-bold">One Stop</h1><p className="text-blue-200 text-sm">Convenience Store</p></div>
-            </div>
-            <div className="max-w-md">
-              <h2 className="text-2xl md:text-4xl lg:text-5xl font-extrabold leading-tight mb-4 md:mb-6">InBentalytix</h2>
-              <p className="text-blue-100 text-sm md:text-base lg:text-lg opacity-90">Streamline your retail operations with our powerful point-of-sale and inventory management platform.</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 max-w-md">
-            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><ShoppingCart className="w-6 h-6 text-white" /><span className="text-sm text-center">Fast Checkout</span></div>
-            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><Package className="w-6 h-6 text-white" /><span className="text-sm text-center">Inventory Tracking</span></div>
-            <div className="flex flex-col items-center gap-3 p-4 md:p-6 bg-white/10 rounded-2xl backdrop-blur-sm"><BarChart3 className="w-6 h-6 text-white" /><span className="text-sm text-center">Analytics</span></div>
-          </div>
-        </div>
-      </div>
+    <div className="relative min-h-screen w-screen flex items-center justify-center overflow-hidden">
+      {/* BACKGROUND IMAGE WITH BLUE OVERLAY */}
+      <img src="/pictures/store.jpg" alt="Store Environment" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-950/85 via-blue-900/80 to-blue-950/95 backdrop-blur-[2px]" />
 
-      <div className="flex flex-1 items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 px-6 py-12">
-        <div className="w-full max-w-md">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 shadow-xl text-white">
-            <div>
-              <h2 className="text-2xl font-bold">Forgot Password?</h2>
-              <p className="mt-1 text-sm text-blue-200">Enter your account email and we’ll send you a reset link.</p>
-            </div>
-            {message && <div role="status" className="bg-green-500/20 border border-green-400 text-green-100 px-4 py-2 rounded-lg text-sm">{message}</div>}
-            {error && <div role="alert" className="bg-red-500/20 border border-red-400 text-red-100 px-4 py-2 rounded-lg text-sm">{error}</div>}
-            <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/30 active:scale-95 disabled:opacity-50">
-              {loading ? "Sending..." : "Send Reset Link"}
-            </button>
-            <Link to="/login" className="text-blue-300 hover:text-blue-400 text-sm underline">Back to Sign In</Link>
-          </form>
-        </div>
+      {/* CENTERED CARD CONTAINER */}
+      <div className="relative z-10 w-full max-w-md mx-4">
+        <form 
+          onSubmit={handleSubmit} 
+          className="flex flex-col gap-6 p-8 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-[0_0_50px_rgba(0,0,0,0.5)] text-white"
+        >
+          <div className="text-center space-y-1.5">
+            <h2 className="text-2xl font-bold tracking-tight">Forgot Password</h2>
+            <p className="text-xs text-blue-200/80 font-medium">Enter your email to reset your password</p>
+          </div>
+
+          {message && <div role="status" className="bg-green-500/20 border border-green-400 text-green-100 px-4 py-2 rounded-xl text-xs">{message}</div>}
+          {error && <div role="alert" className="bg-red-500/20 border border-red-400 text-red-100 px-4 py-2 rounded-xl text-xs">{error}</div>}
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-blue-200 uppercase tracking-wider block">Email Address</label>
+            <input 
+              type="email" 
+              autoComplete="email" 
+              required 
+              value={email} 
+              onChange={(event) => setEmail(event.target.value)} 
+              placeholder="your@email.com" 
+              className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-blue-300/40 border border-white/20 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/40 text-sm transition font-medium" 
+            />
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95 disabled:opacity-50 text-sm uppercase tracking-wider cursor-pointer"
+          >
+            {loading ? "Sending..." : "Send Reset Link"}
+          </button>
+
+          <div className="text-center pt-2">
+            <p className="text-xs text-blue-200/70">
+              Remember your password?{" "}
+              <Link to="/login" className="text-white hover:text-blue-300 underline font-semibold transition">
+                Back to Login
+              </Link>
+            </p>
+          </div>
+        </form>
       </div>
     </div>
   );
