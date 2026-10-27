@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Store, ShoppingCart, Package, BarChart3 } from "lucide-react";
+import { ShoppingCart, Package, BarChart3 } from "lucide-react";
 import { apiRequest } from "../../services/api";
 import { setAuthSession } from "../../services/authSession";
 
@@ -68,8 +68,8 @@ export default function LoginPage() {
         <div className="relative z-10 flex flex-col justify-between w-full text-white p-6 md:p-10 lg:p-16">
           <div>
             <div className="flex items-center gap-3 mb-6 md:mb-8">
-              <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-2xl flex items-center justify-center">
-                <Store className="w-7 h-7 text-white" />
+              <div className="w-12 h-12 md:w-14 md:h-14 bg-white/20 rounded-2xl flex items-center justify-center overflow-hidden p-2">
+                <img src="/pictures/logo.png" alt="Logo" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl md:text-2xl lg:text-3xl font-bold">One Stop</h1>

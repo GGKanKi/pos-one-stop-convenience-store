@@ -21,9 +21,9 @@ interface Product {
   expiration_date?: string;
 }
 
-// Helper to securely parse dates and check expiration against today (2026-10-25)
+// Helper to securely parse dates and check expiration against today (2026-10-28)
 function checkProductExpiration(product: any): { isExpired: boolean; message: string } {
-  const today = new Date("2026-10-25");
+  const today = new Date("2026-10-28");
   today.setHours(0, 0, 0, 0);
 
   const parseDateString = (dateStr: string) => {
@@ -106,7 +106,7 @@ export default function POS() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Custom Error Modal State (para sa kulang ang cash / empty cart)
+  // Custom Error Modal State
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -149,7 +149,6 @@ export default function POS() {
     }
   }, [cart]);
 
-  // Helper to safely add product to cart state and cleanup search modals
   const insertProductIntoCart = (productToAdd: Product) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === productToAdd.id || item.code === productToAdd.code);
@@ -169,7 +168,6 @@ export default function POS() {
     setSearchResults([]);
   };
 
-  // Open discount modal only if an item in cart is selected
   const triggerDiscountModal = useCallback(() => {
     if (selectedItemId === null || !cart.some(item => item.id === selectedItemId)) {
       setErrorMessage("Please select an item from the cart to apply a discount.");
@@ -182,7 +180,6 @@ export default function POS() {
     setShowDiscountModal(true);
   }, [selectedItemId, cart]);
 
-  // Auto focus input when Discount Modal Opens
   useEffect(() => {
     if (showDiscountModal) {
       setTimeout(() => {
@@ -194,7 +191,6 @@ export default function POS() {
     }
   }, [showDiscountModal]);
 
-  // Auto focus input when Staff Inventory Password Modal Opens
   useEffect(() => {
     if (showInventoryPasswordModal) {
       setTimeout(() => {
@@ -220,9 +216,6 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItemId, cart, triggerDiscountModal]);
 
-  // ==========================================
-  // GLOBAL HARDWARE SCANNER LISTENER (D-Tech MP6300IR)
-  // ==========================================
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
 
@@ -249,11 +242,9 @@ export default function POS() {
           expiration_date: exactMatch.expiration_date
         };
 
-        // CLOSE SEARCH MODAL FIRST BEFORE TRIGGERING EXPIRY MODAL
         setShowSearchModal(false);
         setSearchQuery("");
 
-        // CHECK EXPIRATION UPON SCANNING
         const expiryCheck = checkProductExpiration(exactMatch);
         if (expiryCheck.isExpired) {
           setPendingProduct(productToAdd);
@@ -303,7 +294,6 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleGlobalScanKeypress, true);
   }, [handleBarcodeScanned]);
 
-  // Auto-focus on Cash Input when Payment Modal opens
   useEffect(() => {
     if (showPaymentModal) {
       setTimeout(() => {
@@ -374,7 +364,6 @@ export default function POS() {
   };
 
   const addToCart = (product: Product) => {
-    // CLOSE SEARCH MODAL FIRST BEFORE CHECKING EXPIRATION
     setShowSearchModal(false);
     setSearchQuery("");
     setSearchResults([]);
@@ -405,13 +394,11 @@ export default function POS() {
     await handleBarcodeScanned(codeToSearch);
   };
 
-  // Subtotal calculated before discounts
   const subTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.qty, 0),
     [cart]
   );
 
-  // Total discounts combined across all cart items
   const transactionDiscount = useMemo(
     () => cart.reduce((sum, item) => sum + (item.discount || 0), 0),
     [cart]
@@ -471,7 +458,6 @@ export default function POS() {
     setShowReceiptModal(true);
   };
 
-  // APPLY ITEM DISCOUNT SUBMIT
   const handleDiscountSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const val = parseFloat(discountInput) || 0;
@@ -506,7 +492,6 @@ export default function POS() {
     setShowDiscountModal(false);
   };
 
-  // INVENTORY ACCESS SUBMIT
   const handleInventoryAccessSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStaffPasswordError("");
@@ -533,8 +518,7 @@ export default function POS() {
     }
   };
 
-  // FINALIZE TRANSACTION
-  const finalizeTransaction = async () => {
+  const finalizeTransaction = async (shouldPrint = false) => {
     if (cart.length === 0) {
       setShowReceiptModal(false);
       return;
@@ -543,6 +527,8 @@ export default function POS() {
     const transactionData = {
       paymentMethod,
       totalAmount: total,
+      cashTendered: paymentMethod === 'Cash' ? parseFloat(cashTendered) || total : total,
+      changeDue: paymentMethod === 'Cash' ? changeDue : 0,
       gcashReference: paymentMethod === 'GCash' ? gcashReference : null,
       gcashParticulars: paymentMethod === 'GCash' ? gcashParticulars : null,
       actor: (() => {
@@ -582,28 +568,32 @@ export default function POS() {
       return;
     }
 
-    // Local storage sync for Recall Screen
+    const fullSavedTx = {
+      ...transactionData,
+      id: String(savedResponse.transaction_id),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: new Date().toLocaleDateString(),
+      timestamp: Date.now(),
+      itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
+    };
+
     try {
       const existing = JSON.parse(localStorage.getItem("pos_completed_transactions") || "[]");
-
-      const newTx = {
-        id: String(savedResponse.transaction_id),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now(),
-        itemCount: cart.reduce((sum, i) => sum + i.qty, 0),
-        paymentMethod,
-        totalAmount: total,
-        gcashReference: paymentMethod === 'GCash' ? gcashReference : null,
+      const mappedItemsTx = {
+        ...fullSavedTx,
         items: transactionData.items.map((item, index) => ({
           ...item,
           transactionItemId: savedResponse.items?.[index]?.transactionItemId,
         })),
       };
-      
-      localStorage.setItem("pos_completed_transactions", JSON.stringify([newTx, ...existing]));
+      localStorage.setItem("pos_completed_transactions", JSON.stringify([mappedItemsTx, ...existing]));
       window.dispatchEvent(new Event("pos_transaction_saved"));
     } catch (e) {
       console.error("Local Sync Error:", e);
+    }
+
+    if (shouldPrint) {
+      printThermalReceipt(fullSavedTx);
     }
 
     setShowReceiptModal(false);
@@ -614,6 +604,105 @@ export default function POS() {
     setGcashParticulars("");
     setScanCode("");
     setSearchQuery("");
+  };
+
+  // Optimized Thermal Receipt Printing Function with Auto-Close
+  const printThermalReceipt = (tx: any) => {
+    const printWindow = window.open('', '_blank', 'width=380,height=600');
+    if (!printWindow) {
+      alert("Please allow pop-ups for receipt printing.");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt - #${tx.id}</title>
+          <style>
+            @page { margin: 0; size: 58mm auto; }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 11px;
+              width: 54mm;
+              margin: 0 auto;
+              padding: 4px;
+              color: #000;
+              background: #fff;
+              -webkit-print-color-adjust: exact;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .bold { font-weight: bold; }
+            .flex-between { display: flex; justify-content: space-between; }
+            .line { border-bottom: dashed 1px #000; margin: 4px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th, td { font-size: 10px; text-align: left; padding: 1px 0; }
+            .amount-col { text-align: right; }
+          </style>
+        </head>
+        <body>
+          <div class="text-center bold" style="font-size: 12px;">STORE NAME / POS</div>
+          <div class="text-center">Terminal: 202603 - Bernice</div>
+          <div class="text-center">Date: ${tx.date || new Date().toLocaleDateString()} ${tx.time || ''}</div>
+          <div class="text-center">Tx ID: #${tx.id}</div>
+          <div class="line"></div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="text-center">Qty</th>
+                <th class="amount-col">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tx.items.map((item: any) => `
+                <tr>
+                  <td colspan="3" class="bold">${item.name}</td>
+                </tr>
+                <tr>
+                  <td>₱${item.price.toFixed(2)} ${item.discount ? `(-₱${item.discount})` : ''}</td>
+                  <td class="text-center">${item.qty}</td>
+                  <td class="amount-col">₱${((item.price * item.qty) - (item.discount || 0)).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="line"></div>
+          <div class="flex-between"><span>Subtotal:</span> <span>₱${(tx.totalAmount + (tx.discount || 0)).toFixed(2)}</span></div>
+          <div class="flex-between"><span>Discount:</span> <span>₱${(tx.discount || 0).toFixed(2)}</span></div>
+          <div class="flex-between bold" style="font-size: 12px;"><span>TOTAL:</span> <span>₱${tx.totalAmount.toFixed(2)}</span></div>
+          
+          <div class="line"></div>
+          <div class="flex-between"><span>Payment:</span> <span>${tx.paymentMethod}</span></div>
+          ${tx.paymentMethod === 'Cash' ? `
+            <div class="flex-between"><span>Cash Tendered:</span> <span>₱${Number(tx.cashTendered || 0).toFixed(2)}</span></div>
+            <div class="flex-between"><span>Change Due:</span> <span>₱${Number(tx.changeDue || 0).toFixed(2)}</span></div>
+          ` : `
+            <div class="flex-between"><span>Ref No:</span> <span>${tx.gcashReference || 'N/A'}</span></div>
+          `}
+
+          <div class="line"></div>
+          <div class="text-center" style="margin-top: 6px;">Thank you for your purchase!</div>
+          <div class="text-center" style="font-size: 8px; margin-top: 2px;">Powered by POS System</div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 100);
+            }
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
   };
 
   const selectedItem = useMemo(() => cart.find(i => i.id === selectedItemId), [cart, selectedItemId]);
@@ -627,10 +716,9 @@ export default function POS() {
         </div>
       )}
 
-      {/* CUSTOM ERROR / ALERT MODAL */}
       {showErrorModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md transition-all">
-          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[440px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-in zoom-in-95 duration-150">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[440px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)]">
             <div className="w-16 h-16 bg-red-950 border-2 border-red-500 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(239,68,68,0.6)]">
               <AlertTriangle className="text-red-400" size={32} />
             </div>
@@ -655,10 +743,9 @@ export default function POS() {
         </div>
       )}
 
-      {/* EXPIRATION WARNING MODAL (HIGHEST Z-INDEX 100 TO PREVENT FREEZING) */}
       {showExpiryModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md transition-all">
-          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[460px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-in zoom-in-95 duration-150">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[460px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)]">
             <div className="w-16 h-16 bg-red-950 border-2 border-red-500 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(239,68,68,0.6)]">
               <AlertTriangle className="text-red-400" size={32} />
             </div>
@@ -698,7 +785,6 @@ export default function POS() {
         </div>
       )}
 
-      {/* STAFF INVENTORY PASSWORD MODAL */}
       {showInventoryPasswordModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <form 
@@ -726,7 +812,7 @@ export default function POS() {
                     value={staffPasswordInput} 
                     onChange={(e) => setStaffPasswordInput(e.target.value)} 
                     placeholder="Password"
-                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-lg outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition placeholder-cyan-500/50" 
+                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-lg outline-none focus:border-cyan-400 transition placeholder-cyan-500/50" 
                   />
                 </div>
                 {staffPasswordError && <p role="alert" className="text-sm text-red-300 text-center">{staffPasswordError}</p>}
@@ -735,13 +821,12 @@ export default function POS() {
 
             <div className="flex gap-3 pt-1">
               <button type="submit" disabled={isVerifyingStaff || !staffPasswordInput} className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)] disabled:opacity-50">{isVerifyingStaff ? "VERIFYING..." : "ENTER"}</button>
-              <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+              <button type="button" onClick={() => setShowInventoryPasswordModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider transition">CANCEL</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* CASH DISCOUNT MODAL */}
       {showDiscountModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <form 
@@ -756,16 +841,14 @@ export default function POS() {
                 </button>
               </div>
 
-              {/* Selected Item Summary Display Box */}
               <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] rounded-xl p-4 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,140,255,0.25)]">
                 <p className="text-xs text-cyan-400 font-bold tracking-widest uppercase">SELECTED ITEM</p>
                 <p className="text-sm font-bold text-white truncate mt-1">{selectedItem.name}</p>
-                <div className="text-right text-2xl text-cyan-300 font-black tracking-wider mt-1 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">
+                <div className="text-right text-2xl text-cyan-300 font-black tracking-wider mt-1">
                   ₱ {(selectedItem.price * selectedItem.qty).toFixed(2)}
                 </div>
               </div>
 
-              {/* Input Area */}
               <div className="bg-gradient-to-b from-[#183478]/90 to-[#0e214d]/90 rounded-xl p-5 border border-cyan-400/40 space-y-3 shadow-[0_0_20px_rgba(0,140,255,0.15)]">
                 <p className="text-xs font-bold text-cyan-300 uppercase tracking-wide text-center">ENTER DISCOUNT AMOUNT IN PESO</p>
                 
@@ -776,27 +859,24 @@ export default function POS() {
                     value={discountInput} 
                     onFocus={(e) => e.target.select()}
                     onChange={(e) => setDiscountInput(e.target.value)} 
-                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-xl outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
+                    className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-3 px-4 text-center text-cyan-200 font-bold text-xl outline-none focus:border-cyan-400 transition" 
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-base text-cyan-500 font-bold">₱</span>
                 </div>
               </div>
             </div>
 
-            {/* Confirmation Buttons */}
             <div className="flex gap-3 pt-1">
-              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
-              <button type="button" onClick={() => setShowDiscountModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
+              <button type="button" onClick={() => setShowDiscountModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider transition">CANCEL</button>
             </div>
-
           </form>
         </div>
       )}
 
-      {/* SEARCH OVERLAY MODAL */}
       {showSearchModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md p-6">
-          <div className="bg-[#0e214d] border-2 border-cyan-400/60 w-full max-w-3xl h-[75vh] rounded-[26px] p-6 flex flex-col gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)] animate-in zoom-in-95 duration-150">
+          <div className="bg-[#0e214d] border-2 border-cyan-400/60 w-full max-w-3xl h-[75vh] rounded-[26px] p-6 flex flex-col gap-4 shadow-[0_0_60px_rgba(0,180,255,0.35)]">
             
             <div className="flex justify-between items-center pb-2 border-b border-cyan-500/30">
               <span className="text-sm text-cyan-400 font-black tracking-widest uppercase">SEARCH PRODUCTS CATALOG</span>
@@ -812,7 +892,7 @@ export default function POS() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Type product name or barcode & press Enter..." 
-                className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-base text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 focus:shadow-[0_0_20px_rgba(0,180,255,0.3)] transition font-bold" 
+                className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-base text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 font-bold" 
               />
             </form>
 
@@ -856,13 +936,10 @@ export default function POS() {
                 <div className="p-10 text-center text-sm text-cyan-300/60 font-bold">Type a name above or press Enter to add top result directly to POS.</div>
               )}
             </div>
-
-            <p className="text-xs text-cyan-300/60 text-center">Pressing <strong className="text-cyan-300">Enter</strong> adds the top search item and returns directly to POS.</p>
           </div>
         </div>
       )}
 
-      {/* RECEIPT SUCCESS MODAL */}
       {showReceiptModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-cyan-400/60 w-[450px] rounded-[30px] p-10 flex flex-col items-center shadow-[0_0_50px_rgba(0,180,255,0.3)]">
@@ -877,25 +954,24 @@ export default function POS() {
 
             <div className="w-full space-y-3">
               <button 
-                onClick={finalizeTransaction}
-                className="w-full bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider flex items-center justify-center gap-2 hover:bg-cyan-400 active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]"
+                onClick={() => finalizeTransaction(true)}
+                className="w-full bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider flex items-center justify-center gap-2 hover:bg-cyan-400 active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)] cursor-pointer"
               >
                 <Printer size={18} />
-                PRINT RECEIPT
+                PRINT RECEIPT & CLOSE
               </button>
               
               <button 
-                onClick={finalizeTransaction}
-                className="w-full bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]"
+                onClick={() => finalizeTransaction(false)}
+                className="w-full bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/40 text-cyan-300 py-3.5 rounded-xl font-bold text-sm hover:brightness-110 transition cursor-pointer"
               >
-                CLOSE
+                CLOSE (NO PRINT)
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* PAYMENT MODAL WITH GCASH SUPPORT */}
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-all">
           <form 
@@ -912,7 +988,7 @@ export default function POS() {
 
               <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] rounded-xl p-4 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,140,255,0.25)]">
                 <p className="text-xs text-cyan-400 font-bold tracking-widest uppercase">TOTAL AMOUNT</p>
-                <div className="text-right text-3xl text-cyan-300 font-black tracking-wider mt-1 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)]">
+                <div className="text-right text-3xl text-cyan-300 font-black tracking-wider mt-1">
                   ₱ {total.toFixed(2)}
                 </div>
               </div>
@@ -937,21 +1013,21 @@ export default function POS() {
                           value={cashTendered} 
                           onFocus={(e) => e.target.select()}
                           onChange={(e) => setCashTendered(e.target.value)} 
-                          className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition" 
+                          className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-center text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 transition" 
                         />
                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-cyan-500">₱</span>
                       </div>
                       <div className="flex gap-2 mt-2 text-sm">
                         {[100, 500, 1000].map((v) => (
-                          <button type="button" key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">₱{v}</button>
+                          <button type="button" key={v} onClick={() => setCashTendered(v.toFixed(2))} className="flex-1 border border-cyan-400/30 rounded-lg py-1.5 font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 transition">₱{v}</button>
                         ))}
                       </div>
-                      <button type="button" onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 hover:border-cyan-400 active:scale-95 transition shadow-[0_0_10px_rgba(0,120,255,0.15)]">EXACT</button>
+                      <button type="button" onClick={() => setCashTendered(total.toFixed(2))} className="w-full mt-2 border border-cyan-400/30 rounded-lg py-1.5 text-xs font-bold bg-gradient-to-r from-[#1c3e8a] to-[#122a63] text-cyan-300 transition">EXACT</button>
                     </div>
 
                     <div>
                       <p className="text-xs font-bold text-cyan-300 mb-1.5 uppercase tracking-wide">CHANGE DUE</p>
-                      <div className="bg-gradient-to-r from-[#183478] to-[#0c1d45] text-cyan-300 p-3.5 rounded-xl text-center shadow-[0_0_15px_rgba(0,140,255,0.2)]">
+                      <div className="bg-gradient-to-r from-[#183478] to-[#0c1d45] text-cyan-300 p-3.5 rounded-xl text-center">
                         <span className="text-lg font-black tracking-wider text-cyan-400">₱ {changeDue.toFixed(2)}</span>
                       </div>
                     </div>
@@ -965,7 +1041,7 @@ export default function POS() {
                         value={gcashReference}
                         onChange={(e) => setGcashReference(e.target.value)}
                         placeholder="Enter 13-digit ref number"
-                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition"
+                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none transition"
                       />
                     </div>
                     <div>
@@ -974,7 +1050,7 @@ export default function POS() {
                         type="text"
                         value={gcashParticulars}
                         onChange={(e) => setGcashParticulars(e.target.value)}
-                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition"
+                        className="w-full bg-gradient-to-r from-[#183478] to-[#0c1d45] border border-cyan-400/50 rounded-xl py-2.5 px-4 text-cyan-200 font-bold text-sm outline-none transition"
                       />
                     </div>
                   </div>
@@ -983,10 +1059,9 @@ export default function POS() {
             </div>
 
             <div className="flex gap-3 pt-1">
-              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 hover:bg-cyan-400 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
-              <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider active:scale-95 hover:brightness-110 transition shadow-[0_0_15px_rgba(0,120,255,0.2)]">CANCEL</button>
+              <button type="submit" className="flex-1 bg-cyan-500 text-black py-3.5 rounded-xl font-black text-sm tracking-wider active:scale-95 transition shadow-[0_0_20px_rgba(0,242,254,0.4)]">CONFIRM</button>
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/30 text-cyan-300 py-3.5 rounded-xl font-bold text-sm tracking-wider transition">CANCEL</button>
             </div>
-
           </form>
         </div>
       )}
@@ -994,10 +1069,9 @@ export default function POS() {
       {/* MAIN WORKSPACE BACKGROUND */}
       <div className="w-full flex-1 min-h-0 bg-slate-200 border-2 border-cyan-400/60 rounded-[26px] overflow-hidden shadow-[0_0_40px_rgba(0,140,255,0.25)] flex flex-col p-4 gap-4">
         
-        {/* Header */}
-        <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-200 flex flex-wrap justify-between items-center gap-4 px-6 py-4 border-2 border-cyan-400/60 rounded-2xl shadow-[0_0_25px_rgba(0,150,255,0.2)] shrink-0">
+        <div className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-200 flex flex-wrap justify-between items-center gap-4 px-6 py-4 border-2 border-cyan-400/60 rounded-2xl shrink-0">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-cyan-400 shadow-[0_0_15px_rgba(0,242,254,0.6)] flex items-center justify-center bg-gradient-to-br from-[#1c3e8a] to-[#112759] shrink-0">
+            <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-cyan-400 flex items-center justify-center bg-gradient-to-br from-[#1c3e8a] to-[#112759] shrink-0">
               <span className="text-xs font-bold text-cyan-200">User</span>
             </div>
             <div className="flex flex-col leading-tight">
@@ -1009,27 +1083,21 @@ export default function POS() {
           <div className="flex gap-2.5">
             <button 
               onClick={() => navigate("/cashregister", { state: { cashierOut: true } })} 
-              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
+              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black transition"
             >
               Cashier Out
             </button>
             <button 
               onClick={() => setShowInventoryPasswordModal(true)} 
-              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
+              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black transition"
             >
               Inventory Monitoring (For Staff Only)
-            </button>
-            <button 
-              className="bg-gradient-to-r from-[#1c3e8a] to-[#122a63] border border-cyan-400/50 text-cyan-300 px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-cyan-500 hover:text-black active:scale-95 transition shadow-[0_0_15px_rgba(0,140,255,0.25)]"
-            >
-              Settings
             </button>
           </div> 
         </div> 
 
-        <div className="bg-slate-200 border-2 border-cyan-400/50 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 flex-1 min-h-0 shadow-sm overflow-hidden">
+        <div className="bg-slate-200 border-2 border-cyan-400/50 rounded-2xl p-4 sm:p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
           
-          {/* FOR SCANNER OR Scan Bar */}
           <form onSubmit={handleScanSubmit} className="relative shrink-0">
             <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-400 pointer-events-none" size={20} />
             <input
@@ -1038,13 +1106,12 @@ export default function POS() {
               value={scanCode}
               onChange={(e) => setScanCode(e.target.value)}
               placeholder="SCAN Product Code & Press Enter"
-              className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 focus:shadow-[0_0_20px_rgba(0,200,255,0.4)] transition-all font-semibold text-sm shadow-[0_0_15px_rgba(0,140,255,0.2)]"
+              className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 font-semibold text-sm"
             />
           </form>
 
-          {/* F-Keys Quick Actions Bar */}
           <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 shrink-0">
-            <div className="flex gap-3.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-thin shrink-0">
+            <div className="flex gap-3.5 overflow-x-auto pb-2 lg:pb-0 shrink-0">
               {[
                 { label: "Payment", shortcut: "F5", img: "/pictures/payment.jpg", action: () => setShowPaymentModal(true) },
                 { label: "Discounts", shortcut: "F6", img: "/pictures/discount.png", action: triggerDiscountModal },
@@ -1053,16 +1120,16 @@ export default function POS() {
                 <button 
                   key={idx}
                   onClick={btn.action}
-                  className="relative flex flex-col items-center justify-between overflow-hidden border border-cyan-400/50 hover:border-cyan-300 p-2.5 rounded-xl group hover:shadow-[0_0_20px_rgba(0,180,255,0.35)] transition w-24 h-24 shrink-0 shadow-[0_0_12px_rgba(0,140,255,0.2)]"
+                  className="relative flex flex-col items-center justify-between overflow-hidden border border-cyan-400/50 hover:border-cyan-300 p-2.5 rounded-xl group transition w-24 h-24 shrink-0"
                 >
                   <img 
                     src={btn.img} 
                     alt={btn.label} 
-                    className="absolute inset-0 w-full h-full object-cover brightness-75 group-hover:scale-110 group-hover:brightness-90 transition duration-300 z-0" 
+                    className="absolute inset-0 w-full h-full object-cover brightness-75 group-hover:scale-110 transition duration-300 z-0" 
                   />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 z-10"></div>
-                  <span className="relative text-[10px] text-cyan-300 font-bold z-20 drop-shadow">{btn.shortcut}</span>
-                  <span className="relative text-xs font-semibold text-white z-20 drop-shadow">{btn.label}</span>
+                  <span className="relative text-[10px] text-cyan-300 font-bold z-20">{btn.shortcut}</span>
+                  <span className="relative text-xs font-semibold text-white z-20">{btn.label}</span>
                 </button>
               ))}
             </div>
@@ -1074,16 +1141,15 @@ export default function POS() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearchModal(true)}
                 placeholder="Search Product Name & Press Enter..." 
-                className="w-full pl-11 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border border-cyan-400/50 rounded-xl text-sm text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 focus:shadow-[0_0_15px_rgba(0,180,255,0.3)] transition shadow-[0_0_12px_rgba(0,140,255,0.2)] font-semibold" 
+                className="w-full pl-11 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border border-cyan-400/50 rounded-xl text-sm text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 font-semibold" 
               />
             </form>
           </div>
 
-          {/* SCROLLABLE CART TABLE WITH ITEM SELECTION */}
           <div className="w-full bg-white border-2 border-cyan-400/50 rounded-xl shadow-inner flex flex-col flex-1 min-h-0 overflow-hidden">
             <div 
               ref={cartTableContainerRef}
-              className="overflow-y-auto flex-1 h-full scrollbar-thin scrollbar-thumb-cyan-500/50"
+              className="overflow-y-auto flex-1 h-full"
             >
               <table className="w-full table-fixed text-sm text-slate-800 border-collapse">
                 <colgroup>
@@ -1095,7 +1161,7 @@ export default function POS() {
                   <col style={{ width: '11%' }} />
                   <col style={{ width: '11%' }} />
                 </colgroup>
-                <thead className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-300 border-b-2 border-cyan-400/60 sticky top-0 z-20 shadow-[0_4px_10px_rgba(0,140,255,0.2)]">
+                <thead className="bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] text-cyan-300 border-b-2 border-cyan-400/60 sticky top-0 z-20">
                   <tr>
                     <th className="p-3 text-center font-bold">No.</th>
                     <th className="p-3 text-left font-bold">Code</th>
@@ -1130,9 +1196,9 @@ export default function POS() {
                           <td className="p-3 truncate text-slate-500">{item.description}</td>
                           <td className="p-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-center items-center gap-1.5">
-                              <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Minus size={12} /></button>
+                              <button onClick={() => updateQty(item.id, -1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black transition"><Minus size={12} /></button>
                               <span className="font-bold w-5 text-center text-slate-800 text-xs">{item.qty}</span>
-                              <button onClick={() => updateQty(item.id, 1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black active:scale-90 transition shadow-[0_0_10px_rgba(0,140,255,0.2)]"><Plus size={12} /></button>
+                              <button onClick={() => updateQty(item.id, 1)} className="border border-cyan-400/50 w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-300 hover:bg-cyan-500 hover:text-black transition"><Plus size={12} /></button>
                             </div>
                           </td>
                           <td className="p-3 text-center font-medium text-slate-600">
@@ -1141,7 +1207,7 @@ export default function POS() {
                           <td className="p-3 text-center font-bold text-slate-900" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-2">
                               <span>₱{itemSubtotal.toFixed(2)}</span>
-                              <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 active:scale-90 transition"><Trash2 size={15} /></button>
+                              <button onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-700 transition"><Trash2 size={15} /></button>
                             </div>
                           </td>
                         </tr>
@@ -1163,20 +1229,19 @@ export default function POS() {
             </div>
           </div>
 
-          {/* Bottom Total Panel */}
-          <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3 flex flex-col md:flex-row justify-between items-center gap-4 shadow-[0_0_30px_rgba(0,150,255,0.3)] text-cyan-200 shrink-0">
+          <div className="w-full bg-gradient-to-r from-[#0a183b] via-[#12285e] to-[#0c1d45] border-2 border-cyan-400/60 rounded-2xl px-5 py-3 flex flex-col md:flex-row justify-between items-center gap-4 text-cyan-200 shrink-0">
             <div className="flex items-center gap-4 sm:gap-6 flex-wrap w-full md:w-auto">
               <div className="flex items-center gap-2.5 pr-4 border-r border-cyan-500/30">
-                <div className="w-9 h-9 rounded-xl border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shadow-[0_0_10px_rgba(0,140,255,0.3)] shrink-0 text-sm">
-                  📄
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+                  <img src="/pictures/transactions.png" alt="Transaction" className="w-full h-full object-contain" />
                 </div>
                 <span className="text-amber-400 font-bold tracking-wider text-xs sm:text-sm uppercase whitespace-nowrap">TRANSACTION TOTAL</span>
               </div>
 
               <div className="flex items-center gap-5 flex-wrap">
                 <div className="flex items-center gap-2.5 pr-5 border-r border-cyan-500/30">
-                  <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shrink-0 text-xs">
-                    💳
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+                    <img src="/pictures/subtotal.png" alt="Subtotal" className="w-full h-full object-contain" />
                   </div>
                   <div className="flex flex-col leading-tight">
                     <span className="text-[10px] font-semibold text-cyan-300 uppercase tracking-wide">Sub Total</span>
@@ -1185,8 +1250,8 @@ export default function POS() {
                 </div>
 
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-cyan-400 shrink-0 text-xs font-bold">
-                    %
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+                    <img src="/pictures/discount.png" alt="Discount" className="w-full h-full object-contain" />
                   </div>
                   <div className="flex flex-col leading-tight">
                     <span className="text-[10px] font-semibold text-cyan-300 uppercase tracking-wide">Discount</span>
@@ -1196,14 +1261,14 @@ export default function POS() {
               </div>
             </div>
 
-            <div className="border border-cyan-400/50 rounded-xl px-5 py-2 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] flex items-center justify-between gap-5 shadow-[0_0_20px_rgba(0,140,255,0.25)] w-full md:w-auto shrink-0">
+            <div className="border border-cyan-400/50 rounded-xl px-5 py-2 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] flex items-center justify-between gap-5 w-full md:w-auto shrink-0">
               <div className="flex items-center gap-2.5 pr-4 border-r border-cyan-500/30">
-                <div className="w-7 h-7 rounded-full border border-cyan-400/50 flex items-center justify-center bg-gradient-to-br from-[#183478] to-[#0e214d] text-yellow-400 shrink-0 text-xs">
-                  💰
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 overflow-hidden p-1">
+                  <img src="/pictures/total.png" alt="Total" className="w-full h-full object-contain" />
                 </div>
                 <span className="font-black text-amber-400 tracking-wider text-xs uppercase">TOTAL</span>
               </div>
-              <span className="font-black text-amber-400 tracking-wider text-lg sm:text-xl font-mono drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+              <span className="font-black text-amber-400 tracking-wider text-lg sm:text-xl font-mono">
                 ₱{total.toFixed(2)}
               </span>
             </div>
