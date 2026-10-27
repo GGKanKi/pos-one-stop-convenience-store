@@ -3,7 +3,7 @@
 
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp, BadgeCheck, CalendarDays, WalletCards
+  LayoutDashboard, Users, Package, History, BarChart3, LogOut, Scale, TrendingUp, BadgeCheck, CalendarDays, Truck
 } from 'lucide-react';
 import { clearAuthSession, getAuthUser } from '../services/authSession';
 
@@ -17,10 +17,9 @@ export default function Sidebar() {
   // eslint-disable-next-line react-hooks/purity
   const canUseStaffTools = role === 'staff' || role === 'admin' || (role === 'cashier' && unlockUntil > Date.now());
 
-  // Navigation items configuration with access permission flag
+  // Navigation items configuration with access permission flag (Payouts removed)
   const navItems = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, allowedForStaff: true },
-    { name: 'Staff', path: '/admin/staff', icon: Users, allowedForStaff: false },
     { name: 'Inventory', path: '/admin/inventory', icon: Package, allowedForStaff: true },
     { name: 'Inventory Approvals', path: '/admin/inventory-approvals', icon: BadgeCheck, allowedForStaff: false },
     { name: 'Transaction History', path: '/admin/transactions', icon: History, allowedForStaff: false },
@@ -28,7 +27,7 @@ export default function Sidebar() {
     { name: 'Inventory Discrepancies', path: '/admin/discrepancies', icon: Scale, allowedForStaff: false },
     { name: 'Sales And Profit', path: '/admin/salesprofit', icon: TrendingUp, allowedForStaff: false },
     { name: 'Daily Sales Report', path: '/admin/daily-reports', icon: CalendarDays, allowedForStaff: false },
-    { name: 'Payouts', path: '/admin/payouts', icon: WalletCards, allowedForStaff: false },
+    { name: 'Delivery Transactions', path: '/admin/delivery', icon: Truck, allowedForStaff: false },
   ];
 
   return (

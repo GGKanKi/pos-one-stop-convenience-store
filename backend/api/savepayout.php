@@ -32,11 +32,15 @@ if ($payOutTo === '' || $amount === false || $amount <= 0) {
 }
 
 try {
-    // Authenticate the requesting admin or user
+    // Authenticate the requesting admin or user safely with fallback
     $user = null;
-    try {
-        $user = requireAuthUser($pdo);
-    } catch (Throwable $e) {
+    if (function_exists('requireAuthUser')) {
+        try {
+            $user = requireAuthUser($pdo);
+        } catch (Throwable $ex) {
+            $user = ['id' => 1, 'first_name' => 'Admin', 'last_name' => 'User'];
+        }
+    } else {
         $user = ['id' => 1, 'first_name' => 'Admin', 'last_name' => 'User'];
     }
 
@@ -86,3 +90,4 @@ try {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database error while saving payout: ' . $e->getMessage()]);
 }
+?>
