@@ -106,6 +106,10 @@ export default function POS() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
+  // Custom Error Modal State (para sa kulang ang cash / empty cart)
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   // Expiration Warning Modal State
   const [showExpiryModal, setShowExpiryModal] = useState(false);
   const [expiryWarningMessage, setExpiryWarningMessage] = useState("");
@@ -168,7 +172,8 @@ export default function POS() {
   // Open discount modal only if an item in cart is selected
   const triggerDiscountModal = useCallback(() => {
     if (selectedItemId === null || !cart.some(item => item.id === selectedItemId)) {
-      alert("Please select an item from the cart to apply a discount.");
+      setErrorMessage("Please select an item from the cart to apply a discount.");
+      setShowErrorModal(true);
       return;
     }
 
@@ -441,10 +446,24 @@ export default function POS() {
 
   const handleConfirm = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!cart.length) return alert("Cart is empty");
+    if (!cart.length) {
+      setErrorMessage("Cart is empty.");
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (paymentMethod === 'Cash') {
+      const tendered = parseFloat(cashTendered) || 0;
+      if (tendered < total) {
+        setErrorMessage(`Insufficient cash tendered! The total amount is ₱${total.toFixed(2)}, but cash tendered is only ₱${tendered.toFixed(2)}.`);
+        setShowErrorModal(true);
+        return;
+      }
+    }
     
     if (paymentMethod === 'GCash' && !gcashReference.trim()) {
-      alert("Please enter the GCash Reference Number.");
+      setErrorMessage("Please enter the GCash Reference Number.");
+      setShowErrorModal(true);
       return;
     }
 
@@ -465,12 +484,14 @@ export default function POS() {
     const itemTotal = targetItem.price * targetItem.qty;
 
     if (val < 0) {
-      alert("Discount cannot be negative.");
+      setErrorMessage("Discount cannot be negative.");
+      setShowErrorModal(true);
       return;
     }
 
     if (val > itemTotal) {
-      alert("Discount cannot exceed the selected item's total price.");
+      setErrorMessage("Discount cannot exceed the selected item's total price.");
+      setShowErrorModal(true);
       return;
     }
 
@@ -550,12 +571,14 @@ export default function POS() {
     try {
       savedResponse = await apiRequest("/savetransaction.php", "POST", transactionData);
       if (!savedResponse?.success || !savedResponse.transaction_id) {
-        alert(savedResponse?.message || "The sale could not be saved.");
+        setErrorMessage(savedResponse?.message || "The sale could not be saved.");
+        setShowErrorModal(true);
         return;
       }
     } catch (err: unknown) {
       console.error("Fetch/Server Error:", err);
-      alert("Connection Error: " + (err instanceof Error ? err.message : "Failed to reach PHP server."));
+      setErrorMessage("Connection Error: " + (err instanceof Error ? err.message : "Failed to reach PHP server."));
+      setShowErrorModal(true);
       return;
     }
 
@@ -601,6 +624,34 @@ export default function POS() {
       {clockInError && (
         <div role="alert" className="mb-3 rounded-lg border border-red-400 bg-red-900/70 px-4 py-3 text-sm font-semibold text-red-100 shrink-0">
           {clockInError}
+        </div>
+      )}
+
+      {/* CUSTOM ERROR / ALERT MODAL */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md transition-all">
+          <div className="bg-gradient-to-b from-[#183478] to-[#0e214d] border-2 border-red-500 w-[440px] rounded-[30px] p-8 flex flex-col items-center shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-in zoom-in-95 duration-150">
+            <div className="w-16 h-16 bg-red-950 border-2 border-red-500 rounded-full flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(239,68,68,0.6)]">
+              <AlertTriangle className="text-red-400" size={32} />
+            </div>
+
+            <h2 className="text-xl font-black text-white mb-2 tracking-wider text-center">NOTICE</h2>
+            <p className="text-red-200 text-center mb-6 font-medium text-sm px-2">
+              {errorMessage}
+            </p>
+
+            <button 
+              type="button"
+              onClick={() => {
+                setShowErrorModal(false);
+                setErrorMessage("");
+                setTimeout(() => scanInputRef.current?.focus(), 50);
+              }}
+              className="w-full bg-red-600 hover:bg-red-500 text-white py-3.5 rounded-xl font-black text-xs tracking-wider uppercase transition shadow-[0_0_15px_rgba(239,68,68,0.4)] cursor-pointer"
+            >
+              OK
+            </button>
+          </div>
         </div>
       )}
 

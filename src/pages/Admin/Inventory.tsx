@@ -743,7 +743,6 @@ export default function Inventory() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <InputField label="Product Name" name="productName" value={formData.productName} onChange={handleInputChange} />
                 <InputField label="Barcode" name="barcode" value={formData.barcode} onChange={handleInputChange} />
-                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleInputChange} />
                 <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleInputChange} />
                 <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleInputChange} />
                 <InputField label="Category" name="category" value={formData.category} onChange={handleInputChange} />
@@ -752,9 +751,6 @@ export default function Inventory() {
 
               <div className="border-t border-gray-200 pt-3 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-extrabold text-gray-800 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Calendar size={15} className="text-[#17347a]" /> Multiple Expiration Dates & Batches
-                  </span>
                   <button
                     type="button"
                     onClick={handleAddBatch}

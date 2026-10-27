@@ -107,7 +107,7 @@ export default function SalesProfit() {
       <main className="flex-1 p-6 flex flex-col gap-5 text-left overflow-x-hidden">
         
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
-          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Sales Reports</h1>
+          <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider">Sales Profit</h1>
 
           {isFullScreen && (
             <button 
@@ -164,7 +164,7 @@ export default function SalesProfit() {
             <button
               onClick={handleGenerate}
               type="button"
-              className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition active:scale-95 shadow-md flex items-center gap-1.5"
+              className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-lg transition active:scale-95 shadow-md flex items-center gap-1.5 cursor-pointer"
             >
               <Filter size={14} />
               Generate
@@ -185,8 +185,9 @@ export default function SalesProfit() {
           <div className="flex items-center gap-3">
             <button 
               onClick={handleExportExcel}
-              className="flex flex-col items-center justify-center bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md"
+              className="flex flex-col items-center justify-center bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md cursor-pointer"
               title="Export to Excel"
+              type="button"
             >
               <FileSpreadsheet size={18} />
               <span className="text-[10px] font-bold mt-0.5">XLS</span>
@@ -194,8 +195,9 @@ export default function SalesProfit() {
 
             <button 
               onClick={handleExportCSV}
-              className="flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md"
+              className="flex flex-col items-center justify-center bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-xl transition text-white active:scale-95 shadow-md cursor-pointer"
               title="Export to CSV"
+              type="button"
             >
               <FileText size={18} />
               <span className="text-[10px] font-bold mt-0.5">CSV</span>

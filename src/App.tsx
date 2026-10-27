@@ -21,6 +21,7 @@ import ProductStatus from './pages/Admin/ProductStatus';
 import InventoryApprovals from './pages/Admin/InventoryApprovals';
 import DailyReports from './pages/Admin/DailyReports';
 import Payout from './pages/Admin/Payouts';
+import Delivery from './pages/Admin/Delivery'; // <-- Import para sa Admin Delivery component
 
 function App() {
   return (
@@ -59,7 +60,8 @@ function App() {
         <Route path="/admin/productstatus" element={<ProductStatus />} />
         <Route path="/admin/daily-reports" element={<DailyReports />} />
         <Route path="/admin/dailyreports" element={<DailyReports />} />
-        <Route path="/admin/payouts" element={<Payout />} /> {/* <-- Idinagdag ang Payout route */}
+        <Route path="/admin/payouts" element={<Payout />} />
+        <Route path="/admin/delivery" element={<Delivery />} /> {/* <-- Admin Delivery Route */}
 
         {/* FALLBACK */}
         <Route

@@ -16,6 +16,8 @@ import {
   ShoppingCart,
   Edit3,
   PlusCircle,
+  Square,
+  CheckSquare,
 } from "lucide-react";
 
 type ChangeRequest = {
@@ -76,11 +78,17 @@ export default function InventoryApprovals() {
   const [requests, setRequests] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [submittingBulk, setSubmittingBulk] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [editedRestockQty, setEditedRestockQty] = useState<Record<number, number>>({});
   const [activeTab, setActiveTab] = useState<"new_products" | "inventory" | "restock">("new_products");
+
+  // CHECKLIST SELECTION STATES PER TAB
+  const [selectedNewIds, setSelectedNewIds] = useState<number[]>([]);
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<number[]>([]);
+  const [selectedRestockIds, setSelectedRestockIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fontId = "google-font-inter";
@@ -124,32 +132,77 @@ export default function InventoryApprovals() {
     void loadRequests();
   }, [loadRequests]);
 
-  const review = async (request: ChangeRequest, decision: "approve" | "reject") => {
-    setBusyId(request.id);
-    setError("");
-    setNotice("");
-    try {
-      const proposed = parseSnapshot(request.requested_data);
-      const finalRestockQty = editedRestockQty[request.id] ?? proposed?.restockQty ?? 0;
-      const response = await apiRequest("/reviewinventorychange.php", "POST", {
-        request_id: request.id,
-        decision,
-        note: reviewNotes[request.id] || "",
-        approved_qty: request.action_type === "restock" ? finalRestockQty : undefined,
-      });
-      if (!response.success) throw new Error(response.message || "Unable to review this request.");
-      setNotice(response.message);
-      await loadRequests();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to review this request.");
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const newProductRequests = requests.filter((r) => r.action_type === "add");
   const inventoryChanges = requests.filter((r) => r.action_type === "update");
   const restockRequests = requests.filter((r) => r.action_type === "restock");
+
+  // TOGGLE SELECT ALL FOR CURRENT ACTIVE TAB
+  const toggleSelectAll = () => {
+    if (activeTab === "new_products") {
+      const allIds = newProductRequests.map((r) => r.id);
+      const allSelected = allIds.length > 0 && allIds.every((id) => selectedNewIds.includes(id));
+      setSelectedNewIds(allSelected ? [] : allIds);
+    } else if (activeTab === "inventory") {
+      const allIds = inventoryChanges.map((r) => r.id);
+      const allSelected = allIds.length > 0 && allIds.every((id) => selectedInventoryIds.includes(id));
+      setSelectedInventoryIds(allSelected ? [] : allIds);
+    } else if (activeTab === "restock") {
+      const allIds = restockRequests.map((r) => r.id);
+      const allSelected = allIds.length > 0 && allIds.every((id) => selectedRestockIds.includes(id));
+      setSelectedRestockIds(allSelected ? [] : allIds);
+    }
+  };
+
+  const toggleSelectItem = (id: number) => {
+    if (activeTab === "new_products") {
+      setSelectedNewIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+    } else if (activeTab === "inventory") {
+      setSelectedInventoryIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+    } else if (activeTab === "restock") {
+      setSelectedRestockIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+    }
+  };
+
+  const currentSelectedIds =
+    activeTab === "new_products"
+      ? selectedNewIds
+      : activeTab === "inventory"
+      ? selectedInventoryIds
+      : selectedRestockIds;
+
+  // BULK REVIEW HANDLER
+  const handleBulkReview = async (decision: "approve" | "reject") => {
+    if (currentSelectedIds.length === 0) return;
+    setSubmittingBulk(true);
+    setError("");
+    setNotice("");
+    try {
+      const selectedRequests = requests.filter((r) => currentSelectedIds.includes(r.id));
+      
+      for (const request of selectedRequests) {
+        const proposed = parseSnapshot(request.requested_data);
+        const finalRestockQty = editedRestockQty[request.id] ?? proposed?.restockQty ?? 0;
+        
+        await apiRequest("/reviewinventorychange.php", "POST", {
+          request_id: request.id,
+          decision,
+          note: reviewNotes[request.id] || "",
+          approved_qty: request.action_type === "restock" ? finalRestockQty : undefined,
+        });
+      }
+
+      setNotice(`Successfully ${decision}ed ${selectedRequests.length} requests!`);
+      if (activeTab === "new_products") setSelectedNewIds([]);
+      if (activeTab === "inventory") setSelectedInventoryIds([]);
+      if (activeTab === "restock") setSelectedRestockIds([]);
+
+      await loadRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to bulk ${decision} requests.`);
+    } finally {
+      setSubmittingBulk(false);
+    }
+  };
 
   return (
     <div
@@ -232,16 +285,52 @@ export default function InventoryApprovals() {
 
         {/* CONTENT SECTION */}
         <section className="rounded-2xl bg-white p-5 shadow-lg border border-gray-200 space-y-4">
+          {/* BULK ACTION CONTROLS BAR */}
+          <div className="bg-[#17347a] text-white px-4 py-3 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="text-white hover:text-blue-200 cursor-pointer flex items-center gap-2 text-xs font-extrabold uppercase"
+                title="Select All"
+              >
+                {(activeTab === "new_products" && newProductRequests.length > 0 && newProductRequests.every((r) => selectedNewIds.includes(r.id))) ||
+                (activeTab === "inventory" && inventoryChanges.length > 0 && inventoryChanges.every((r) => selectedInventoryIds.includes(r.id))) ||
+                (activeTab === "restock" && restockRequests.length > 0 && restockRequests.every((r) => selectedRestockIds.includes(r.id))) ? (
+                  <CheckSquare size={18} className="text-emerald-400" />
+                ) : (
+                  <Square size={18} />
+                )}
+                <span>Select All</span>
+              </button>
+              <span className="text-xs text-blue-200 font-medium">
+                {currentSelectedIds.length} item{currentSelectedIds.length === 1 ? "" : "s"} selected
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={submittingBulk || currentSelectedIds.length === 0}
+                onClick={() => void handleBulkReview("reject")}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 text-xs font-extrabold uppercase transition shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <XCircle size={14} /> Reject Selected ({currentSelectedIds.length})
+              </button>
+              <button
+                type="button"
+                disabled={submittingBulk || currentSelectedIds.length === 0}
+                onClick={() => void handleBulkReview("approve")}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 text-xs font-extrabold uppercase transition shadow-md cursor-pointer disabled:opacity-50"
+              >
+                <CheckCircle2 size={14} /> {submittingBulk ? "Processing..." : `Approve Selected (${currentSelectedIds.length})`}
+              </button>
+            </div>
+          </div>
+
           {activeTab === "new_products" ? (
             /* NEW PRODUCTS TAB */
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Pending New Product Approvals ({newProductRequests.length})
-                </p>
-                <span className="text-[11px] font-semibold text-gray-400">Admin Access Only</span>
-              </div>
-
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading requests...</div>
               ) : newProductRequests.length === 0 ? (
@@ -251,27 +340,37 @@ export default function InventoryApprovals() {
                   const proposed = parseSnapshot(request.requested_data);
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
                   const requesterName = getRequesterDisplayName(request);
+                  const isSelected = selectedNewIds.includes(request.id);
 
                   return (
-                    <article key={request.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition space-y-3">
+                    <article key={request.id} className={`rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition space-y-3 ${isSelected ? "border-blue-500 bg-blue-50/30" : "border-gray-200"}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
-                              New Product
-                            </span>
-                            <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectItem(request.id)}
+                            className="text-gray-400 hover:text-blue-600 cursor-pointer"
+                          >
+                            {isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                                New Product
+                              </span>
+                              <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                            </div>
+                            <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
+                              <User size={12} className="text-gray-400" />
+                              Submitted by <span className="font-bold text-gray-700">{requesterName}</span> ({request.staff_id || "Staff"}) ·{" "}
+                              {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
-                            <User size={12} className="text-gray-400" />
-                            Submitted by <span className="font-bold text-gray-700">{requesterName}</span> ({request.staff_id || "Staff"}) ·{" "}
-                            {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
-                          </p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-800 border border-amber-200">Pending</span>
                       </div>
 
-                      <div className="grid gap-2.5 rounded-xl bg-blue-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-blue-100">
+                      <div className="grid gap-2.5 rounded-xl bg-blue-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-blue-100 ml-7">
                         <div className="flex items-center gap-1.5"><Barcode size={14} className="text-[#17347a]" /> Barcode: <strong className="font-mono text-gray-900">{proposed.barcode || "N/A"}</strong></div>
                         <div className="flex items-center gap-1.5"><Tag size={14} className="text-[#17347a]" /> Category: <strong className="text-gray-900">{proposed.category || "Uncategorized"}</strong></div>
                         <div className="flex items-center gap-1.5"><Package size={14} className="text-[#17347a]" /> Initial Stock: <strong className="text-emerald-700 font-extrabold">{proposed.stockQuantity ?? 0}</strong></div>
@@ -280,7 +379,7 @@ export default function InventoryApprovals() {
                         <div className="flex items-center gap-1.5"><Building2 size={14} className="text-[#17347a]" /> Supplier: <strong className="text-gray-900">{proposed.supplier || "—"}</strong></div>
                       </div>
 
-                      <div className="pt-1">
+                      <div className="ml-7 pt-1">
                         <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">Review Note (Optional)</label>
                         <div className="relative">
                           <MessageSquare size={14} className="absolute left-3 top-2.5 text-gray-400" />
@@ -292,11 +391,6 @@ export default function InventoryApprovals() {
                           />
                         </div>
                       </div>
-
-                      <div className="flex gap-2.5 justify-end pt-2 border-t border-gray-100">
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "reject")} className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><XCircle size={14} /> Reject</button>
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "approve")} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><CheckCircle2 size={14} /> {busyId === request.id ? "Saving..." : "Approve & Add to Inventory"}</button>
-                      </div>
                     </article>
                   );
                 })
@@ -305,13 +399,6 @@ export default function InventoryApprovals() {
           ) : activeTab === "inventory" ? (
             /* EDIT DETAILS TAB */
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Pending Product Edit Approvals ({inventoryChanges.length})
-                </p>
-                <span className="text-[11px] font-semibold text-gray-400">Admin Access Only</span>
-              </div>
-
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading requests...</div>
               ) : inventoryChanges.length === 0 ? (
@@ -322,27 +409,37 @@ export default function InventoryApprovals() {
                   const before = parseSnapshot(request.before_data);
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
                   const requesterName = getRequesterDisplayName(request);
+                  const isSelected = selectedInventoryIds.includes(request.id);
 
                   return (
-                    <article key={request.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition space-y-3">
+                    <article key={request.id} className={`rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition space-y-3 ${isSelected ? "border-blue-500 bg-blue-50/30" : "border-gray-200"}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
-                              Edit Details
-                            </span>
-                            <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectItem(request.id)}
+                            className="text-gray-400 hover:text-blue-600 cursor-pointer"
+                          >
+                            {isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                                Edit Details
+                              </span>
+                              <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                            </div>
+                            <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
+                              <User size={12} className="text-gray-400" />
+                              Submitted by <span className="font-bold text-gray-700">{requesterName}</span> ({request.staff_id || "Staff"}) ·{" "}
+                              {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
-                            <User size={12} className="text-gray-400" />
-                            Submitted by <span className="font-bold text-gray-700">{requesterName}</span> ({request.staff_id || "Staff"}) ·{" "}
-                            {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
-                          </p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-800 border border-amber-200">Pending</span>
                       </div>
 
-                      <div className="grid gap-2.5 rounded-xl bg-blue-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-blue-100">
+                      <div className="grid gap-2.5 rounded-xl bg-blue-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-blue-100 ml-7">
                         <div className="flex items-center gap-1.5"><Barcode size={14} className="text-[#17347a]" /> Barcode: <strong className="font-mono text-gray-900">{proposed.barcode || "N/A"}</strong></div>
                         <div className="flex items-center gap-1.5"><Tag size={14} className="text-[#17347a]" /> Category: <strong className="text-gray-900">{proposed.category || "Uncategorized"}</strong></div>
                         <div className="flex items-center gap-1.5"><Package size={14} className="text-[#17347a]" /> Stock: <strong className="text-gray-900">{before && before.stockQuantity !== undefined ? <><span className="text-gray-400 line-through mr-1">{before.stockQuantity}</span><span className="text-emerald-700 font-extrabold">{proposed.stockQuantity}</span></> : proposed.stockQuantity}</strong></div>
@@ -352,13 +449,13 @@ export default function InventoryApprovals() {
                       </div>
 
                       {proposed.stockChangeReason && (
-                        <div className="rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900 font-medium flex items-start gap-2">
+                        <div className="ml-7 rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-xs text-amber-900 font-medium flex items-start gap-2">
                           <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
                           <div><span className="font-bold">Stock Adjustment Reason:</span> {proposed.stockChangeReason}</div>
                         </div>
                       )}
 
-                      <div className="pt-1">
+                      <div className="ml-7 pt-1">
                         <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">Review Note (Optional)</label>
                         <div className="relative">
                           <MessageSquare size={14} className="absolute left-3 top-2.5 text-gray-400" />
@@ -370,11 +467,6 @@ export default function InventoryApprovals() {
                           />
                         </div>
                       </div>
-
-                      <div className="flex gap-2.5 justify-end pt-2 border-t border-gray-100">
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "reject")} className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><XCircle size={14} /> Reject</button>
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "approve")} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><CheckCircle2 size={14} /> {busyId === request.id ? "Saving..." : "Approve & Apply"}</button>
-                      </div>
                     </article>
                   );
                 })
@@ -383,13 +475,6 @@ export default function InventoryApprovals() {
           ) : (
             /* RESTOCK REQUESTS TAB */
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Pending Restock Purchase Orders ({restockRequests.length})
-                </p>
-                <span className="text-[11px] font-semibold text-gray-400">Managers can adjust quantities before ordering</span>
-              </div>
-
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading restock requests...</div>
               ) : restockRequests.length === 0 ? (
@@ -400,25 +485,35 @@ export default function InventoryApprovals() {
                   const currentQty = editedRestockQty[request.id] ?? proposed.restockQty ?? 1;
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
                   const requesterName = getRequesterDisplayName(request);
+                  const isSelected = selectedRestockIds.includes(request.id);
 
                   return (
-                    <article key={request.id} className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm hover:shadow-md transition space-y-3">
+                    <article key={request.id} className={`rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition space-y-3 ${isSelected ? "border-emerald-500 bg-emerald-50/30" : "border-emerald-200"}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">Restock Request</span>
-                            <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectItem(request.id)}
+                            className="text-gray-400 hover:text-emerald-600 cursor-pointer"
+                          >
+                            {isSelected ? <CheckSquare size={18} className="text-emerald-600" /> : <Square size={18} />}
+                          </button>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">Restock Request</span>
+                              <h3 className="font-extrabold text-sm text-[#17347a]">{productName}</h3>
+                            </div>
+                            <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
+                              <User size={12} className="text-gray-400" />
+                              Requested by <span className="font-bold text-gray-700">{requesterName}</span> ·{" "}
+                              {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-gray-500 font-medium mt-1 flex items-center gap-1">
-                            <User size={12} className="text-gray-400" />
-                            Requested by <span className="font-bold text-gray-700">{requesterName}</span> ·{" "}
-                            {request.created_at ? new Date(request.created_at.replace(" ", "T")).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
-                          </p>
                         </div>
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-800 border border-amber-200">Awaiting Manager Approval</span>
                       </div>
 
-                      <div className="grid gap-3 rounded-xl bg-emerald-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-emerald-100 items-center">
+                      <div className="grid gap-3 rounded-xl bg-emerald-50/50 p-3.5 text-xs font-medium text-gray-700 sm:grid-cols-2 lg:grid-cols-3 border border-emerald-100 items-center ml-7">
                         <div>Barcode: <strong className="font-mono text-gray-900">{proposed.barcode || "N/A"}</strong></div>
                         <div>Current Stock: <strong className="text-red-600 font-extrabold">{proposed.stockQuantity ?? 0} pcs</strong></div>
 
@@ -441,7 +536,7 @@ export default function InventoryApprovals() {
                         </div>
                       </div>
 
-                      <div className="pt-1">
+                      <div className="ml-7 pt-1">
                         <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">Manager Note / Supplier Order Details</label>
                         <div className="relative">
                           <MessageSquare size={14} className="absolute left-3 top-2.5 text-gray-400" />
@@ -452,11 +547,6 @@ export default function InventoryApprovals() {
                             className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-gray-300 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
                           />
                         </div>
-                      </div>
-
-                      <div className="flex gap-2.5 justify-end pt-2 border-t border-gray-100">
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "reject")} className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><XCircle size={14} /> Reject Order</button>
-                        <button type="button" disabled={busyId !== null} onClick={() => void review(request, "approve")} className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-extrabold uppercase tracking-wider transition active:scale-95 disabled:opacity-50 cursor-pointer"><ShoppingCart size={14} /> {busyId === request.id ? "Saving..." : `Approve & Order (${currentQty} pcs)`}</button>
                       </div>
                     </article>
                   );
