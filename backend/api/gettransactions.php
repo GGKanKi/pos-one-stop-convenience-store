@@ -16,9 +16,22 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 
 require __DIR__ . '/../config/db.php';
 
+$date = $_GET['date'] ?? date('Y-m-d');
+if (!is_string($date)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid date. Use YYYY-MM-DD.']);
+    exit;
+}
+$parsedDate = DateTime::createFromFormat('!Y-m-d', $date);
+if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => 'Invalid date. Use YYYY-MM-DD.']);
+    exit;
+}
+
 try {
     // Recall needs database IDs for safe void requests and product snapshots for the item breakdown.
-    $stmt = $pdo->query(
+    $stmt = $pdo->prepare(
         "SELECT t.id, t.created_at, t.payment_method, t.total_amount,
                 ti.id AS transaction_item_id, ti.product_id, ti.product_name,
                 ti.price, ti.quantity, ti.discount, p.barcode
@@ -26,8 +39,11 @@ try {
          LEFT JOIN transaction_items ti ON ti.transaction_id = t.id AND ti.voided_at IS NULL
          LEFT JOIN products p ON p.id = ti.product_id
          WHERE t.status = 'completed'
+           AND t.created_at >= ?
+           AND t.created_at < DATE_ADD(?, INTERVAL 1 DAY)
          ORDER BY t.created_at DESC, t.id DESC, ti.id"
     );
+    $stmt->execute([$date, $date]);
 
     $transactions = [];
     foreach ($stmt->fetchAll() as $row) {

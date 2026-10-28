@@ -119,15 +119,6 @@ export default function CashRegister() {
         </button>
 
         {error && <p role="alert" className="mt-3 text-center text-sm text-red-300">{error}</p>}
-        {/* Back to POS Button - Positioned to prevent layout jumping */}
-        <div className="flex justify-center mt-4">
-          <button
-            onClick={() => navigate("/pos")}
-            className="text-[11px] text-blue-100/40 hover:text-white transition-colors uppercase tracking-widest font-medium py-1"
-          >
-            Back to POS
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../../components/Sidebar';
+import { exportWorkbook } from '../../services/spreadsheet';
 import { 
   CalendarDays, 
   Printer, 
@@ -152,7 +153,63 @@ export default function DailyReports() {
   };
 
   const handleExportExcel = () => {
-    alert("Exporting daily sales report to Excel...");
+    exportWorkbook(`daily-sales-report-${reportDate}.xlsx`, [
+      {
+        name: 'Sales Items',
+        rows: [
+          ['Report Date', reportDate],
+          ['Product', 'Category', 'Quantity', 'Sales Total'],
+          ...items.map((item) => [item.product_name, item.category, Number(item.qty), Number(item.total)]),
+          [],
+          ['Grand Total', Number(totals.grandTotal)],
+          ['Net Sales (Less Payouts)', Number(totals.netSales)],
+        ],
+      },
+      {
+        name: 'Sales by Category',
+        rows: [['Category', 'Sales Total'], ...categories.map((item) => [item.category, Number(item.total)])],
+      },
+      {
+        name: 'Payment Summary',
+        rows: [
+          ['Metric', 'Amount / Count'],
+          ['Cash', Number(totals.totalCash)],
+          ['e-Payments', Number(totals.totalEpayments)],
+          ['GCash', Number(totals.totalGcash)],
+          ['Credit', Number(totals.totalCredit)],
+          ['Returned', Number(totals.returned)],
+          ['Voided Amount', Number(totals.voidedAmount)],
+          ['Discounts', Number(totals.totalDiscounts)],
+          ['Payouts / Expenses', Number(totals.totalPayouts)],
+          ['Transactions', Number(totals.transactionCount)],
+          ['Items Sold', Number(totals.totalItemCount)],
+        ],
+      },
+      {
+        name: 'Cashiers',
+        rows: [
+          ['Cashier', 'Shift Start', 'Opening Cash', 'Cash Sales', 'Expected Cash', 'Closing Cash', 'Cash Difference'],
+          ...cashiers.map((cashier) => [
+            cashier.cashier_name,
+            cashier.start_time,
+            cashier.register_start,
+            cashier.cash_sales,
+            cashier.expected_cash,
+            cashier.register_end,
+            cashier.cash_difference,
+          ]),
+        ],
+      },
+      {
+        name: 'Payouts',
+        rows: [['Payee', 'Description', 'Amount', 'Created At'], ...payouts.map((payout) => [
+          payout.pay_out_to,
+          payout.description,
+          Number(payout.amount),
+          payout.created_at || '',
+        ])],
+      },
+    ]);
   };
 
   return (
@@ -160,11 +217,11 @@ export default function DailyReports() {
       className="flex min-h-screen bg-[#cfdcfc] text-slate-800 antialiased"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      <Sidebar />
+      <div className="no-print"><Sidebar /></div>
 
       <main className="flex-1 p-6 flex flex-col gap-5 overflow-y-auto text-left">
         {/* HEADER */}
-        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
+        <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center print-header">
           <div className="ml-2">
             <h1 className="text-lg font-extrabold uppercase tracking-wider flex items-center gap-2">
               Daily Sales Report
@@ -175,7 +232,7 @@ export default function DailyReports() {
             type="button"
             onClick={() => void loadReport()}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md disabled:opacity-60 cursor-pointer mr-1"
+            className="no-print inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs font-bold transition active:scale-95 shadow-md disabled:opacity-60 cursor-pointer mr-1"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
             <span className="hidden sm:inline">Refresh</span>
@@ -189,7 +246,7 @@ export default function DailyReports() {
         )}
 
         {/* CONTROLS & ACTIONS BAR */}
-        <div className="bg-[#b0c8fa] p-2.5 rounded-2xl border border-black/10 flex flex-wrap items-center justify-between gap-4">
+        <div className="no-print bg-[#b0c8fa] p-2.5 rounded-2xl border border-black/10 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2 ml-2">
             <span className="text-xs font-extrabold uppercase text-[#17347a]">Report Date:</span>
             <div className="relative">
@@ -433,6 +490,7 @@ export default function DailyReports() {
 
         </div>
       </main>
+      <style>{`@media print { @page { margin: 12mm; } body { background: white !important; } .no-print { display: none !important; } main { padding: 0 !important; overflow: visible !important; } .print-header { margin: 0 0 12px !important; color: #111 !important; background: white !important; border: 0 !important; box-shadow: none !important; } .print-header h1 { color: #111 !important; } section, main > div { break-inside: avoid; box-shadow: none !important; } }`}</style>
     </div>
   );
 }

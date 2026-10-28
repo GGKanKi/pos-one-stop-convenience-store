@@ -10,7 +10,8 @@ import {
   AlertCircle, 
   RefreshCw, 
   Building2,
-  ArrowLeft
+  ArrowLeft,
+  X,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -44,6 +45,8 @@ export default function AdminDelivery() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const fetchDeliveries = async () => {
     setLoading(true);
@@ -66,10 +69,22 @@ export default function AdminDelivery() {
     fetchDeliveries();
   }, []);
 
-  const filteredDeliveries = deliveries.filter((item) =>
-    item.supplierName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.referenceNo.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const query = searchQuery.trim().toLowerCase();
+  const filteredDeliveries = deliveries.filter((item) => {
+    const deliveryDate = item.deliveryDate.slice(0, 10);
+    const matchesSearch = !query || [
+      item.supplierName,
+      item.referenceNo,
+      item.receivedBy,
+      item.deliveryDate,
+      String(item.totalAmount),
+      ...item.items.flatMap((product) => [product.productName, product.barcode, String(product.quantity), product.expirationDate || ""]),
+    ].some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesStartDate = !fromDate || deliveryDate >= fromDate;
+    const matchesEndDate = !toDate || deliveryDate <= toDate;
+    return matchesSearch && matchesStartDate && matchesEndDate;
+  });
+  const hasActiveFilters = Boolean(searchQuery || fromDate || toDate);
 
   const money = (amount: number) => `₱${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -119,16 +134,38 @@ export default function AdminDelivery() {
 
         {/* CONTROLS & SEARCH BAR */}
         <div className="bg-[#b0c8fa] p-4 rounded-2xl shadow-lg border border-black/10 flex flex-wrap items-center justify-between gap-4">
-          <div className="relative min-w-[285px] flex-1 max-w-md">
+          <div className="relative min-w-[260px] flex-1 max-w-md">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search by supplier name or reference #..."
+              placeholder="Search supplier, reference, product, barcode..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white text-gray-800 text-xs font-bold pl-10 pr-4 py-2.5 rounded-xl border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-inner"
+              aria-label="Search delivery records"
+              className="w-full bg-white text-gray-800 text-xs font-bold pl-10 pr-9 py-2.5 rounded-xl border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-600 shadow-inner"
             />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear delivery search" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
+                <X size={14} />
+              </button>
+            )}
           </div>
+
+          <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-[#17347a] shadow-xs border border-blue-200">
+            <span>From</span>
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} aria-label="Delivery date from" className="min-w-0 bg-transparent text-gray-800 outline-none" />
+          </label>
+
+          <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-[#17347a] shadow-xs border border-blue-200">
+            <span>To</span>
+            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} aria-label="Delivery date to" className="min-w-0 bg-transparent text-gray-800 outline-none" />
+          </label>
+
+          {hasActiveFilters && (
+            <button type="button" onClick={() => { setSearchQuery(""); setFromDate(""); setToDate(""); }} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-blue-500">
+              Clear Filters
+            </button>
+          )}
 
           <div className="text-xs font-extrabold text-[#17347a] bg-white px-4 py-2.5 rounded-xl shadow-xs border border-blue-200">
             Total Deliveries Recorded: <span className="text-emerald-700">{filteredDeliveries.length}</span>

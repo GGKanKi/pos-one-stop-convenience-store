@@ -104,7 +104,7 @@ try {
             $name = trim((string)($data['productName'] ?? ''));
             $barcode = trim((string)($data['barcode'] ?? ''));
             $category = trim((string)($data['category'] ?? ''));
-            $stock = filter_var($data['stockQuantity'] ?? null, FILTER_VALIDATE_INT);
+            $stock = $request['action_type'] === 'add' ? 0 : filter_var($data['stockQuantity'] ?? null, FILTER_VALIDATE_INT);
             $cost = filter_var($data['costPrice'] ?? null, FILTER_VALIDATE_FLOAT);
             $price = filter_var($data['sellingPrice'] ?? null, FILTER_VALIDATE_FLOAT);
             $threshold = filter_var($data['threshold'] ?? 5, FILTER_VALIDATE_INT);
@@ -113,7 +113,7 @@ try {
                 throw new InvalidArgumentException("The requested product fields are invalid.");
             }
 
-            $expirationDate = !empty($data['expirationDate']) ? (string)$data['expirationDate'] : null;
+            $expirationDate = $request['action_type'] === 'add' ? null : (!empty($data['expirationDate']) ? (string)$data['expirationDate'] : null);
             if ($expirationDate !== null) {
                 $date = DateTime::createFromFormat('!Y-m-d', $expirationDate);
                 if (!$date || $date->format('Y-m-d') !== $expirationDate) {
@@ -121,9 +121,9 @@ try {
                 }
             }
 
-            $batches = $data['expiryBatches'] ?? [];
+            $batches = $request['action_type'] === 'add' ? [] : ($data['expiryBatches'] ?? []);
             if ($request['action_type'] === 'add') {
-                $batches = ($expirationDate && $stock > 0) ? [['date' => $expirationDate, 'qty' => $stock]] : [];
+                $batches = [];
             } elseif (!is_array($batches) || count($batches) > 100) {
                 throw new InvalidArgumentException("Expiry batches are invalid.");
             }
