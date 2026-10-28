@@ -35,6 +35,7 @@ type LowStockItem = {
   barcode: string;
   stockQuantity: number;
   threshold: number;
+  ceiling: number; // Ceiling limit property
 };
 
 type AllProductItem = {
@@ -43,6 +44,7 @@ type AllProductItem = {
   barcode: string;
   stockQuantity: number;
   threshold: number;
+  ceiling: number; // Ceiling limit property
 };
 
 type ApprovedRestockItem = {
@@ -105,16 +107,19 @@ export default function AdminDashboard() {
   const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
   const [submittingBulk, setSubmittingBulk] = useState(false);
 
+  // Ceiling Popup Warning Modal States
+  const [ceilingAlertModal, setCeilingAlertModal] = useState(false);
+  const [ceilingAlertMessage, setCeilingAlertMessage] = useState("");
+
   const [selectedApprovedIds, setSelectedApprovedIds] = useState<number[]>([]);
   const [receivingBulk, setReceivingBulk] = useState(false);
   const [receivedQuantities, setReceivedQuantities] = useState<Record<number, number>>({});
   const [itemExpirationDates, setItemExpirationDates] = useState<Record<number, string>>({});
 
-  // TWO-STEP MODAL STATES & BATCH / RECEIPT NO
   const [isBulkReceiveModalOpen, setIsBulkReceiveModalOpen] = useState(false);
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
   const [deliverySource, setDeliverySource] = useState("");
-  const [receiptNo, setReceiptNo] = useState(""); // <--- for receipt
+  const [receiptNo, setReceiptNo] = useState("");
   const [receiptTotal, setReceiptTotal] = useState("");
 
   useEffect(() => {
@@ -177,6 +182,7 @@ export default function AdminDashboard() {
           barcode: p.barcode || p.code || "",
           stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0),
           threshold: Number(p.threshold ?? 10),
+          ceiling: Number(p.ceiling ?? 100),
         }))
       );
     } catch (err) {
@@ -244,15 +250,33 @@ export default function AdminDashboard() {
     );
   };
 
+  // ==========================================
+  // CEILING VALIDATION CHECK ON RESTOCK REQUEST
+  // ==========================================
   const handleBulkRequestRestock = async () => {
     if (selectedItemIds.length === 0 || !data?.lowStock) return;
-    setSubmittingBulk(true);
     setError("");
     setNotice("");
+
+    const selectedProducts = data.lowStock.filter((p) => selectedItemIds.includes(p.id));
+
+    // Check if Current Stock + Qty to Buy exceeds the Ceiling limit
+    for (const product of selectedProducts) {
+      const qtyToBuy = restockQuantities[product.id] || Math.max(1, product.threshold - product.stockQuantity);
+      const projectedTotal = product.stockQuantity + qtyToBuy;
+      const ceilingLimit = product.ceiling || 100;
+
+      if (projectedTotal > ceilingLimit) {
+        setCeilingAlertMessage(`⚠️ The product "${product.name}" currently has ${product.stockQuantity} in stock. Adding a restock quantity of ${qtyToBuy} will result in a total of ${projectedTotal}, which exceeds the manager's ceiling limit of ${ceilingLimit}.`);
+        setCeilingAlertModal(true);
+        return; // Halt process and open warning popup
+      }
+    }
+
+    setSubmittingBulk(true);
     try {
       const user = getActiveStaffUser();
       const actor = { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || "Staff" };
-      const selectedProducts = data.lowStock.filter((p) => selectedItemIds.includes(p.id));
       
       for (const product of selectedProducts) {
         const qtyToBuy = restockQuantities[product.id] || Math.max(1, product.threshold - product.stockQuantity);
@@ -296,7 +320,6 @@ export default function AdminDashboard() {
     );
   };
 
-  // STEP 1 PROCEED TO SOURCE MODAL
   const handleProceedToSourceModal = () => {
     if (selectedApprovedIds.length === 0) return;
     setIsBulkReceiveModalOpen(false);
@@ -306,7 +329,6 @@ export default function AdminDashboard() {
     setIsSourceModalOpen(true);
   };
 
-  // STEP 2 FINAL SUBMIT TO INVENTORY & DELIVERY
   const handleFinalReceiveRestock = async () => {
     if (!deliverySource.trim() || !receiptTotal) {
       setError("Please provide the delivery source and receipt total.");
@@ -332,7 +354,7 @@ export default function AdminDashboard() {
       await apiRequest("/receiverestock.php", "POST", {
         items: payloadItems,
         source: deliverySource,
-        receipt_no: receiptNo, // <--- Isinama ang receipt number/batch ID
+        receipt_no: receiptNo,
         receipt_total: Number(receiptTotal),
         staff_name: staffName,
       });
@@ -403,6 +425,26 @@ export default function AdminDashboard() {
 
         {notice && <div role="status" className="bg-green-50 text-green-800 border border-green-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{notice}</div>}
         {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{error}</div>}
+
+        {/* CEILING ALERT POPUP MODAL */}
+        {ceilingAlertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-center border-2 border-red-500 animate-in zoom-in-95 duration-150">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl font-black">
+                ⚠️
+              </div>
+              <h2 className="font-extrabold text-red-600 text-base uppercase tracking-wider">Ceiling Limit Exceeded</h2>
+              <p className="text-xs font-semibold text-gray-700">{ceilingAlertMessage}</p>
+              <button
+                type="button"
+                onClick={() => setCeilingAlertModal(false)}
+                className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white text-xs font-extrabold uppercase rounded-xl shadow-md transition active:scale-95 cursor-pointer"
+              >
+                OK, I Understand
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* RESTOCK ATTENTION SECTION */}
         <section className="bg-white rounded-2xl shadow-md border border-red-200 overflow-hidden">
@@ -482,6 +524,7 @@ export default function AdminDashboard() {
                       <th className="py-3 px-3">Barcode</th>
                       <th className="py-3 px-3 text-center">Current Stock</th>
                       <th className="py-3 px-3 text-center">Min Threshold</th>
+                      <th className="py-3 px-3 text-center">Ceiling</th>
                       {!isAdmin && <th className="py-3 px-3 text-center w-32">Qty to Buy</th>}
                     </tr>
                   </thead>
@@ -502,6 +545,7 @@ export default function AdminDashboard() {
                           <td className="py-3 px-3 font-mono text-gray-500 text-[11px]">{product.barcode}</td>
                           <td className="py-3 px-3 text-center font-black text-red-600">{product.stockQuantity}</td>
                           <td className="py-3 px-3 text-center font-semibold text-gray-500">{product.threshold}</td>
+                          <td className="py-3 px-3 text-center font-extrabold text-blue-600">{product.ceiling || 100}</td>
                           {!isAdmin && (
                             <td className="py-3 px-3 text-center">
                               <input

@@ -25,7 +25,7 @@ if (!is_array($data) || !$productId || $productId < 1) {
     exit;
 }
 
-$requiredFields = ['productName', 'barcode', 'category', 'stockQuantity', 'costPrice', 'sellingPrice', 'threshold'];
+$requiredFields = ['productName', 'barcode', 'category', 'stockQuantity', 'costPrice', 'sellingPrice', 'threshold', 'ceiling'];
 foreach ($requiredFields as $field) {
     if (!isset($data[$field]) || trim((string)$data[$field]) === '') {
         http_response_code(400);
@@ -38,10 +38,15 @@ $stock = filter_var($data['stockQuantity'], FILTER_VALIDATE_INT);
 $cost = filter_var($data['costPrice'], FILTER_VALIDATE_FLOAT);
 $price = filter_var($data['sellingPrice'], FILTER_VALIDATE_FLOAT);
 $threshold = filter_var($data['threshold'], FILTER_VALIDATE_INT);
-if ($stock === false || $stock < 0 || $cost === false || $cost < 0 ||
-    $price === false || $price < 0 || $threshold === false || $threshold < 0) {
+$ceiling = filter_var($data['ceiling'], FILTER_VALIDATE_INT);
+
+if ($stock === false || $stock < 0 || 
+    $cost === false || $cost < 0 ||
+    $price === false || $price < 0 || 
+    $threshold === false || $threshold < 0 || 
+    $ceiling === false || $ceiling < 0) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Stock, prices, and threshold must be valid non-negative numbers.']);
+    echo json_encode(['success' => false, 'message' => 'Stock, prices, threshold, and ceiling must be valid non-negative numbers.']);
     exit;
 }
 
@@ -130,12 +135,13 @@ try {
         'expirationDate' => $expirationDate,
         'expiryBatches' => $batches,
         'threshold' => $threshold,
+        'ceiling' => $ceiling,
     ];
 
     $update = $pdo->prepare(
         'UPDATE products SET productName=:productName, barcode=:barcode, description=:description,
          stockQuantity=:stockQuantity, costPrice=:costPrice, sellingPrice=:sellingPrice, category=:category,
-         supplier=:supplier, expirationDate=:expirationDate, expiry_batches=:expiryBatches, threshold=:threshold
+         supplier=:supplier, expirationDate=:expirationDate, expiry_batches=:expiryBatches, threshold=:threshold, ceiling=:ceiling
          WHERE id=:id'
     );
     $update->execute([
@@ -150,6 +156,7 @@ try {
         ':expirationDate' => $after['expirationDate'],
         ':expiryBatches' => json_encode($batches, JSON_THROW_ON_ERROR),
         ':threshold' => $after['threshold'],
+        ':ceiling' => $after['ceiling'],
         ':id' => $productId,
     ]);
 
@@ -159,7 +166,7 @@ try {
     );
     $changedBefore = [];
     $changedAfter = [];
-    $auditFields = ['productName', 'barcode', 'description', 'costPrice', 'sellingPrice', 'category', 'supplier', 'expirationDate', 'threshold'];
+    $auditFields = ['productName', 'barcode', 'description', 'costPrice', 'sellingPrice', 'category', 'supplier', 'expirationDate', 'threshold', 'ceiling'];
     foreach ($auditFields as $field) {
         $oldValue = $before[$field] ?? null;
         $newValue = $after[$field];

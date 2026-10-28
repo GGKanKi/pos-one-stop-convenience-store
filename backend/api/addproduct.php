@@ -43,11 +43,17 @@ $threshold = isset($data['threshold']) && $data['threshold'] !== ''
     ? filter_var($data['threshold'], FILTER_VALIDATE_INT)
     : 5;
 
+// Parse ceiling value (default to 100 if not provided or invalid)
+$ceiling = isset($data['ceiling']) && $data['ceiling'] !== ''
+    ? filter_var($data['ceiling'], FILTER_VALIDATE_INT)
+    : 100;
+
 if ($productName === '' || $barcode === '' || $category === '' ||
     $stockQuantity === false || $stockQuantity < 0 ||
     $costPrice === false || $costPrice < 0 ||
     $sellingPrice === false || $sellingPrice < 0 ||
-    $threshold === false || $threshold < 0) {
+    $threshold === false || $threshold < 0 ||
+    $ceiling === false || $ceiling < 0) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Product fields must contain valid non-negative values.']);
     exit;
@@ -76,8 +82,8 @@ try {
     $pdo->beginTransaction();
 
     $insert = $pdo->prepare(
-        'INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold)
-         VALUES (:productName, :barcode, :description, :stockQuantity, :costPrice, :sellingPrice, :category, :supplier, :expirationDate, :expiryBatches, :threshold)'
+        'INSERT INTO products (productName, barcode, description, stockQuantity, costPrice, sellingPrice, category, supplier, expirationDate, expiry_batches, threshold, ceiling)
+         VALUES (:productName, :barcode, :description, :stockQuantity, :costPrice, :sellingPrice, :category, :supplier, :expirationDate, :expiryBatches, :threshold, :ceiling)'
     );
     $insert->execute([
         ':productName' => $productName,
@@ -91,6 +97,7 @@ try {
         ':expirationDate' => $expirationDate,
         ':expiryBatches' => json_encode($expiryBatches, JSON_THROW_ON_ERROR),
         ':threshold' => $threshold,
+        ':ceiling' => $ceiling,
     ]);
     $productId = (int)$pdo->lastInsertId();
 
@@ -103,7 +110,7 @@ try {
         'Added New Product',
         $productId,
         $productName,
-        json_encode(['stockQuantity' => $stockQuantity, 'barcode' => $barcode], JSON_THROW_ON_ERROR),
+        json_encode(['stockQuantity' => $stockQuantity, 'barcode' => $barcode, 'ceiling' => $ceiling], JSON_THROW_ON_ERROR),
         $stockQuantity,
         $actorId,
         $actorName,

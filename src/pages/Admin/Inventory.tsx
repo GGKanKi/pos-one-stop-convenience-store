@@ -24,6 +24,7 @@ interface Product {
   expirationDate: string | null;
   expiryBatches: ExpiryBatch[];
   threshold: number;
+  ceiling: number; // Ceiling limit property
   actualCount?: number | string | null;
 }
 
@@ -78,6 +79,7 @@ const emptyForm = {
   supplier: "",
   expirationDate: "",
   threshold: "5",
+  ceiling: "100", // Default ceiling value set by manager/admin
 };
 
 function getSessionUser(): { id?: number | string; role?: string; first_name?: string; last_name?: string; email?: string } {
@@ -116,7 +118,6 @@ export default function Inventory() {
   const isStaffView = location.state?.staffView === true;
   const hideSidebar = isFullScreen || isStaffView;
 
-  // Enforce staff mode if user is staff or operating under staff views
   const isStaffMode = currentUserRole === "staff" || hideSidebar || isStaffView;
 
   const [showAdd, setShowAdd] = useState(false);
@@ -235,6 +236,7 @@ export default function Inventory() {
           expirationDate: rawExpiry,
           expiryBatches: defaultBatches,
           threshold: Number(item.threshold || 5),
+          ceiling: Number(item.ceiling || 100), // Mapped ceiling from database or default to 100
           actualCount: actualVal,
         };
       });
@@ -283,18 +285,31 @@ export default function Inventory() {
 
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setSaving(true);
     setError("");
     setNotice("");
+
+    const stockToAdd = Number(formData.stockQuantity);
+    const ceilingLimit = Number(formData.ceiling || 100);
+
+    // ==========================================
+    // CEILING QUANTITY VALIDATION CHECK
+    // ==========================================
+    if (stockToAdd > ceilingLimit) {
+      setError(`⚠️ Stock quantity (${stockToAdd}) exceeds the manager's ceiling limit of ${ceilingLimit} for this product.`);
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const user = getInventoryActor();
       const productData = {
         ...formData,
-        stockQuantity: Number(formData.stockQuantity),
+        stockQuantity: stockToAdd,
         costPrice: Number(formData.costPrice),
         sellingPrice: Number(formData.sellingPrice),
         threshold: Number(formData.threshold || 5),
+        ceiling: ceilingLimit,
         expirationDate: formData.expirationDate || null,
         supplier: formData.supplier || null,
         description: formData.description || null,
@@ -359,6 +374,7 @@ export default function Inventory() {
       supplier: product.supplier || "",
       expirationDate: product.expirationDate || "",
       threshold: String(product.threshold),
+      ceiling: String(product.ceiling || 100),
     });
   };
 
@@ -386,7 +402,18 @@ export default function Inventory() {
     if (!editingProduct) return;
 
     const newStock = Number(formData.stockQuantity);
+    const ceilingLimit = Number(formData.ceiling || editingProduct.ceiling || 100);
+
+    // ==========================================
+    // CEILING QUANTITY VALIDATION CHECK ON EDIT / RESTOCK
+    // ==========================================
+    if (newStock > ceilingLimit) {
+      setError(`⚠️ Stock quantity (${newStock}) cannot exceed the ceiling limit of ${ceilingLimit} set by the manager.`);
+      return;
+    }
+
     if (newStock !== originalStock) {
+      setError("");
       setStockChangeReason("");
       setStockReasonModalOpen(true);
     } else {
@@ -399,7 +426,13 @@ export default function Inventory() {
 
     const primaryExpiry = editExpiryBatches[0]?.date || formData.expirationDate || null;
     const newStock = Number(formData.stockQuantity);
+    const ceilingLimit = Number(formData.ceiling || 100);
     const user = getInventoryActor();
+
+    if (newStock > ceilingLimit) {
+      setError(`⚠️ Stock quantity (${newStock}) exceeds the ceiling limit of ${ceilingLimit}.`);
+      return;
+    }
 
     const updatedProductData = {
       id: editingProduct.id,
@@ -412,6 +445,7 @@ export default function Inventory() {
       supplier: formData.supplier || null,
       description: formData.description || null,
       threshold: Number(formData.threshold),
+      ceiling: ceilingLimit,
       expirationDate: primaryExpiry,
       expiryBatches: editExpiryBatches,
       stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
@@ -646,7 +680,8 @@ export default function Inventory() {
               </div>
               <div className="flex flex-wrap gap-4">
                 <InputField label="Expiration Date" name="expirationDate" type="date" value={formData.expirationDate} onChange={handleInputChange} />
-                <InputField label="Low Stock Threshold for Replenishment" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
+                <InputField label="Low Stock Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
+                <InputField label="Ceiling Quantity (Max Capacity)" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
               </div>
             </div>
 
@@ -746,7 +781,8 @@ export default function Inventory() {
                 <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleInputChange} />
                 <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleInputChange} />
                 <InputField label="Category" name="category" value={formData.category} onChange={handleInputChange} />
-                <InputField label="Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
+                <InputField label="Low Stock Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
+                <InputField label="Ceiling Quantity (Max Capacity)" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
               </div>
 
               <div className="border-t border-gray-200 pt-3 space-y-3">
@@ -882,12 +918,12 @@ export default function Inventory() {
                 <thead className="bg-[#17347a] text-white font-bold uppercase text-[11px] tracking-wider sticky top-0 z-20 shadow-sm">
                   {view === "list" ? (
                     <tr>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[24%]">Product</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[14%]">Barcode</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[16%]">Category</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Cost Price</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[10%]">Selling Price</th>
-                      <th className="py-3 px-4 border-b border-blue-900 w-[11%] text-center">Stock / Threshold</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[22%]">Product</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[12%]">Barcode</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[14%]">Category</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[9%]">Cost Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[9%]">Selling Price</th>
+                      <th className="py-3 px-4 border-b border-blue-900 w-[12%] text-center">Stock / Threshold / Ceiling</th>
                       <th className="py-3 px-4 border-b border-blue-900 w-[9%] text-center">Expiry Dates</th>
                       {canEditInventory && <th className="py-3 px-4 border-b border-blue-900 w-[6%] text-center">Action</th>}
                     </tr>
@@ -938,7 +974,8 @@ export default function Inventory() {
                                 <span className={Number(item.stockQuantity) <= Number(item.threshold) ? "text-red-600 font-black" : "text-gray-800"}>
                                   {Number(item.stockQuantity)}
                                 </span>{" "}
-                                / <span className="text-gray-400 font-semibold">{Number(item.threshold)}</span>
+                                / <span className="text-gray-500">{Number(item.threshold)}</span>{" "}
+                                / <span className="text-blue-600 font-extrabold" title="Ceiling Limit">{Number(item.ceiling)}</span>
                               </td>
                               <td className="py-3 px-4 text-center whitespace-nowrap">
                                 <button
