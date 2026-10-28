@@ -670,7 +670,6 @@ export default function Inventory() {
                 <InputField label="Description" name="description" value={formData.description} onChange={handleInputChange} />
               </div>
               <div className="flex flex-wrap gap-4">
-                <InputField label="Stock Quantity" name="stockQuantity" type="number" value={formData.stockQuantity} onChange={handleInputChange} />
                 <InputField label="Cost Price" name="costPrice" type="number" value={formData.costPrice} onChange={handleInputChange} />
                 <InputField label="Selling Price" name="sellingPrice" type="number" value={formData.sellingPrice} onChange={handleInputChange} />
               </div>
@@ -681,7 +680,7 @@ export default function Inventory() {
               <div className="flex flex-wrap gap-4">
                 <InputField label="Expiration Date" name="expirationDate" type="date" value={formData.expirationDate} onChange={handleInputChange} />
                 <InputField label="Low Stock Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
-                <InputField label="Ceiling Quantity (Max Capacity)" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
+                <InputField label="Ceiling Quantity" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
               </div>
             </div>
 
