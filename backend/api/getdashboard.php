@@ -85,9 +85,9 @@ try {
     $topStmt->execute([$date]);
     $topProducts = $topStmt->fetchAll();
 
-    // 5. Low Stock Products (Excluding items with pending restock requests)
+    // 5. Low Stock Products (Excluding items with pending restock requests) - Added ceiling here
     $lowStockStmt = $pdo->prepare(
-        'SELECT id, productName AS name, barcode, stockQuantity, threshold
+        'SELECT id, productName AS name, barcode, stockQuantity, threshold, ceiling
          FROM products p
          WHERE p.stockQuantity <= p.threshold
            AND NOT EXISTS (

@@ -51,7 +51,8 @@ try {
                 supplier,
                 expirationDate,
                 expiry_batches,
-                threshold
+                threshold,
+                ceiling
             FROM products 
             WHERE productName LIKE ? OR barcode LIKE ? OR category LIKE ? OR supplier LIKE ?
             ORDER BY productName ASC
@@ -77,7 +78,8 @@ try {
                 supplier,
                 expirationDate,
                 expiry_batches,
-                threshold
+                threshold,
+                ceiling
             FROM products 
             ORDER BY productName ASC
         ");
