@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
 import { getAuthToken, getAuthUser } from "../../services/authSession";
-import { Search, Upload, Edit3, X, Calendar, Plus, Trash2, FileText, ArrowLeft, ClipboardCheck, BarChart2 } from "lucide-react";
+import { Search, Upload, Edit3, X, Calendar, Plus, FileText, ArrowLeft, ClipboardCheck, BarChart2 } from "lucide-react";
+import { readSpreadsheet } from "../../services/spreadsheet";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
 
@@ -59,7 +60,7 @@ const InputField: React.FC<InputFieldProps> = ({
         value={value}
         onChange={onChange}
         placeholder={type === "date" ? "YYYY-MM-DD" : placeholder}
-        required={["productName", "barcode", "stockQuantity", "costPrice", "sellingPrice", "category"].includes(name)}
+        required={["productName", "barcode", "costPrice", "sellingPrice", "category"].includes(name)}
         min={type === "number" ? "0" : undefined}
         step={name === "costPrice" || name === "sellingPrice" ? "0.01" : undefined}
         className="w-full h-11 px-4 bg-white border border-gray-300 rounded-xl outline-none transition duration-150 placeholder:text-gray-400 text-gray-800 text-xs font-medium focus:border-blue-600 focus:ring-2 focus:ring-blue-100 shadow-inner"
@@ -72,12 +73,10 @@ const emptyForm = {
   productName: "",
   barcode: "",
   description: "",
-  stockQuantity: "0",
   costPrice: "0.00",
   sellingPrice: "0.00",
   category: "",
   supplier: "",
-  expirationDate: "",
   threshold: "5",
   ceiling: "100", // Default ceiling value set by manager/admin
 };
@@ -107,6 +106,13 @@ function getInventoryAuthToken(): string | undefined {
   return getAuthToken();
 }
 
+const normalizeImportHeader = (value: unknown) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const parseImportNumber = (value: unknown): number => {
+  if (typeof value === "number") return value;
+  return Number(String(value ?? "").replace(/₱|php|usd|\$|,|\s/gi, ""));
+};
+
 export default function Inventory() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -122,8 +128,6 @@ export default function Inventory() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [originalStock, setOriginalStock] = useState<number>(0);
-  const [editExpiryBatches, setEditExpiryBatches] = useState<ExpiryBatch[]>([]);
   const [expiryModalProduct, setExpiryModalProduct] = useState<Product | null>(null);
   const [view, setView] = useState<"list" | "check">("list");
   const [products, setProducts] = useState<Product[]>([]);
@@ -135,14 +139,13 @@ export default function Inventory() {
   const [notice, setNotice] = useState("");
   const [formData, setFormData] = useState(emptyForm);
 
-  const [stockReasonModalOpen, setStockReasonModalOpen] = useState(false);
-  const [stockChangeReason, setStockChangeReason] = useState("");
 
   // ==========================================
   // HARDWARE SCANNER LISTENER (D-Tech MP6300IR)
   // ==========================================
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleGlobalScanKeypress = (e: KeyboardEvent) => {
@@ -288,16 +291,7 @@ export default function Inventory() {
     setError("");
     setNotice("");
 
-    const stockToAdd = Number(formData.stockQuantity);
     const ceilingLimit = Number(formData.ceiling || 100);
-
-    // ==========================================
-    // CEILING QUANTITY VALIDATION CHECK
-    // ==========================================
-    if (stockToAdd > ceilingLimit) {
-      setError(`⚠️ Stock quantity (${stockToAdd}) exceeds the manager's ceiling limit of ${ceilingLimit} for this product.`);
-      return;
-    }
 
     setSaving(true);
 
@@ -305,12 +299,12 @@ export default function Inventory() {
       const user = getInventoryActor();
       const productData = {
         ...formData,
-        stockQuantity: stockToAdd,
+        stockQuantity: 0,
         costPrice: Number(formData.costPrice),
         sellingPrice: Number(formData.sellingPrice),
         threshold: Number(formData.threshold || 5),
         ceiling: ceilingLimit,
-        expirationDate: formData.expirationDate || null,
+        expirationDate: null,
         supplier: formData.supplier || null,
         description: formData.description || null,
         actor: { 
@@ -353,92 +347,147 @@ export default function Inventory() {
     }
   };
 
+  const handleImportProducts = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError("");
+    setNotice("");
+    setSaving(true);
+    try {
+      const rows = await readSpreadsheet(file);
+      if (rows.length < 2) throw new Error("The file must contain a header row and at least one product row.");
+      if (rows.length > 501) throw new Error("Import up to 500 products per file.");
+
+      const headers = rows[0].map(normalizeImportHeader);
+      const aliases: Record<string, string[]> = {
+        productName: ["productname", "product", "name"],
+        barcode: ["barcode", "sku", "code"],
+        description: ["description", "details"],
+        costPrice: ["costprice", "unitcost", "cost"],
+        sellingPrice: ["sellingprice", "price", "retailprice"],
+        category: ["category", "type"],
+        supplier: ["supplier", "vendor"],
+        threshold: ["threshold", "lowstockthreshold", "reorderlevel"],
+        ceiling: ["ceiling", "stockceiling", "maximumstock"],
+      };
+      const indexes = Object.fromEntries(Object.entries(aliases).map(([field, names]) => [
+        field,
+        headers.findIndex((header) => names.includes(header)),
+      ])) as Record<string, number>;
+      const required = ["productName", "barcode", "costPrice", "sellingPrice", "category"];
+      const missing = required.filter((field) => indexes[field] < 0);
+      if (missing.length) throw new Error(`Missing required columns: ${missing.join(", ")}.`);
+
+      const existingBarcodes = new Set(products.map((product) => product.barcode.trim().toLowerCase()));
+      const importedBarcodes = new Set<string>();
+      type ImportRowResult = { line: number; problems: string[] } | { line: number; product: Record<string, unknown> };
+      const parsed: ImportRowResult[] = rows.slice(1).flatMap((row, index): ImportRowResult[] => {
+        if (row.every((cell) => String(cell ?? "").trim() === "")) return [];
+        const get = (field: string) => indexes[field] >= 0 ? String(row[indexes[field]] ?? "").trim() : "";
+        const productName = get("productName");
+        const barcode = get("barcode");
+        const category = get("category");
+        const costPrice = parseImportNumber(get("costPrice"));
+        const sellingPrice = parseImportNumber(get("sellingPrice"));
+        const threshold = get("threshold") ? parseImportNumber(get("threshold")) : 5;
+        const ceiling = get("ceiling") ? parseImportNumber(get("ceiling")) : 100;
+        const line = index + 2;
+        const problems: string[] = [];
+        if (!productName || !barcode || !category) problems.push("product name, barcode, and category are required");
+        if (![costPrice, sellingPrice, threshold, ceiling].every((value) => Number.isFinite(value) && value >= 0)) problems.push("prices and stock limits must be non-negative numbers");
+        if (!Number.isInteger(threshold) || !Number.isInteger(ceiling)) problems.push("threshold and ceiling must be whole numbers");
+        const barcodeKey = barcode.toLowerCase();
+        if (barcode && (existingBarcodes.has(barcodeKey) || importedBarcodes.has(barcodeKey))) problems.push("barcode already exists");
+        if (barcode) importedBarcodes.add(barcodeKey);
+        if (problems.length) return [{ line, problems }];
+
+        return [{
+          line,
+          product: {
+            productName,
+            barcode,
+            description: get("description") || null,
+            stockQuantity: 0,
+            costPrice,
+            sellingPrice,
+            category,
+            supplier: get("supplier") || null,
+            expirationDate: null,
+            threshold,
+            ceiling,
+          },
+        }];
+      });
+      const invalidRows = parsed.filter((entry): entry is { line: number; problems: string[] } => "problems" in entry);
+      if (invalidRows.length) {
+        const details = invalidRows.slice(0, 8).map((entry) => `Row ${entry.line}: ${entry.problems.join(", ")}`).join("; ");
+        throw new Error(`${invalidRows.length} row(s) need correction. ${details}${invalidRows.length > 8 ? "; …" : ""}`);
+      }
+
+      const validRows = parsed.filter((entry): entry is { line: number; product: Record<string, unknown> } => "product" in entry);
+      if (!validRows.length) throw new Error("No product rows were found in the selected file.");
+      if (!window.confirm(`Import ${validRows.length} products from ${file.name}? Existing products will not be overwritten.`)) return;
+
+      const token = getInventoryAuthToken();
+      let imported = 0;
+      const failed: string[] = [];
+      for (const entry of validRows) {
+        try {
+          const response = await fetch(`${API_BASE}/addproduct.php`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify(entry.product),
+          });
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.message || "Save failed");
+          imported++;
+        } catch (error) {
+          failed.push(`row ${entry.line}: ${error instanceof Error ? error.message : "Save failed"}`);
+        }
+      }
+      await loadProducts();
+      setNotice(failed.length
+        ? `Imported ${imported} product(s); ${failed.length} failed. ${failed.slice(0, 5).join("; ")}`
+        : `Imported ${imported} product(s) successfully.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not import products from this file.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
-    setOriginalStock(Number(product.stockQuantity));
-    setEditExpiryBatches(
-      product.expiryBatches && product.expiryBatches.length > 0
-        ? [...product.expiryBatches]
-        : product.expirationDate
-        ? [{ date: product.expirationDate, qty: product.stockQuantity }]
-        : []
-    );
     setFormData({
       productName: product.productName,
       barcode: product.barcode,
       description: product.description || "",
-      stockQuantity: String(product.stockQuantity),
       costPrice: String(product.costPrice),
       sellingPrice: String(product.sellingPrice),
       category: product.category,
       supplier: product.supplier || "",
-      expirationDate: product.expirationDate || "",
       threshold: String(product.threshold),
       ceiling: String(product.ceiling || 100),
     });
   };
 
-  const handleAddBatch = () => {
-    setEditExpiryBatches((prev) => [...prev, { date: "", qty: 0 }]);
-  };
-
-  const handleRemoveBatch = (index: number) => {
-    setEditExpiryBatches((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleBatchChange = (
-    index: number,
-    field: "date" | "qty",
-    value: string | number
-  ) => {
-    setEditExpiryBatches((prev) =>
-      prev.map((batch, i) =>
-        i === index ? { ...batch, [field]: value } : batch
-      )
-    );
-  };
-
   const handlePreSaveEditProduct = () => {
-    if (!editingProduct) return;
-
-    const newStock = Number(formData.stockQuantity);
-    const ceilingLimit = Number(formData.ceiling || editingProduct.ceiling || 100);
-
-    // ==========================================
-    // CEILING QUANTITY VALIDATION CHECK ON EDIT / RESTOCK
-    // ==========================================
-    if (newStock > ceilingLimit) {
-      setError(`⚠️ Stock quantity (${newStock}) cannot exceed the ceiling limit of ${ceilingLimit} set by the manager.`);
-      return;
-    }
-
-    if (newStock !== originalStock) {
-      setError("");
-      setStockChangeReason("");
-      setStockReasonModalOpen(true);
-    } else {
-      void handleSaveEditProduct();
-    }
+    void handleSaveEditProduct();
   };
 
   const handleSaveEditProduct = async () => {
     if (!editingProduct) return;
 
-    const primaryExpiry = editExpiryBatches[0]?.date || formData.expirationDate || null;
-    const newStock = Number(formData.stockQuantity);
     const ceilingLimit = Number(formData.ceiling || 100);
     const user = getInventoryActor();
-
-    if (newStock > ceilingLimit) {
-      setError(`⚠️ Stock quantity (${newStock}) exceeds the ceiling limit of ${ceilingLimit}.`);
-      return;
-    }
 
     const updatedProductData = {
       id: editingProduct.id,
       productName: formData.productName,
       barcode: formData.barcode,
-      stockQuantity: newStock,
+      stockQuantity: editingProduct.stockQuantity,
       costPrice: Number(formData.costPrice),
       sellingPrice: Number(formData.sellingPrice),
       category: formData.category,
@@ -446,9 +495,8 @@ export default function Inventory() {
       description: formData.description || null,
       threshold: Number(formData.threshold),
       ceiling: ceilingLimit,
-      expirationDate: primaryExpiry,
-      expiryBatches: editExpiryBatches,
-      stockChangeReason: newStock !== originalStock ? stockChangeReason : null,
+      expirationDate: editingProduct.expirationDate,
+      expiryBatches: editingProduct.expiryBatches || [],
       actor: { 
         id: user.id || null, 
         name: [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email || "Staff", 
@@ -480,11 +528,10 @@ export default function Inventory() {
 
       setNotice(
         isStaffMode
-          ? "Stock change request sent to Admin for approval. It will appear on the Inventory Approvals screen."
+          ? "Product details request sent to Admin for approval. It will appear on the Inventory Approvals screen."
           : "Product details updated successfully."
       );
       setEditingProduct(null);
-      setStockReasonModalOpen(false);
       await loadProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update product details.");
@@ -522,6 +569,14 @@ export default function Inventory() {
       {!hideSidebar && <Sidebar />}
 
       <main className="flex-1 p-6 flex flex-col gap-5 overflow-y-auto text-left">
+        <input
+          ref={importFileRef}
+          type="file"
+          accept=".csv,.xls,.xlsx"
+          onChange={(event) => void handleImportProducts(event)}
+          className="hidden"
+          aria-label="Choose product spreadsheet"
+        />
         <header className="bg-[#17347a] text-white p-3 rounded-xl shadow-md border-b-4 border-blue-900 mt-6 flex justify-between items-center">
           <h1 className="text-lg font-extrabold ml-2 uppercase tracking-wider flex items-center gap-2">
             {view === "check" ? "Manual Count Log" : "Inventory Management"}
@@ -591,14 +646,17 @@ export default function Inventory() {
           <div className="flex flex-wrap items-center gap-2.5">
             {view === "list" ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => setNotice("Excel import feature ready.")}
-                  className="px-4 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer"
-                >
-                  <Upload size={14} />
-                  Import Product
-                </button>
+                {currentUserRole === "admin" && (
+                  <button
+                    type="button"
+                    onClick={() => importFileRef.current?.click()}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-xl font-extrabold text-xs uppercase tracking-wider bg-[#17347a] text-white shadow-md hover:bg-[#0f2456] active:scale-95 transition-all flex items-center gap-1.5 border border-white/10 cursor-pointer disabled:opacity-50"
+                  >
+                    <Upload size={14} />
+                    {saving ? "Importing..." : "Import Product"}
+                  </button>
+                )}
 
                 {canEditInventory && (
                   <button
@@ -678,10 +736,10 @@ export default function Inventory() {
                 <InputField label="Supplier" name="supplier" value={formData.supplier} onChange={handleInputChange} />
               </div>
               <div className="flex flex-wrap gap-4">
-                <InputField label="Expiration Date" name="expirationDate" type="date" value={formData.expirationDate} onChange={handleInputChange} />
                 <InputField label="Low Stock Threshold" name="threshold" type="number" value={formData.threshold} onChange={handleInputChange} />
                 <InputField label="Ceiling Quantity" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
               </div>
+              <p className="text-[11px] text-gray-500">Stock quantity and expiry date are recorded when the delivery is received.</p>
             </div>
 
             <div className="flex gap-3 justify-end pt-3 border-t">
@@ -784,56 +842,6 @@ export default function Inventory() {
                 <InputField label="Ceiling Quantity (Max Capacity)" name="ceiling" type="number" value={formData.ceiling} onChange={handleInputChange} />
               </div>
 
-              <div className="border-t border-gray-200 pt-3 space-y-3">
-                <div className="flex justify-between items-center">
-                  <button
-                    type="button"
-                    onClick={handleAddBatch}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition border border-blue-200"
-                  >
-                    <Plus size={13} /> Add Expiry Date
-                  </button>
-                </div>
-
-                {editExpiryBatches.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No expiry date batches assigned yet. Click "Add Expiry Date" to add one.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {editExpiryBatches.map((batch, index) => (
-                      <div key={index} className="flex items-center gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
-                        <div className="flex-1">
-                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">Expiry Date</label>
-                          <input
-                            type="date"
-                            value={batch.date}
-                            onChange={(e) => handleBatchChange(index, "date", e.target.value)}
-                            className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-mono bg-white"
-                          />
-                        </div>
-                        <div className="w-28">
-                          <label className="text-[10px] font-extrabold uppercase text-gray-500 block mb-0.5">Quantity</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={batch.qty}
-                            onChange={(e) => handleBatchChange(index, "qty", Number(e.target.value))}
-                            className="w-full px-2.5 py-1 text-xs border rounded-lg outline-none focus:border-blue-500 font-bold bg-white"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBatch(index)}
-                          className="text-red-500 hover:text-red-700 p-1.5 mt-3 transition"
-                          title="Remove batch"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-200">
                 <button
                   type="button"
@@ -848,61 +856,6 @@ export default function Inventory() {
                   className="px-5 py-1.5 bg-blue-600 text-white rounded-xl font-extrabold text-xs uppercase tracking-wider hover:bg-blue-500 shadow-md transition active:scale-95"
                 >
                   {isStaffMode ? "Submit for Approval" : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* REASON MODAL FOR STOCK ADJUSTMENT */}
-        {stockReasonModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
-              <div className="flex justify-between items-center border-b border-gray-200 pb-3">
-                <div className="flex items-center gap-2 text-[#17347a]">
-                  <FileText size={20} />
-                  <h2 className="font-extrabold text-xs uppercase tracking-wider">Reason for Stock Change</h2>
-                </div>
-                <button onClick={() => setStockReasonModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                <p className="text-xs font-bold text-gray-700">
-                  Stock quantity for <span className="text-blue-700 font-extrabold">{editingProduct?.productName}</span> changed from{" "}
-                  <span className="font-extrabold text-red-600">{originalStock}</span> to{" "}
-                  <span className="font-extrabold text-emerald-600">{formData.stockQuantity}</span>.
-                </p>
-                <label className="text-[11px] font-semibold text-gray-600 block">
-                  Please enter a reason or description for this stock adjustment:
-                </label>
-                <textarea
-                  rows={4}
-                  value={stockChangeReason}
-                  onChange={(e) => setStockChangeReason(e.target.value)}
-                  placeholder="e.g. Received new shipment, Damaged stock removal, Inventory correction..."
-                  className="w-full p-3 border border-gray-300 rounded-xl text-xs outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-200 font-medium"
-                  required
-                />
-                {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-2 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setStockReasonModalOpen(false)}
-                  className="px-4 py-1.5 border border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition active:scale-95"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  disabled={!stockChangeReason.trim() || saving}
-                  onClick={handleSaveEditProduct}
-                  className="px-5 py-1.5 bg-[#17347a] text-white text-xs font-extrabold uppercase tracking-wider rounded-xl hover:bg-blue-900 shadow-md transition active:scale-95 disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : isStaffMode ? "Confirm & Submit Request" : "Confirm & Save"}
                 </button>
               </div>
             </div>

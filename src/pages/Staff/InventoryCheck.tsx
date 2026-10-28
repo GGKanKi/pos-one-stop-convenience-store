@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Search, FileText, CheckCircle2, ListChecks, X, Check, ArrowLeft } from "lucide-react";
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
@@ -15,6 +15,7 @@ interface Product {
 }
 
 export default function InventoryCheck() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [actualStocks, setActualStocks] = useState<Record<string, string>>({});
@@ -176,11 +177,11 @@ export default function InventoryCheck() {
         {/* Header */}
         <header className="bg-[#122b68] text-white p-3.5 px-6 rounded-2xl shadow-md shrink-0 flex items-center justify-between">
           <button
-            onClick={() => navigate("/pos")}
+            onClick={() => navigate("/inventory", { state: location.state })}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-xs font-extrabold uppercase transition-all shadow-xs cursor-pointer"
           >
             <ArrowLeft size={16} />
-            <span>POS Terminal</span>
+            <span>Back to Inventory</span>
           </button>
 
           <h1 className="text-lg font-black uppercase tracking-wider text-center flex-1 pr-28 text-white">

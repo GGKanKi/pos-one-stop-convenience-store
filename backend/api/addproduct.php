@@ -24,7 +24,7 @@ if (!is_array($data)) {
     exit;
 }
 
-$required = ['productName', 'barcode', 'stockQuantity', 'costPrice', 'sellingPrice', 'category'];
+$required = ['productName', 'barcode', 'costPrice', 'sellingPrice', 'category'];
 foreach ($required as $field) {
     if (!isset($data[$field]) || trim((string)$data[$field]) === '') {
         http_response_code(400);
@@ -36,7 +36,7 @@ foreach ($required as $field) {
 $productName = trim((string)$data['productName']);
 $barcode = trim((string)$data['barcode']);
 $category = trim((string)$data['category']);
-$stockQuantity = filter_var($data['stockQuantity'], FILTER_VALIDATE_INT);
+$stockQuantity = 0;
 $costPrice = filter_var($data['costPrice'], FILTER_VALIDATE_FLOAT);
 $sellingPrice = filter_var($data['sellingPrice'], FILTER_VALIDATE_FLOAT);
 $threshold = isset($data['threshold']) && $data['threshold'] !== ''
@@ -49,7 +49,6 @@ $ceiling = isset($data['ceiling']) && $data['ceiling'] !== ''
     : 100;
 
 if ($productName === '' || $barcode === '' || $category === '' ||
-    $stockQuantity === false || $stockQuantity < 0 ||
     $costPrice === false || $costPrice < 0 ||
     $sellingPrice === false || $sellingPrice < 0 ||
     $threshold === false || $threshold < 0 ||
@@ -59,20 +58,8 @@ if ($productName === '' || $barcode === '' || $category === '' ||
     exit;
 }
 
-$expirationDate = !empty($data['expirationDate']) ? (string)$data['expirationDate'] : null;
-if ($expirationDate !== null) {
-    $parsedDate = DateTime::createFromFormat('!Y-m-d', $expirationDate);
-    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $expirationDate) {
-        http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'Expiration date must use YYYY-MM-DD format.']);
-        exit;
-    }
-}
-
-// New products use one initial expiry batch when an expiry date is provided.
-$expiryBatches = $expirationDate !== null && $stockQuantity > 0
-    ? [['date' => $expirationDate, 'qty' => $stockQuantity]]
-    : [];
+$expirationDate = null;
+$expiryBatches = [];
 $authenticatedUser = requireAuthUser($pdo);
 if ($authenticatedUser['role'] !== 'admin') sendJsonResponse(false, 'Admin access required.', null, 403);
 $actorId = (int)$authenticatedUser['id'];

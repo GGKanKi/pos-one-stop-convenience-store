@@ -220,12 +220,13 @@ export default function POS() {
   const lastKeyTimeRef = useRef(0);
 
   const handleBarcodeScanned = useCallback(async (barcode: string) => {
-    if (!barcode.trim()) return;
+    const scannedCode = barcode.trim();
+    if (!scannedCode) return;
 
     try {
-      const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(barcode.trim())}`, "GET");
+      const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(scannedCode)}`, "GET");
       if (response.success && response.products && response.products.length > 0) {
-        const exactMatch = response.products.find((p: Record<string, unknown>) => p.code === barcode.trim()) || response.products[0];
+        const exactMatch = response.products.find((p: Record<string, unknown>) => p.code === scannedCode) || response.products[0];
         
         const productToAdd: Product = {
           id: Number(exactMatch.id),
@@ -255,10 +256,18 @@ export default function POS() {
         }
 
       } else {
-        console.warn("Hardware Scanner: Product not found for barcode:", barcode);
+        if (response.success && Array.isArray(response.products)) {
+          setErrorMessage(`Product with barcode "${scannedCode}" was not found in inventory.`);
+          setShowErrorModal(true);
+        } else {
+          setErrorMessage(response.message || "Could not search the product inventory. Please try again.");
+          setShowErrorModal(true);
+        }
       }
     } catch (err) {
       console.error("Scanner lookup error:", err);
+      setErrorMessage("Could not search the product inventory. Please try again.");
+      setShowErrorModal(true);
     }
   }, []);
 

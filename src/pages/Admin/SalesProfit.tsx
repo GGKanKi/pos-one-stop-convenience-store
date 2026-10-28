@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
+import { exportCsv, exportWorkbook } from '../../services/spreadsheet';
 
 const API_BASE = "http://localhost/One-Convenience/backend/api";
 
@@ -94,8 +95,27 @@ export default function SalesProfit() {
     void fetchSalesProfitReport();
   };
 
-  const handleExportExcel = () => console.log("Exporting to Excel...");
-  const handleExportCSV = () => console.log("Exporting to CSV...");
+  const salesRows = [
+    ['Product', 'Quantity Sold', 'Average Cost', 'Average Selling Price', 'Gross Sales', 'Total Cost', 'Profit'],
+    ...filteredData.map((item) => [
+      item.inventoryName,
+      Number(item.qtySold),
+      Number(item.avgCostPrice),
+      Number(item.avgSellingPrice),
+      Number(item.grossSales),
+      Number(item.totalCost),
+      Number(item.salesProfit),
+    ]),
+    [],
+    ['Totals', '', '', '', totalGrossSales, totalCost, totalProfit],
+  ];
+
+  const handleExportExcel = () => {
+    exportWorkbook(`sales-profit-${fromDate}-to-${toDate}.xlsx`, [{ name: 'Sales Profit', rows: salesRows }]);
+  };
+  const handleExportCSV = () => {
+    exportCsv(`sales-profit-${fromDate}-to-${toDate}.csv`, salesRows);
+  };
 
   return (
     <div 
@@ -190,7 +210,7 @@ export default function SalesProfit() {
               type="button"
             >
               <FileSpreadsheet size={18} />
-              <span className="text-[10px] font-bold mt-0.5">XLS</span>
+              <span className="text-[10px] font-bold mt-0.5">XLSX</span>
             </button>
 
             <button 

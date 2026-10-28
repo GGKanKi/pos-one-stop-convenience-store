@@ -27,9 +27,32 @@ interface Transaction {
   items?: PurchasedItem[];
   timestamp?: number;
   created_at?: string;
+  date?: string;
   cashTendered?: number;
   changeDue?: number;
   gcashReference?: string;
+}
+
+function getTransactionDateKey(transaction: Transaction): string | null {
+  if (transaction.timestamp !== undefined && Number.isFinite(transaction.timestamp)) {
+    const date = new Date(transaction.timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  const value = transaction.created_at || transaction.date || transaction.time;
+  if (!value) return null;
+  const isoDate = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoDate) return isoDate[1];
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function RecallTransactions() {
@@ -170,7 +193,8 @@ export default function RecallTransactions() {
       combinedList = localTxList;
     }
 
-    const sortedDesc = combinedList.sort((a, b) => getSortTimestamp(b) - getSortTimestamp(a));
+    const dateTransactions = combinedList.filter((transaction) => getTransactionDateKey(transaction) === targetDate);
+    const sortedDesc = dateTransactions.sort((a, b) => getSortTimestamp(b) - getSortTimestamp(a));
     setTransactions(sortedDesc);
   }, [activeFilter, selectedDate]);
 

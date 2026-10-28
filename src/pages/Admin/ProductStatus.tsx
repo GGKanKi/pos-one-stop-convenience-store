@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/Sidebar';
+import { exportCsv, exportWorkbook } from '../../services/spreadsheet';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost/One-Convenience/backend/api';
 
@@ -161,8 +162,27 @@ export default function ProductStatus() {
     }
   };
 
-  const handleExportExcel = () => alert("Exporting product status to Excel...");
-  const handleExportCSV = () => alert("Exporting product status to CSV...");
+  const productStatusRows = [
+    ['Product', 'SKU / Barcode', 'Category', 'Quantity', 'Unit Cost', 'Selling Price', 'Expiry Date', 'Status', 'Days Remaining'],
+    ...filteredItems.map((item) => [
+      item.inventoryName,
+      item.barcode || item.sku,
+      item.category,
+      Number(item.quantity),
+      Number(item.unitCost),
+      Number(item.sellingPrice || 0),
+      item.expiryDate,
+      item.status,
+      Number(item.daysRemaining),
+    ]),
+  ];
+
+  const handleExportExcel = () => {
+    exportWorkbook(`product-status-${activeTab.toLowerCase()}.xlsx`, [{ name: 'Product Status', rows: productStatusRows }]);
+  };
+  const handleExportCSV = () => {
+    exportCsv(`product-status-${activeTab.toLowerCase()}.csv`, productStatusRows);
+  };
 
   return (
     <div 
@@ -297,7 +317,7 @@ export default function ProductStatus() {
               title="Export to Excel"
             >
               <FileSpreadsheet size={18} />
-              <span className="text-[10px] font-bold mt-0.5">XLS</span>
+              <span className="text-[10px] font-bold mt-0.5">XLSX</span>
             </button>
 
             <button 

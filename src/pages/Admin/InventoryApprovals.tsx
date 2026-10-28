@@ -18,6 +18,8 @@ import {
   PlusCircle,
   Square,
   CheckSquare,
+  Search,
+  X,
 } from "lucide-react";
 
 type ChangeRequest = {
@@ -84,6 +86,7 @@ export default function InventoryApprovals() {
   const [reviewNotes, setReviewNotes] = useState<Record<number, string>>({});
   const [editedRestockQty, setEditedRestockQty] = useState<Record<number, number>>({});
   const [activeTab, setActiveTab] = useState<"new_products" | "inventory" | "restock">("new_products");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // CHECKLIST SELECTION STATES PER TAB
   const [selectedNewIds, setSelectedNewIds] = useState<number[]>([]);
@@ -135,22 +138,50 @@ export default function InventoryApprovals() {
   const newProductRequests = requests.filter((r) => r.action_type === "add");
   const inventoryChanges = requests.filter((r) => r.action_type === "update");
   const restockRequests = requests.filter((r) => r.action_type === "restock");
+  const filterRequests = (list: ChangeRequest[]) => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return list;
+    return list.filter((request) => {
+      const proposed = parseSnapshot(request.requested_data);
+      const before = parseSnapshot(request.before_data);
+      return [
+        request.id,
+        request.product_id,
+        request.action_type,
+        request.created_at,
+        getRequesterDisplayName(request),
+        request.staff_id,
+        request.email,
+        JSON.stringify(proposed),
+        JSON.stringify(before),
+      ].join(" ").toLowerCase().includes(query);
+    });
+  };
+  const filteredNewProductRequests = filterRequests(newProductRequests);
+  const filteredInventoryChanges = filterRequests(inventoryChanges);
+  const filteredRestockRequests = filterRequests(restockRequests);
+  const visibleRequests = activeTab === "new_products"
+    ? filteredNewProductRequests
+    : activeTab === "inventory"
+    ? filteredInventoryChanges
+    : filteredRestockRequests;
 
   // TOGGLE SELECT ALL FOR CURRENT ACTIVE TAB
   const toggleSelectAll = () => {
-    if (activeTab === "new_products") {
-      const allIds = newProductRequests.map((r) => r.id);
-      const allSelected = allIds.length > 0 && allIds.every((id) => selectedNewIds.includes(id));
-      setSelectedNewIds(allSelected ? [] : allIds);
-    } else if (activeTab === "inventory") {
-      const allIds = inventoryChanges.map((r) => r.id);
-      const allSelected = allIds.length > 0 && allIds.every((id) => selectedInventoryIds.includes(id));
-      setSelectedInventoryIds(allSelected ? [] : allIds);
-    } else if (activeTab === "restock") {
-      const allIds = restockRequests.map((r) => r.id);
-      const allSelected = allIds.length > 0 && allIds.every((id) => selectedRestockIds.includes(id));
-      setSelectedRestockIds(allSelected ? [] : allIds);
-    }
+    const visibleIds = visibleRequests.map((request) => request.id);
+    const selectedIds = activeTab === "new_products"
+      ? selectedNewIds
+      : activeTab === "inventory"
+      ? selectedInventoryIds
+      : selectedRestockIds;
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+    const updateSelected = (previous: number[]) => allVisibleSelected
+      ? previous.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...previous, ...visibleIds]));
+
+    if (activeTab === "new_products") setSelectedNewIds(updateSelected);
+    else if (activeTab === "inventory") setSelectedInventoryIds(updateSelected);
+    else setSelectedRestockIds(updateSelected);
   };
 
   const toggleSelectItem = (id: number) => {
@@ -287,6 +318,22 @@ export default function InventoryApprovals() {
         <section className="rounded-2xl bg-white p-5 shadow-lg border border-gray-200 space-y-4">
           {/* BULK ACTION CONTROLS BAR */}
           <div className="bg-[#17347a] text-white px-4 py-3 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-200" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search product, barcode, requester..."
+                aria-label="Search approval requests"
+                className="w-full rounded-lg bg-white py-2 pl-9 pr-3 text-xs font-semibold text-gray-800 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              {searchTerm && (
+                <button type="button" onClick={() => setSearchTerm("")} aria-label="Clear request search" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -294,9 +341,7 @@ export default function InventoryApprovals() {
                 className="text-white hover:text-blue-200 cursor-pointer flex items-center gap-2 text-xs font-extrabold uppercase"
                 title="Select All"
               >
-                {(activeTab === "new_products" && newProductRequests.length > 0 && newProductRequests.every((r) => selectedNewIds.includes(r.id))) ||
-                (activeTab === "inventory" && inventoryChanges.length > 0 && inventoryChanges.every((r) => selectedInventoryIds.includes(r.id))) ||
-                (activeTab === "restock" && restockRequests.length > 0 && restockRequests.every((r) => selectedRestockIds.includes(r.id))) ? (
+                {visibleRequests.length > 0 && visibleRequests.every((request) => currentSelectedIds.includes(request.id)) ? (
                   <CheckSquare size={18} className="text-emerald-400" />
                 ) : (
                   <Square size={18} />
@@ -333,10 +378,10 @@ export default function InventoryApprovals() {
             <div className="space-y-4">
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading requests...</div>
-              ) : newProductRequests.length === 0 ? (
-                <div className="py-12 text-center text-xs text-gray-400 italic">No pending new product requests.</div>
+              ) : filteredNewProductRequests.length === 0 ? (
+                <div className="py-12 text-center text-xs text-gray-400 italic">{newProductRequests.length === 0 ? "No pending new product requests." : "No requests match your search."}</div>
               ) : (
-                newProductRequests.map((request) => {
+                filteredNewProductRequests.map((request) => {
                   const proposed = parseSnapshot(request.requested_data);
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
                   const requesterName = getRequesterDisplayName(request);
@@ -401,10 +446,10 @@ export default function InventoryApprovals() {
             <div className="space-y-4">
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading requests...</div>
-              ) : inventoryChanges.length === 0 ? (
-                <div className="py-12 text-center text-xs text-gray-400 italic">No pending edit requests.</div>
+              ) : filteredInventoryChanges.length === 0 ? (
+                <div className="py-12 text-center text-xs text-gray-400 italic">{inventoryChanges.length === 0 ? "No pending edit requests." : "No requests match your search."}</div>
               ) : (
-                inventoryChanges.map((request) => {
+                filteredInventoryChanges.map((request) => {
                   const proposed = parseSnapshot(request.requested_data);
                   const before = parseSnapshot(request.before_data);
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
@@ -477,10 +522,10 @@ export default function InventoryApprovals() {
             <div className="space-y-4">
               {loading ? (
                 <div className="py-12 text-center text-xs text-gray-400 italic">Loading restock requests...</div>
-              ) : restockRequests.length === 0 ? (
-                <div className="py-12 text-center text-xs text-gray-400 italic">No pending restock requests.</div>
+              ) : filteredRestockRequests.length === 0 ? (
+                <div className="py-12 text-center text-xs text-gray-400 italic">{restockRequests.length === 0 ? "No pending restock requests." : "No requests match your search."}</div>
               ) : (
-                restockRequests.map((request) => {
+                filteredRestockRequests.map((request) => {
                   const proposed = parseSnapshot(request.requested_data);
                   const currentQty = editedRestockQty[request.id] ?? proposed.restockQty ?? 1;
                   const productName = proposed.productName || proposed.name || "Unnamed Product";
