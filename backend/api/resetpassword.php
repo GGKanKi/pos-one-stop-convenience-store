@@ -12,7 +12,9 @@ $input = getJsonInput();
 $token = trim($input['token'] ?? '');
 $password = $input['password'] ?? '';
 if (!preg_match('/^[a-f0-9]{64}$/i', $token)) sendJsonResponse(false, "This reset link is invalid or has expired.", null, 400);
-if (!is_string($password) || strlen($password) < 8) sendJsonResponse(false, "Password must be at least 8 characters.", null, 400);
+if (!is_string($password) || strlen($password) < 15 || strlen($password) > 64) {
+    sendJsonResponse(false, "Password must be 15 to 64 characters.", null, 400);
+}
 
 try {
     $pdo->beginTransaction();

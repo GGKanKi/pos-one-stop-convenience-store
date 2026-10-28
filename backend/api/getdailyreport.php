@@ -113,9 +113,24 @@ try {
             'items' => $items,
             'categories' => $categories,
             'payouts' => $payouts,
-            'cashiers' => [
-                ['cashier_name' => 'Rhiel Mulingbayan', 'start_time' => '6:17:53 am', 'register_start' => 0]
-            ],
+            'cashiers' => (function () use ($pdo, $date) {
+                $stmt = $pdo->prepare("SELECT CONCAT(u.first_name, ' ', u.last_name) AS cashier_name,
+                    TIME_FORMAT(s.opened_at, '%h:%i %p') AS start_time, s.opening_amount AS register_start,
+                    s.closing_amount AS register_end, s.closed_at,
+                    COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.payment_method = 'Cash' THEN t.total_amount ELSE 0 END), 0) AS cash_sales,
+                    (s.opening_amount + COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.payment_method = 'Cash' THEN t.total_amount ELSE 0 END), 0)) AS expected_cash,
+                    CASE WHEN s.closing_amount IS NULL THEN NULL ELSE s.closing_amount - (s.opening_amount + COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.payment_method = 'Cash' THEN t.total_amount ELSE 0 END), 0)) END AS cash_difference
+                    FROM cash_register_sessions s JOIN users u ON u.id = s.user_id
+                    LEFT JOIN transactions t ON t.cash_register_session_id = s.id
+                    WHERE DATE(s.opened_at) = ? GROUP BY s.id, u.first_name, u.last_name ORDER BY s.opened_at");
+                $stmt->execute([$date]);
+                return array_map(static function ($row) {
+                    foreach (['register_start', 'register_end', 'cash_sales', 'expected_cash', 'cash_difference'] as $key) {
+                        $row[$key] = $row[$key] === null ? null : (float)$row[$key];
+                    }
+                    return $row;
+                }, $stmt->fetchAll(PDO::FETCH_ASSOC));
+            })(),
             'totals' => [
                 'grandTotal' => $grandTotal,
                 'totalCash' => (float)($tRow['total_cash'] ?? 0),

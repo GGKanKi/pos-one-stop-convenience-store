@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BarChart3, Package, ShoppingCart, Store } from "lucide-react";
 import { apiRequest } from "../../services/api";
+import { PasswordRequirementsMessage } from "../../services/ValidationServices";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -24,8 +25,8 @@ export default function ResetPasswordPage() {
       setErrorMsg("Passwords do not match.");
       return;
     }
-    if (password.length < 8) {
-      setErrorMsg("Password must be at least 8 characters.");
+    if (password.length < 15 || password.length > 64) {
+      setErrorMsg("Password must be 15 to 64 characters.");
       return;
     }
 
@@ -78,11 +79,12 @@ export default function ResetPasswordPage() {
             {!token && <p className="text-sm text-blue-100">This link is missing its reset token. <Link className="underline text-blue-300" to="/forgot-password">Request a new link</Link>.</p>}
             <div className="flex flex-col gap-2">
               <label htmlFor="new-password" className="text-sm text-blue-100">New Password</label>
-              <input id="new-password" type="password" autoComplete="new-password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 8 characters" required className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input id="new-password" type="password" autoComplete="new-password" minLength={15} maxLength={64} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="15 to 64 characters" required className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-xs text-blue-200">{PasswordRequirementsMessage}</p>
             </div>
             <div className="flex flex-col gap-2">
               <label htmlFor="confirm-password" className="text-sm text-blue-100">Confirm Password</label>
-              <input id="confirm-password" type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Re-enter your password" required className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input id="confirm-password" type="password" autoComplete="new-password" minLength={15} maxLength={64} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Re-enter your password" required className="px-4 py-3 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <button type="submit" disabled={loading || success || !token} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-lg shadow-blue-500/30 active:scale-95 disabled:opacity-50">
               {loading ? "Updating..." : "Reset Password"}

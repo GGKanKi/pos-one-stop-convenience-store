@@ -29,6 +29,11 @@ interface CashierSummary {
   cashier_name: string;
   start_time: string;
   register_start: number;
+  register_end: number | null;
+  closed_at: string | null;
+  cash_sales: number;
+  expected_cash: number;
+  cash_difference: number | null;
 }
 
 interface PayoutItem {
@@ -399,8 +404,24 @@ export default function DailyReports() {
                         <span className="text-gray-400 font-normal">{c.start_time}</span>
                       </div>
                       <div className="flex justify-between py-0.5 text-gray-600">
-                        <span>Register Start Amount</span>
+                        <span>Opening Cash</span>
                         <span>₱{Number(c.register_start).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between py-0.5 text-gray-600">
+                        <span>Cash Sales</span>
+                        <span>₱{Number(c.cash_sales).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between py-0.5 text-gray-600">
+                        <span>Expected Cash</span>
+                        <span>₱{Number(c.expected_cash).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between py-0.5 text-gray-600">
+                        <span>{c.register_end === null ? "Closing Cash (open)" : "Closing Cash"}</span>
+                        <span>{c.register_end === null ? "—" : `₱${Number(c.register_end).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</span>
+                      </div>
+                      <div className="flex justify-between py-0.5 text-gray-600">
+                        <span>Cash Difference</span>
+                        <span>{c.cash_difference === null ? "—" : `₱${Number(c.cash_difference).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}</span>
                       </div>
                     </div>
                   ))

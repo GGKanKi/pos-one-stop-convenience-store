@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../../services/api";
-import { clearAuthSession, getAuthUserId } from "../../services/authSession";
+import { clearAuthSession } from "../../services/authSession";
 
 interface Denomination {
   label: string;
@@ -27,30 +27,24 @@ export default function CashRegister() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const handleConfirm = async () => {
-    if (!isCashierOut) {
-      navigate("/pos");
-      return;
-    }
-
-    const userId = getAuthUserId();
-
-    if (!userId) {
-      setError("Could not end the shift because the signed-in user was not found. Please sign in again.");
-      return;
-    }
-
     setSubmitting(true);
     setError("");
     try {
-      const response = await apiRequest("/clockout.php", "POST", { user_id: userId });
+      const response = await apiRequest("/cashregister.php", "POST", {
+        action: isCashierOut ? "close" : "open",
+        amount: totalFund,
+      });
       if (!response.success) {
-        throw new Error(response.message || "Could not clock out.");
+        throw new Error(response.message || "Could not save the register count.");
       }
-
-      clearAuthSession();
-      navigate("/login", { replace: true });
+      if (isCashierOut) {
+        clearAuthSession();
+        navigate("/login", { replace: true });
+      } else {
+        navigate("/pos");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not end the shift. Please try again.");
+      setError(err instanceof Error ? err.message : "Could not save the register count. Please try again.");
     } finally {
       setSubmitting(false);
     }

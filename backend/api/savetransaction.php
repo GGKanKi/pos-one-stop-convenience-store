@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 require __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../helpers/auth.php';
 $data = json_decode(file_get_contents('php://input'), true);
 if (!is_array($data) || !isset($data['items']) || !is_array($data['items']) || $data['items'] === []) {
     http_response_code(400);
@@ -27,17 +29,29 @@ if (!is_array($data) || !isset($data['items']) || !is_array($data['items']) || $
 }
 
 try {
+    $user = requireAuthUser($pdo);
+    if (!in_array($user['role'], ['cashier', 'staff'], true)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Cashier access required.']);
+        exit;
+    }
     $pdo->beginTransaction();
     $paymentMethod = trim((string)($data['paymentMethod'] ?? 'Cash'));
     if ($paymentMethod === '' || strlen($paymentMethod) > 50) {
         throw new InvalidArgumentException('Choose a valid payment method.');
     }
 
+    $sessionStmt = $pdo->prepare('SELECT id FROM cash_register_sessions WHERE user_id = ? AND closed_at IS NULL ORDER BY id DESC LIMIT 1 FOR UPDATE');
+    $sessionStmt->execute([(int)$user['id']]);
+    $registerSessionId = $sessionStmt->fetchColumn();
+    if (!$registerSessionId) {
+        throw new InvalidArgumentException('Open the cash register before recording a sale.');
+    }
     $sale = $pdo->prepare(
-        'INSERT INTO transactions (payment_method, total_amount, created_at) VALUES (?, ?, NOW())'
+        'INSERT INTO transactions (payment_method, total_amount, cash_register_session_id, created_at) VALUES (?, ?, ?, NOW())'
     );
     // The total is calculated from locked product prices, rather than trusting the POS total.
-    $sale->execute([$paymentMethod, 0]);
+    $sale->execute([$paymentMethod, 0, (int)$registerSessionId]);
     $transactionId = (int)$pdo->lastInsertId();
 
     $findProduct = $pdo->prepare(
