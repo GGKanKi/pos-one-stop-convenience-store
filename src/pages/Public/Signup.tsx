@@ -1,6 +1,6 @@
 ﻿﻿import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { SignupSchema } from "../../services/ValidationServices";
+import { PasswordRequirementsMessage, SignupSchema } from "../../services/ValidationServices";
 import { apiRequest } from "../../services/api";
 
 export default function SignupPage() {
@@ -104,11 +104,14 @@ export default function SignupPage() {
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
+              minLength={15}
+              maxLength={64}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 outline-none focus:border-blue-400"
             />
+            <p className="mt-1 text-xs text-gray-300">{PasswordRequirementsMessage}</p>
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
@@ -122,6 +125,8 @@ export default function SignupPage() {
           <input
             type="password"
             placeholder="Confirm Password"
+            minLength={15}
+            maxLength={64}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

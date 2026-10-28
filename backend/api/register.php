@@ -16,6 +16,9 @@ $password = $input['password'] ?? '';
 if ($firstName === '' || $lastName === '' || $email === '' || $password === '') {
     sendJsonResponse(false, "All fields are required.", null, 400);
 }
+if (!is_string($password) || strlen($password) < 15 || strlen($password) > 64) {
+    sendJsonResponse(false, "Password must be 15 to 64 characters.", null, 400);
+}
 
 try {
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);

@@ -23,7 +23,6 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/Sidebar";
-import StaffAttendanceControl from "../../components/StaffAttendanceControl";
 import { getActiveStaffUser } from "../../services/authSession";
 import { apiRequest } from "../../services/api";
 
@@ -82,7 +81,6 @@ export default function AdminDashboard() {
   const isFullScreen = location.state?.fullScreen;
   const isStaffView = location.state?.staffView === true;
   const currentUser = getActiveStaffUser();
-  const hasStaffAttendance = Boolean(currentUser.id);
 
   const role = currentUser.role?.toLowerCase() || "";
   const isAdmin = role === "admin" || role === "manager" || (!isStaffView && !isFullScreen && role !== "staff");
@@ -421,7 +419,6 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {hasStaffAttendance && <StaffAttendanceControl />}
 
         {notice && <div role="status" className="bg-green-50 text-green-800 border border-green-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{notice}</div>}
         {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{error}</div>}

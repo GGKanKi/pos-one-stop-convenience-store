@@ -38,6 +38,7 @@ if (!$responseHelperPath || !file_exists($responseHelperPath)) {
 require_once $dbPath;
 require_once $responseHelperPath;
 require_once __DIR__ . '/../helpers/auth.php';
+require_once __DIR__ . '/../helpers/login_attempts.php';
 
 // Get request body
 $input = getJsonInput();
@@ -56,6 +57,13 @@ if ($email === '' || $password === '') {
 }
 
 try {
+    [$emailKey, $ipKey] = getLoginAttemptKeys($email);
+    $lockSeconds = getLoginLockSeconds($pdo, $emailKey, $ipKey);
+    if ($lockSeconds > 0) {
+        header('Retry-After: ' . $lockSeconds);
+        sendJsonResponse(false, 'Too many failed attempts. Try again in 15 minutes.', null, 429);
+    }
+
     // 1. Find user by email
     $stmt = $pdo->prepare("
         SELECT id, first_name, last_name, email, password_hash, role
@@ -71,6 +79,11 @@ try {
 
     // 2. Verify user credentials
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        $attempts = recordFailedLogin($pdo, $emailKey, $ipKey);
+        if ($attempts >= LOGIN_ATTEMPT_LIMIT) {
+            header('Retry-After: ' . (LOGIN_ATTEMPT_LOCK_MINUTES * 60));
+            sendJsonResponse(false, 'Too many failed attempts. Try again in 15 minutes.', null, 429);
+        }
         sendJsonResponse(
             false,
             "Invalid email or password.",
@@ -81,6 +94,7 @@ try {
     }
 
     // 3. Return user information without the password hash
+    clearLoginAttempts($pdo, $emailKey, $ipKey);
     unset($user['password_hash']);
     $token = createAuthSession($pdo, (int)$user['id']);
 
