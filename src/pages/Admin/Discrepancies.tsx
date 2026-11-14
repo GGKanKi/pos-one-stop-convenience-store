@@ -9,6 +9,8 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost/One-Convenience/backend/api";
+
 interface DiscrepancyItem {
   id: number;
   productName: string;
@@ -36,12 +38,34 @@ export default function Discrepancies() {
     }
   }, []);
 
-  const handleResolve = (id: number) => {
+  const handleResolve = async (id: number) => {
+    const targetItem = discrepancies.find(item => item.id === id);
+    
     const updated = discrepancies.map((item) => 
       item.id === id ? { ...item, status: 'Resolved' as const } : item
     );
     setDiscrepancies(updated);
     localStorage.setItem("inventory_discrepancies", JSON.stringify(updated));
+
+    // Send Telegram Notification on Resolve
+    if (targetItem) {
+      try {
+        await fetch(`${API_BASE}/send_telegram_discrepancy.php`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productName: targetItem.productName,
+            barcode: targetItem.barcode,
+            expected: targetItem.expectedStock,
+            actual: targetItem.actualStock,
+            difference: targetItem.difference,
+            status: 'Resolved'
+          }),
+        });
+      } catch (tgErr) {
+        console.error("Failed to send Telegram discrepancy update:", tgErr);
+      }
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -196,7 +220,7 @@ export default function Discrepancies() {
                             {item.status === 'Pending' && (
                               <button
                                 type="button"
-                                onClick={() => handleResolve(item.id)}
+                                onClick={() => void handleResolve(item.id)}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-black text-[10px] uppercase tracking-wider hover:bg-emerald-500 transition active:scale-95 shadow-xs cursor-pointer"
                                 title="Mark as Resolved"
                               >

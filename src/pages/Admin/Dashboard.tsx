@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Clock,
   RefreshCw,
-  ChevronRight,
   ShoppingCart,
   CheckCircle2,
   Package,
@@ -34,7 +33,7 @@ type LowStockItem = {
   barcode: string;
   stockQuantity: number;
   threshold: number;
-  ceiling: number; // Ceiling limit property
+  ceiling: number;
 };
 
 type AllProductItem = {
@@ -43,7 +42,7 @@ type AllProductItem = {
   barcode: string;
   stockQuantity: number;
   threshold: number;
-  ceiling: number; // Ceiling limit property
+  ceiling: number;
 };
 
 type ApprovedRestockItem = {
@@ -249,7 +248,7 @@ export default function AdminDashboard() {
   };
 
   // ==========================================
-  // CEILING VALIDATION CHECK ON RESTOCK REQUEST
+  // CEILING VALIDATION & TELEGRAM NOTIFICATION
   // ==========================================
   const handleBulkRequestRestock = async () => {
     if (selectedItemIds.length === 0 || !data?.lowStock) return;
@@ -267,17 +266,19 @@ export default function AdminDashboard() {
       if (projectedTotal > ceilingLimit) {
         setCeilingAlertMessage(`⚠️ The product "${product.name}" currently has ${product.stockQuantity} in stock. Adding a restock quantity of ${qtyToBuy} will result in a total of ${projectedTotal}, which exceeds the manager's ceiling limit of ${ceilingLimit}.`);
         setCeilingAlertModal(true);
-        return; // Halt process and open warning popup
+        return; 
       }
     }
 
     setSubmittingBulk(true);
     try {
       const user = getActiveStaffUser();
-      const actor = { id: user.id || null, name: [user.first_name, user.last_name].filter(Boolean).join(" ") || "Staff" };
+      const actorName = [user.first_name, user.last_name].filter(Boolean).join(" ") || "Staff";
       
       for (const product of selectedProducts) {
         const qtyToBuy = restockQuantities[product.id] || Math.max(1, product.threshold - product.stockQuantity);
+        
+        // 1. Submit restock request to backend
         await apiRequest("/submitinventorychange.php", "POST", {
           action: "restock",
           product: {
@@ -286,9 +287,25 @@ export default function AdminDashboard() {
             barcode: product.barcode,
             stockQuantity: product.stockQuantity,
             restockQty: qtyToBuy,
-            actor,
+            actor: { id: user.id || null, name: actorName },
           },
         });
+
+        // 2. Dispatch Telegram Restock Requisition Notification
+        try {
+          await fetch(`${API_BASE}/send_telegram_restock.php`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              request_id: product.id,
+              supplier_name: "General Supplier",
+              requested_qty: qtyToBuy,
+              item_name: product.name
+            }),
+          });
+        } catch (tgErr) {
+          console.error("Telegram notification failed:", tgErr);
+        }
       }
 
       setNotice(`Successfully submitted restock requests for ${selectedProducts.length} items!`);
@@ -418,7 +435,6 @@ export default function AdminDashboard() {
             )}
           </div>
         </header>
-
 
         {notice && <div role="status" className="bg-green-50 text-green-800 border border-green-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{notice}</div>}
         {error && <div role="alert" className="bg-red-50 text-red-700 border border-red-200 rounded-xl px-4 py-3 text-xs font-bold shadow-xs">{error}</div>}
