@@ -216,12 +216,28 @@ export default function POS() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItemId, cart, triggerDiscountModal]);
 
-  const barcodeBufferRef = useRef("");
-  const lastKeyTimeRef = useRef(0);
+  const lastProcessedBarcodeRef = useRef("");
+  const lastProcessedTimeRef = useRef(0);
 
   const handleBarcodeScanned = useCallback(async (barcode: string) => {
-    const scannedCode = barcode.trim();
+    let scannedCode = barcode.trim();
     if (!scannedCode) return;
+
+    if (scannedCode.length % 2 === 0) {
+      const half = scannedCode.length / 2;
+      const firstHalf = scannedCode.substring(0, half);
+      const secondHalf = scannedCode.substring(half);
+      if (firstHalf === secondHalf) {
+        scannedCode = firstHalf;
+      }
+    }
+
+    const now = Date.now();
+    if (scannedCode === lastProcessedBarcodeRef.current && now - lastProcessedTimeRef.current < 500) {
+      return;
+    }
+    lastProcessedBarcodeRef.current = scannedCode;
+    lastProcessedTimeRef.current = now;
 
     try {
       const response = await apiRequest(`/getproducts.php?search=${encodeURIComponent(scannedCode)}`, "GET");
@@ -270,38 +286,6 @@ export default function POS() {
       setShowErrorModal(true);
     }
   }, []);
-
-  useEffect(() => {
-    const handleGlobalScanKeypress = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        (target.tagName === "INPUT" && target.id !== "pos-main-scan-input" && target !== scanInputRef.current) ||
-        target.tagName === "TEXTAREA"
-      ) {
-        return;
-      }
-
-      const currentTime = Date.now();
-      if (currentTime - lastKeyTimeRef.current > 100) {
-        barcodeBufferRef.current = ""; 
-      }
-      lastKeyTimeRef.current = currentTime;
-
-      if (e.key === 'Enter') {
-        const scannedCode = barcodeBufferRef.current.trim();
-        if (scannedCode.length > 1) {
-          e.preventDefault();
-          handleBarcodeScanned(scannedCode);
-        }
-        barcodeBufferRef.current = "";
-      } else if (e.key.length === 1) {
-        barcodeBufferRef.current += e.key;
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalScanKeypress, true);
-    return () => window.removeEventListener('keydown', handleGlobalScanKeypress, true);
-  }, [handleBarcodeScanned]);
 
   useEffect(() => {
     if (showPaymentModal) {
@@ -396,11 +380,12 @@ export default function POS() {
 
   const handleScanSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scanCode.trim()) return;
-
-    const codeToSearch = scanCode.trim();
+    const codeToSearch = scanCode;
     setScanCode("");
     await handleBarcodeScanned(codeToSearch);
+    setTimeout(() => {
+      scanInputRef.current?.focus();
+    }, 50);
   };
 
   const subTotal = useMemo(
@@ -1115,6 +1100,11 @@ export default function POS() {
               value={scanCode}
               onChange={(e) => setScanCode(e.target.value)}
               placeholder="SCAN Product Code & Press Enter"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              name="random_scan_field_xyz"
               className="w-full pl-12 pr-4 py-3.5 bg-gradient-to-r from-[#183478] via-[#132c66] to-[#0c1d45] border-2 border-cyan-400/60 rounded-xl text-cyan-100 placeholder-cyan-400/60 outline-none focus:border-cyan-300 font-semibold text-sm"
             />
           </form>

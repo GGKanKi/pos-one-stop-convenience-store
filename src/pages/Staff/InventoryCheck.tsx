@@ -101,18 +101,19 @@ export default function InventoryCheck() {
     });
   }, [products, searchTerm]);
 
+  // FIX: Automatically consider ANY product with an entered actual stock count as checked
   const checkedProducts = useMemo(() => {
-    return products.filter((p) => confirmedBarcodes.includes(p.barcode));
-  }, [products, confirmedBarcodes]);
+    return products.filter((p) => {
+      const hasInput = actualStocks[p.barcode] !== undefined && actualStocks[p.barcode] !== "";
+      return hasInput || confirmedBarcodes.includes(p.barcode);
+    });
+  }, [products, actualStocks, confirmedBarcodes]);
 
   const handleStockChange = (barcode: string, value: string) => {
     const updated = { ...actualStocks, [barcode]: value };
     setActualStocks(updated);
-    const updatedConfirmed = confirmedBarcodes.filter((b) => b !== barcode);
-    setConfirmedBarcodes(updatedConfirmed);
 
     localStorage.setItem("inventory_actual_counts", JSON.stringify(updated));
-    localStorage.setItem("inventory_confirmed_barcodes", JSON.stringify(updatedConfirmed));
   };
 
   const handleMarkDone = (barcode: string) => {
@@ -129,25 +130,25 @@ export default function InventoryCheck() {
     }
   };
 
-  const handleComplete = () => {
-    if (confirmedBarcodes.length === 0) {
+  const handleComplete = async () => {
+    if (checkedProducts.length === 0) {
       alert(
-        "Please mark at least one product as Done before completing the check."
+        "Please enter actual stock counts for at least one product before completing the check."
       );
       return;
     }
 
     const isConfirmed = window.confirm(
-      "Are you sure you want to complete the inventory check? Mismatched items will be logged as discrepancies."
+      "Are you sure you want to complete the inventory check? Mismatched items will be logged as discrepancies and sent to Telegram."
     );
 
     if (isConfirmed) {
-      const discrepancies = products
-        .filter((prod) => confirmedBarcodes.includes(prod.barcode))
+      const discrepancies = checkedProducts
         .map((prod) => {
-          const actual = Number(actualStocks[prod.barcode] ?? prod.stockQuantity);
-          const expected = prod.stockQuantity;
+          const actual = Number(actualStocks[prod.barcode] ?? 0);
+          const expected = Number(prod.stockQuantity ?? 0);
           const diff = actual - expected;
+
           return {
             id: prod.id,
             productName: prod.productName,
@@ -162,7 +163,29 @@ export default function InventoryCheck() {
         })
         .filter((item) => item.difference !== 0);
 
+      // Save all discrepancies to local storage
       localStorage.setItem("inventory_discrepancies", JSON.stringify(discrepancies));
+
+      // Automatically push each discrepancy notification to Telegram
+      for (const disc of discrepancies) {
+        try {
+          await fetch(`${API_BASE}/send_telegram_discrepancy.php`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productName: disc.productName,
+              barcode: disc.barcode,
+              expected: disc.expectedStock,
+              actual: disc.actualStock,
+              difference: disc.difference,
+              status: 'Pending'
+            }),
+          });
+        } catch (tgErr) {
+          console.error("Failed to send Telegram discrepancy alert:", tgErr);
+        }
+      }
+
       navigate("/discrepancies");
     }
   };
@@ -228,7 +251,7 @@ export default function InventoryCheck() {
             </button>
 
             <button
-              onClick={handleComplete}
+              onClick={() => void handleComplete()}
               type="button"
               className="flex items-center gap-2 px-6 py-2 rounded-xl font-extrabold text-xs uppercase bg-[#122b68] hover:bg-[#1a3880] text-white shadow-xs active:scale-95 transition-all cursor-pointer"
             >
@@ -268,7 +291,7 @@ export default function InventoryCheck() {
                   </tr>
                 ) : (
                   displayedItems.map((item) => {
-                    const isDone = confirmedBarcodes.includes(item.barcode);
+                    const isDone = confirmedBarcodes.includes(item.barcode) || (actualStocks[item.barcode] !== undefined && actualStocks[item.barcode] !== "");
 
                     return (
                       <tr

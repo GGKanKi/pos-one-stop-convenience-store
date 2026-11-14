@@ -204,7 +204,77 @@ try {
     }
 
     $pdo->commit();
+
+    // Automatically check low stock and push Telegram alert natively
+    try {
+        $token = '9207372500:AAEgC46x60QiqZZ8vdIen1vK3r2EQKercWs';
+        $chatId = 5993608350;
+
+        $lowStmt = $pdo->query("SELECT * FROM products WHERE stockQuantity <= threshold ORDER BY stockQuantity ASC");
+        $currentLowStock = $lowStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($currentLowStock)) {
+            $newlyLowItems = [];
+            foreach ($currentLowStock as $item) {
+                $itemBarcode = $item['barcode'] ?? $item['code'] ?? '';
+                $itemStock = (int)($item['stockQuantity'] ?? $item['stock'] ?? 0);
+
+                $checkStmt = $pdo->prepare("SELECT last_notified_stock FROM low_stock_alerts WHERE barcode = ?");
+                $checkStmt->execute([$itemBarcode]);
+                $existingAlert = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$existingAlert) {
+                    $newlyLowItems[] = $item;
+                    $insertStmt = $pdo->prepare("INSERT INTO low_stock_alerts (barcode, last_notified_stock) VALUES (?, ?) ON DUPLICATE KEY UPDATE last_notified_stock = ?");
+                    $insertStmt->execute([$itemBarcode, $itemStock, $itemStock]);
+                } else {
+                    if ($itemStock < (int)$existingAlert['last_notified_stock']) {
+                        $newlyLowItems[] = $item;
+                        $updateStmt = $pdo->prepare("UPDATE low_stock_alerts SET last_notified_stock = ? WHERE barcode = ?");
+                        $updateStmt->execute([$itemStock, $itemBarcode]);
+                    }
+                }
+            }
+
+            if (!empty($newlyLowItems)) {
+                $message = "🚨 *NEW RESTOCK ATTENTION REQUIRED* 🚨\n";
+                $message .= "The following items have newly crossed below their threshold:\n\n";
+
+                foreach ($newlyLowItems as $newItem) {
+                    $name = $newItem['productName'] ?? $newItem['name'] ?? 'Unknown Item';
+                    $stockQty = $newItem['stockQuantity'] ?? $newItem['stock'] ?? 0;
+                    $thresh = $newItem['threshold'] ?? 0;
+                    $bar = $newItem['barcode'] ?? $newItem['code'] ?? 'N/A';
+
+                    $safeName = str_replace(['_', '*', '`', '['], ['\_', '\*', '\`', '\['], $name);
+
+                    $message .= "• *{$safeName}* (`{$bar}`)\n";
+                    $message .= "  Stock: *{$stockQty}* | Min Threshold: {$thresh}\n\n";
+                }
+
+                $sendUrl = "https://api.telegram.org/bot{$token}/sendMessage";
+                $postData = [
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                    'parse_mode' => 'Markdown'
+                ];
+
+                $ch = curl_init($sendUrl);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                curl_exec($ch);
+                curl_close($ch);
+            }
+        }
+    } catch (Throwable $t) {
+        // Fail silently so product updates never break
+    }
+
     echo json_encode(['success' => true, 'message' => 'Product updated successfully.']);
+
 } catch (InvalidArgumentException $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
@@ -231,3 +301,4 @@ try {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Unable to update product.']);
 }
+?>
